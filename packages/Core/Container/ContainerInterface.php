@@ -17,4 +17,9 @@ interface ContainerInterface extends PsrContainerInterface
      * @param Closure(self): mixed $resolver
      */
     public function factory(string $id, Closure $resolver): void;
+
+    /**
+     * Resolve and instantiate a class using constructor injection.
+     */
+    public function autowire(string $id): object;
 }

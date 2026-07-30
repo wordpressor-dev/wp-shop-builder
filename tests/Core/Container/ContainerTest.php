@@ -36,8 +36,11 @@ final class ContainerTest extends TestCase
     {
         $container = new Container();
 
-        self::assertFalse($container->has(TestService::class));
+        self::assertTrue($container->has(TestService::class));
+        self::assertFalse($container->has('UnknownService'));
+
         $container->set(TestService::class, new TestService('catalog'));
+
         self::assertTrue($container->has(TestService::class));
     }
 
