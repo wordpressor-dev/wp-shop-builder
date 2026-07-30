@@ -19,8 +19,13 @@
             "WPShop\\Tests\\": "tests/"
         }
     },
-
+"scripts": {
+    "test": "phpunit"
+},
     "config": {
         "sort-packages": true
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
     }
 }
