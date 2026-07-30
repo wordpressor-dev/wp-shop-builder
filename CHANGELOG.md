@@ -66,3 +66,11 @@
 - PHP configuration file loader.
 - Exceptions for missing and invalid configuration files.
 - PHPUnit coverage for repository and loader behavior.
+
+## PR-012 — PSR-3 Logging
+
+- Added `psr/log` 3.x as the logging contract.
+- Added file and null logger implementations.
+- Added configurable log levels, PSR-3 message interpolation and context serialization.
+- Added `LoggerFactory` and `LoggingServiceProvider`.
+- Added unit tests for logging, configuration and container registration.

@@ -28,3 +28,15 @@ composer qa
 ```
 
 Commit `.github/workflows/quality.yml` so GitHub can run the quality matrix.
+
+## PR-012 — PSR-3 Logging
+
+Update dependencies before running the quality suite:
+
+```bash
+composer update psr/log --with-all-dependencies
+composer qa
+```
+
+Register `LoggingServiceProvider` with a `ConfigInterface` instance to expose
+`Psr\Log\LoggerInterface` through the service container.

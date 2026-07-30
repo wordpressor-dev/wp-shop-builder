@@ -38,3 +38,9 @@ composer qa
 ```
 
 The workflow validates Composer metadata and tests the supported PHP matrix defined in `.github/workflows/quality.yml`.
+
+## Logging
+
+The core provides a lightweight PSR-3 logging layer with `file` and `null`
+drivers. Register `LoggingServiceProvider` to resolve
+`Psr\Log\LoggerInterface` from the container.
