@@ -6,7 +6,6 @@ namespace WPShop\Core\Container;
 
 use Closure;
 use ReflectionClass;
-use ReflectionException;
 use ReflectionNamedType;
 use ReflectionParameter;
 use WPShop\Core\Container\Exception\AutowireException;
@@ -79,11 +78,7 @@ final class Container implements ContainerInterface
             throw AutowireException::classDoesNotExist($id);
         }
 
-        try {
-            $reflection = new ReflectionClass($id);
-        } catch (ReflectionException $exception) {
-            throw AutowireException::reflectionFailed($id, $exception);
-        }
+        $reflection = new ReflectionClass($id);
 
         if (!$reflection->isInstantiable()) {
             throw AutowireException::classIsNotInstantiable($id);

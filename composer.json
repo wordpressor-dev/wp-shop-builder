@@ -3,30 +3,40 @@
     "description": "Digital Product Platform for WordPress",
     "type": "project",
     "license": "GPL-2.0-or-later",
-
     "require": {
         "php": "^8.3",
         "psr/container": "2.0"
     },
-
     "autoload": {
         "psr-4": {
             "WPShop\\": "packages/"
         }
     },
-
     "autoload-dev": {
         "psr-4": {
             "WPShop\\Tests\\": "tests/"
         }
     },
-"scripts": {
-    "test": "phpunit"
-},
+    "scripts": {
+        "test": "phpunit",
+        "stan": "phpstan analyse --no-progress",
+        "cs": "phpcs",
+        "cs-fix": "phpcbf",
+        "rector": "rector process --dry-run",
+        "rector-fix": "rector process",
+        "qa": [
+            "@stan",
+            "@cs",
+            "@test"
+        ]
+    },
     "config": {
         "sort-packages": true
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.5"
+        "phpstan/phpstan": "^2.2",
+        "phpunit/phpunit": "^11.5",
+        "rector/rector": "^2.5",
+        "squizlabs/php_codesniffer": "^4.0"
     }
 }

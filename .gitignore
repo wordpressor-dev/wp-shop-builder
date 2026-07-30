@@ -1,7 +1,7 @@
 /vendor/
+/.phpunit.cache/
+/.phpstan-cache/
+/.rector.cache/
 /.idea/
 /.vscode/
-/.phpunit.cache/
-/coverage/
-/build/
-/var/
+*.log

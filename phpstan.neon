@@ -1,0 +1,7 @@
+parameters:
+  level: 8
+  paths:
+    - packages
+  tmpDir: .phpstan-cache
+  treatPhpDocTypesAsCertain: true
+  reportUnmatchedIgnoredErrors: true
