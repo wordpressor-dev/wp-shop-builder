@@ -48,6 +48,17 @@ final readonly class BlueprintService implements
         }
     }
 
+    public function restore(int $id): Blueprint
+    {
+        $blueprint = $this->repository->restore($id);
+
+        if ($blueprint === null) {
+            throw BlueprintNotFound::byId($id);
+        }
+
+        return $blueprint;
+    }
+
     public function getById(int $id): Blueprint
     {
         $blueprint = $this->repository->findById($id);
@@ -64,6 +75,32 @@ final readonly class BlueprintService implements
         $blueprint = $this->repository->findByUuid(
             $uuid
         );
+
+        if ($blueprint === null) {
+            throw BlueprintNotFound::byUuid($uuid);
+        }
+
+        return $blueprint;
+    }
+
+    public function getByIdIncludingDeleted(
+        int $id
+    ): Blueprint {
+        $blueprint = $this->repository
+            ->findByIdIncludingDeleted($id);
+
+        if ($blueprint === null) {
+            throw BlueprintNotFound::byId($id);
+        }
+
+        return $blueprint;
+    }
+
+    public function getByUuidIncludingDeleted(
+        string $uuid
+    ): Blueprint {
+        $blueprint = $this->repository
+            ->findByUuidIncludingDeleted($uuid);
 
         if ($blueprint === null) {
             throw BlueprintNotFound::byUuid($uuid);

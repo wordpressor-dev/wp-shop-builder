@@ -21,7 +21,17 @@ interface BlueprintRepositoryInterface
 
     public function softDelete(int $id): bool;
 
+    public function restore(int $id): ?Blueprint;
+
     public function findById(int $id): ?Blueprint;
 
     public function findByUuid(string $uuid): ?Blueprint;
+
+    public function findByIdIncludingDeleted(
+        int $id
+    ): ?Blueprint;
+
+    public function findByUuidIncludingDeleted(
+        string $uuid
+    ): ?Blueprint;
 }

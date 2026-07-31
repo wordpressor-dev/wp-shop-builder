@@ -47,6 +47,20 @@ final class BlueprintPersistenceFailed extends RuntimeException
         );
     }
 
+    public static function restoration(
+        int $id,
+        Throwable $previous
+    ): self {
+        return new self(
+            sprintf(
+                'Blueprint %d restoration failed.',
+                $id
+            ),
+            0,
+            $previous
+        );
+    }
+
     public static function lookup(
         string $field,
         int|string $value,

@@ -21,7 +21,17 @@ interface BlueprintServiceInterface
 
     public function delete(int $id): void;
 
+    public function restore(int $id): Blueprint;
+
     public function getById(int $id): Blueprint;
 
     public function getByUuid(string $uuid): Blueprint;
+
+    public function getByIdIncludingDeleted(
+        int $id
+    ): Blueprint;
+
+    public function getByUuidIncludingDeleted(
+        string $uuid
+    ): Blueprint;
 }
