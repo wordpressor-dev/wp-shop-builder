@@ -16,15 +16,20 @@
 
 declare(strict_types=1);
 
+use WPShop\App\Plugin\Blueprint\BlueprintServiceProvider;
 use WPShop\App\Plugin\Bootstrap;
+use WPShop\App\Plugin\Database\WordPressDatabaseConnection;
 use WPShop\App\Plugin\Database\WordPressSchemaManager;
 use WPShop\App\Plugin\Exception\IncompatibleEnvironment;
 use WPShop\App\Plugin\Installation\Exception\InstallationFailed;
 use WPShop\App\Plugin\Installation\InstallationManager;
 use WPShop\App\Plugin\Installation\MigrationRegistry;
 use WPShop\App\Plugin\Installation\MigrationRunner;
+use WPShop\App\Plugin\Installation\Migrations\CreateInitialSchema;
 use WPShop\App\Plugin\Installation\OptionInstalledVersionStore;
 use WPShop\App\Plugin\Plugin;
+use WPShop\Core\Container\ContainerInterface;
+use WPShop\Core\Contracts\ServiceProviderInterface;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -83,6 +88,116 @@ $installation = new InstallationManager(
     Plugin::VERSION
 );
 
+$insert = static function (
+    string $table,
+    array $data,
+    array $formats
+) use ($wpdb): int {
+    $result = $wpdb->insert(
+        $table,
+        $data,
+        $formats
+    );
+
+    if ($result === false) {
+        throw new RuntimeException(
+            sprintf(
+                'WordPress database insert failed: %s',
+                $wpdb->last_error
+            )
+        );
+    }
+
+    return (int) $wpdb->insert_id;
+};
+
+$prepare = static function (
+    string $sql,
+    array $parameters
+) use ($wpdb): string {
+    $prepared = $wpdb->prepare(
+        $sql,
+        $parameters
+    );
+
+    if (! is_string($prepared)) {
+        throw new UnexpectedValueException(
+            'WordPress database query preparation failed.'
+        );
+    }
+
+    return $prepared;
+};
+
+$fetchOne = static function (
+    string $sql
+) use ($wpdb): ?array {
+    $row = $wpdb->get_row(
+        $sql,
+        ARRAY_A
+    );
+
+    if ($row === null) {
+        if ($wpdb->last_error !== '') {
+            throw new RuntimeException(
+                sprintf(
+                    'WordPress database query failed: %s',
+                    $wpdb->last_error
+                )
+            );
+        }
+
+        return null;
+    }
+
+    if (! is_array($row)) {
+        throw new UnexpectedValueException(
+            'WordPress database query returned an invalid row.'
+        );
+    }
+
+    return $row;
+};
+
+$database = new WordPressDatabaseConnection(
+    $insert,
+    $prepare,
+    $fetchOne
+);
+
+$blueprintsTable = $schema->table(
+    CreateInitialSchema::BLUEPRINTS_TABLE
+);
+
+$uuidGenerator = static function (): string {
+    return wp_generate_uuid4();
+};
+
+$clock = static function (): DateTimeImmutable {
+    return current_datetime();
+};
+
+$serviceProviderFactory = static function (
+    ContainerInterface $container
+) use (
+    $database,
+    $blueprintsTable,
+    $uuidGenerator,
+    $clock
+): ServiceProviderInterface {
+    return new BlueprintServiceProvider(
+        $container,
+        $database,
+        $blueprintsTable,
+        $uuidGenerator,
+        $clock
+    );
+};
+
+$plugin = new Plugin(
+    $serviceProviderFactory
+);
+
 $flushRewriteRules = static function (bool $hard): void {
     flush_rewrite_rules($hard);
 };
@@ -90,7 +205,8 @@ $flushRewriteRules = static function (bool $hard): void {
 $bootstrap = new Bootstrap(
     null,
     $flushRewriteRules,
-    $installation
+    $installation,
+    $plugin
 );
 
 register_activation_hook(
