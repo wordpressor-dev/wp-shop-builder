@@ -9,10 +9,11 @@
         "psr/log": "^3.0"
     },
     "autoload": {
-        "psr-4": {
-            "WPShop\\": "packages/"
-        }
-    },
+    "psr-4": {
+        "WPShop\\": "packages/",
+        "WPShop\\App\\": "apps/"
+    }
+},
     "autoload-dev": {
         "psr-4": {
             "WPShop\\Tests\\": "tests/"

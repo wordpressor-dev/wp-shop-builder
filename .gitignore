@@ -1,7 +1,33 @@
+# Composer dependencies
 /vendor/
+
+# Tool caches and generated reports
 /.phpunit.cache/
 /.phpstan-cache/
 /.rector.cache/
+/coverage/
+.phpunit.result.cache
+
+# Build and release artifacts
+/build/
+/dist/
+*.zip
+*.patch
+PR-*-NOTES.md
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+
+# IDE and operating-system files
 /.idea/
 /.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
 *.log
+*.tmp
+*.swp
+*~
