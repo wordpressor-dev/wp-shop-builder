@@ -44,3 +44,22 @@ The workflow validates Composer metadata and tests the supported PHP matrix defi
 The core provides a lightweight PSR-3 logging layer with `file` and `null`
 drivers. Register `LoggingServiceProvider` to resolve
 `Psr\Log\LoggerInterface` from the container.
+
+## WordPress bridge
+
+PR-013.1 introduces the contracts and adapters used by the WordPress integration layer.
+Production code can use `NativeHookAdapter`, while unit tests can use
+`TestingHookAdapter` without loading WordPress.
+
+
+## WordPress application lifecycle
+
+```php
+use WPShop\WordPress\Bootstrap\Bootstrap;
+
+$application = Bootstrap::create();
+$application->registerPlugin(new ShopPlugin());
+$application->boot();
+```
+
+`Bootstrap::run()` is available when no plugins need to be registered before boot.

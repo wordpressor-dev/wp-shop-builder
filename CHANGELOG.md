@@ -1,5 +1,52 @@
 # Changelog
 
+## PR-017 — System Package
+
+- Added immutable PHP, server, WordPress, and aggregate system information DTOs.
+- Added `SystemServiceInterface` and `SystemService` to compose Version and Environment data.
+- Added `SystemServiceProvider` with shared container bindings.
+- Registered the System package through `WordPressServiceProvider`.
+- Added unit, provider, integration coverage, and package documentation.
+
+## PR-016 — Version Package
+
+- Added immutable DTOs for framework, PHP, WordPress, and WooCommerce versions.
+- Added `VersionServiceInterface` and `VersionService` as the package public API.
+- Added `VersionServiceProvider` with shared container bindings.
+- Added a central `Framework::VERSION` source used by the WordPress application and version service.
+- Registered the version package through `WordPressServiceProvider`.
+- Added unit and integration coverage plus package documentation.
+
+## PR-014.2.1 — Environment Layer
+
+- Added typed PHP, server, and WordPress environment contracts.
+- Added native environment implementations with safe non-WordPress fallbacks.
+- Registered environment services through `EnvironmentServiceProvider`.
+- Added environment unit and integration tests.
+
+## [Unreleased]
+
+### Added
+
+- Minimal WordPress admin framework and WP Shop Builder dashboard.
+
+
+### Added
+
+- WordPress application lifecycle with `Application`, `Bootstrap`, and `PluginManager`.
+- Base `Plugin` class for WordPress extensions.
+- `WordPressServiceProvider` bindings for application, plugins, and native hooks.
+
+## PR-013.1 — WordPress Contracts and Hook Adapters
+
+### Added
+
+- WordPress bridge contracts for hook adapters, hook registrars, and plugins.
+- Native WordPress hook adapter for `add_action()` and `add_filter()`.
+- In-memory testing hook adapter with action dispatching and filter application.
+- Explicit exception when native WordPress hook functions are unavailable.
+- PHPUnit coverage for registration, priorities, accepted arguments, and non-WordPress execution.
+
 ## PR-011 — Quality Gate and GitHub Actions
 
 ### Added
