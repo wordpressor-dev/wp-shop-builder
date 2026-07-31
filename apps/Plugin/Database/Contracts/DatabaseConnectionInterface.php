@@ -17,6 +17,20 @@ interface DatabaseConnectionInterface
     ): int;
 
     /**
+     * @param array<string, int|float|string|null> $data
+     * @param array<string, int|float|string|null> $where
+     * @param list<string> $formats
+     * @param list<string> $whereFormats
+     */
+    public function update(
+        string $table,
+        array $data,
+        array $where,
+        array $formats,
+        array $whereFormats
+    ): int;
+
+    /**
      * @param list<int|float|string> $parameters
      *
      * @return array<string, mixed>|null

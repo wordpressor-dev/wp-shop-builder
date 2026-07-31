@@ -95,6 +95,16 @@ final class ProviderDatabaseConnection implements
         return 1;
     }
 
+    public function update(
+        string $table,
+        array $data,
+        array $where,
+        array $formats,
+        array $whereFormats
+    ): int {
+        return 0;
+    }
+
     public function fetchOne(
         string $sql,
         array $parameters = []

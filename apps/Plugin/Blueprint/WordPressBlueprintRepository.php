@@ -12,6 +12,7 @@ use UnexpectedValueException;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Exception\BlueprintPersistenceFailed;
 
@@ -112,13 +113,117 @@ final readonly class WordPressBlueprintRepository implements
         }
     }
 
-    public function findById(int $id): ?Blueprint
-    {
-        if ($id < 1) {
-            throw new InvalidArgumentException(
-                'Blueprint identifier must be positive.'
+    public function update(
+        int $id,
+        BlueprintUpdateData $data
+    ): ?Blueprint {
+        $this->assertPositiveId($id);
+
+        try {
+            $now = ($this->clock)();
+
+            $affectedRows = $this->database->update(
+                $this->table,
+                [
+                    'slug' => $data->slug(),
+                    'type' => $data->type(),
+                    'provider_id' =>
+                        $data->providerId(),
+                    'developer_id' =>
+                        $data->developerId(),
+                    'current_release_id' =>
+                        $data->currentReleaseId(),
+                    'state' => $data->state(),
+                    'workflow' => $data->workflow(),
+                    'updated_at' => $now->format(
+                        'Y-m-d H:i:s'
+                    ),
+                ],
+                [
+                    'id' => $id,
+                    'deleted_at' => null,
+                ],
+                [
+                    '%s',
+                    '%s',
+                    '%d',
+                    '%d',
+                    '%d',
+                    '%s',
+                    '%s',
+                    '%s',
+                ],
+                [
+                    '%d',
+                    '%s',
+                ]
+            );
+
+            $blueprint = $this->fetch(
+                'id',
+                '%d',
+                $id
+            );
+
+            if (
+                $affectedRows > 0
+                && $blueprint === null
+            ) {
+                throw new UnexpectedValueException(
+                    'Updated blueprint could not be loaded.'
+                );
+            }
+
+            return $blueprint;
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::update(
+                $id,
+                $exception
             );
         }
+    }
+
+    public function softDelete(int $id): bool
+    {
+        $this->assertPositiveId($id);
+
+        try {
+            $now = ($this->clock)()->format(
+                'Y-m-d H:i:s'
+            );
+
+            $affectedRows = $this->database->update(
+                $this->table,
+                [
+                    'deleted_at' => $now,
+                    'updated_at' => $now,
+                ],
+                [
+                    'id' => $id,
+                    'deleted_at' => null,
+                ],
+                [
+                    '%s',
+                    '%s',
+                ],
+                [
+                    '%d',
+                    '%s',
+                ]
+            );
+
+            return $affectedRows > 0;
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::deletion(
+                $id,
+                $exception
+            );
+        }
+    }
+
+    public function findById(int $id): ?Blueprint
+    {
+        $this->assertPositiveId($id);
 
         try {
             return $this->fetch(
@@ -194,5 +299,14 @@ final readonly class WordPressBlueprintRepository implements
         }
 
         return $this->mapper->map($row);
+    }
+
+    private function assertPositiveId(int $id): void
+    {
+        if ($id < 1) {
+            throw new InvalidArgumentException(
+                'Blueprint identifier must be positive.'
+            );
+        }
     }
 }

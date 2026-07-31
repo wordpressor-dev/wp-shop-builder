@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Exception\BlueprintNotFound;
 use WPShop\Blueprint\Service\BlueprintService;
@@ -39,6 +40,72 @@ final class BlueprintServiceTest extends TestCase
             $data,
             $repository->creationData
         );
+    }
+
+    public function testUpdatesBlueprintThroughRepository(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->blueprint = $this->blueprint();
+
+        $data = $this->updateData();
+
+        $updated = (new BlueprintService($repository))
+            ->update(42, $data);
+
+        self::assertSame(
+            $repository->blueprint,
+            $updated
+        );
+
+        self::assertSame(42, $repository->updatedId);
+
+        self::assertSame(
+            $data,
+            $repository->updateData
+        );
+    }
+
+    public function testThrowsWhenUpdatedBlueprintIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Blueprint with identifier 42 was not found.'
+        );
+
+        (new BlueprintService($repository))
+            ->update(42, $this->updateData());
+    }
+
+    public function testSoftDeletesBlueprintThroughRepository(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        (new BlueprintService($repository))
+            ->delete(42);
+
+        self::assertSame(42, $repository->deletedId);
+    }
+
+    public function testThrowsWhenDeletedBlueprintIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->deleteResult = false;
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Blueprint with identifier 42 was not found.'
+        );
+
+        (new BlueprintService($repository))
+            ->delete(42);
     }
 
     public function testGetsBlueprintByIdentifier(): void
@@ -111,6 +178,19 @@ final class BlueprintServiceTest extends TestCase
             ->getByUuid(self::UUID);
     }
 
+    private function updateData(): BlueprintUpdateData
+    {
+        return new BlueprintUpdateData(
+            'updated-plugin',
+            'plugin',
+            null,
+            null,
+            null,
+            'published',
+            'reviewed'
+        );
+    }
+
     private function blueprint(): Blueprint
     {
         $date = new DateTimeImmutable(
@@ -141,6 +221,14 @@ final class RecordingBlueprintRepository implements
 
     public ?BlueprintCreateData $creationData = null;
 
+    public ?BlueprintUpdateData $updateData = null;
+
+    public ?int $updatedId = null;
+
+    public ?int $deletedId = null;
+
+    public bool $deleteResult = true;
+
     public ?int $requestedId = null;
 
     public ?string $requestedUuid = null;
@@ -154,6 +242,23 @@ final class RecordingBlueprintRepository implements
             ?? throw new \LogicException(
                 'Blueprint fixture is missing.'
             );
+    }
+
+    public function update(
+        int $id,
+        BlueprintUpdateData $data
+    ): ?Blueprint {
+        $this->updatedId = $id;
+        $this->updateData = $data;
+
+        return $this->blueprint;
+    }
+
+    public function softDelete(int $id): bool
+    {
+        $this->deletedId = $id;
+
+        return $this->deleteResult;
     }
 
     public function findById(int $id): ?Blueprint
