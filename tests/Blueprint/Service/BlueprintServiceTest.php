@@ -108,6 +108,38 @@ final class BlueprintServiceTest extends TestCase
             ->delete(42);
     }
 
+    public function testRestoresBlueprintThroughRepository(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->blueprint = $this->blueprint();
+
+        $restored = (new BlueprintService($repository))
+            ->restore(42);
+
+        self::assertSame(
+            $repository->blueprint,
+            $restored
+        );
+
+        self::assertSame(42, $repository->restoredId);
+    }
+
+    public function testThrowsWhenRestoredBlueprintIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Blueprint with identifier 42 was not found.'
+        );
+
+        (new BlueprintService($repository))
+            ->restore(42);
+    }
+
     public function testGetsBlueprintByIdentifier(): void
     {
         $repository = new RecordingBlueprintRepository();
@@ -178,6 +210,79 @@ final class BlueprintServiceTest extends TestCase
             ->getByUuid(self::UUID);
     }
 
+    public function testGetsDeletedBlueprintByIdentifier(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->blueprint = $this->blueprint();
+
+        $blueprint = (new BlueprintService($repository))
+            ->getByIdIncludingDeleted(42);
+
+        self::assertSame(
+            $repository->blueprint,
+            $blueprint
+        );
+
+        self::assertSame(
+            42,
+            $repository->requestedIncludingDeletedId
+        );
+    }
+
+    public function testThrowsWhenDeletedIdentifierIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Blueprint with identifier 42 was not found.'
+        );
+
+        (new BlueprintService($repository))
+            ->getByIdIncludingDeleted(42);
+    }
+
+    public function testGetsDeletedBlueprintByUuid(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->blueprint = $this->blueprint();
+
+        $blueprint = (new BlueprintService($repository))
+            ->getByUuidIncludingDeleted(self::UUID);
+
+        self::assertSame(
+            $repository->blueprint,
+            $blueprint
+        );
+
+        self::assertSame(
+            self::UUID,
+            $repository->requestedIncludingDeletedUuid
+        );
+    }
+
+    public function testThrowsWhenDeletedUuidIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            sprintf(
+                'Blueprint with UUID "%s" was not found.',
+                self::UUID
+            )
+        );
+
+        (new BlueprintService($repository))
+            ->getByUuidIncludingDeleted(self::UUID);
+    }
+
     private function updateData(): BlueprintUpdateData
     {
         return new BlueprintUpdateData(
@@ -227,11 +332,17 @@ final class RecordingBlueprintRepository implements
 
     public ?int $deletedId = null;
 
+    public ?int $restoredId = null;
+
     public bool $deleteResult = true;
 
     public ?int $requestedId = null;
 
     public ?string $requestedUuid = null;
+
+    public ?int $requestedIncludingDeletedId = null;
+
+    public ?string $requestedIncludingDeletedUuid = null;
 
     public function create(
         BlueprintCreateData $data
@@ -261,6 +372,13 @@ final class RecordingBlueprintRepository implements
         return $this->deleteResult;
     }
 
+    public function restore(int $id): ?Blueprint
+    {
+        $this->restoredId = $id;
+
+        return $this->blueprint;
+    }
+
     public function findById(int $id): ?Blueprint
     {
         $this->requestedId = $id;
@@ -272,6 +390,22 @@ final class RecordingBlueprintRepository implements
         string $uuid
     ): ?Blueprint {
         $this->requestedUuid = $uuid;
+
+        return $this->blueprint;
+    }
+
+    public function findByIdIncludingDeleted(
+        int $id
+    ): ?Blueprint {
+        $this->requestedIncludingDeletedId = $id;
+
+        return $this->blueprint;
+    }
+
+    public function findByUuidIncludingDeleted(
+        string $uuid
+    ): ?Blueprint {
+        $this->requestedIncludingDeletedUuid = $uuid;
 
         return $this->blueprint;
     }

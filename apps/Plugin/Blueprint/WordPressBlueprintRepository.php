@@ -221,6 +221,69 @@ final readonly class WordPressBlueprintRepository implements
         }
     }
 
+    public function restore(int $id): ?Blueprint
+    {
+        $this->assertPositiveId($id);
+
+        try {
+            $blueprint = $this->fetch(
+                'id',
+                '%d',
+                $id,
+                true
+            );
+
+            if ($blueprint === null) {
+                return null;
+            }
+
+            if ($blueprint->deletedAt() === null) {
+                return $blueprint;
+            }
+
+            $now = ($this->clock)()->format(
+                'Y-m-d H:i:s'
+            );
+
+            $this->database->update(
+                $this->table,
+                [
+                    'deleted_at' => null,
+                    'updated_at' => $now,
+                ],
+                [
+                    'id' => $id,
+                ],
+                [
+                    '%s',
+                    '%s',
+                ],
+                [
+                    '%d',
+                ]
+            );
+
+            $restored = $this->fetch(
+                'id',
+                '%d',
+                $id
+            );
+
+            if ($restored === null) {
+                throw new UnexpectedValueException(
+                    'Restored blueprint could not be loaded.'
+                );
+            }
+
+            return $restored;
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::restoration(
+                $id,
+                $exception
+            );
+        }
+    }
+
     public function findById(int $id): ?Blueprint
     {
         $this->assertPositiveId($id);
@@ -243,17 +306,7 @@ final readonly class WordPressBlueprintRepository implements
     public function findByUuid(
         string $uuid
     ): ?Blueprint {
-        if (
-            preg_match(
-                '/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}'
-                . '[0-9a-f]{12}$/Di',
-                $uuid
-            ) !== 1
-        ) {
-            throw new InvalidArgumentException(
-                'Blueprint UUID is invalid.'
-            );
-        }
+        $this->assertUuid($uuid);
 
         try {
             return $this->fetch(
@@ -270,11 +323,58 @@ final readonly class WordPressBlueprintRepository implements
         }
     }
 
+    public function findByIdIncludingDeleted(
+        int $id
+    ): ?Blueprint {
+        $this->assertPositiveId($id);
+
+        try {
+            return $this->fetch(
+                'id',
+                '%d',
+                $id,
+                true
+            );
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::lookup(
+                'id',
+                $id,
+                $exception
+            );
+        }
+    }
+
+    public function findByUuidIncludingDeleted(
+        string $uuid
+    ): ?Blueprint {
+        $this->assertUuid($uuid);
+
+        try {
+            return $this->fetch(
+                'uuid',
+                '%s',
+                $uuid,
+                true
+            );
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::lookup(
+                'uuid',
+                $uuid,
+                $exception
+            );
+        }
+    }
+
     private function fetch(
         string $field,
         string $placeholder,
-        int|string $value
+        int|string $value,
+        bool $includingDeleted = false
     ): ?Blueprint {
+        $deletedCondition = $includingDeleted
+            ? ''
+            : 'AND deleted_at IS NULL ';
+
         $sql = sprintf(
             'SELECT id, uuid, slug, type, '
             . 'provider_id, developer_id, '
@@ -282,11 +382,12 @@ final readonly class WordPressBlueprintRepository implements
             . 'created_at, updated_at, deleted_at '
             . 'FROM %s '
             . 'WHERE %s = %s '
-            . 'AND deleted_at IS NULL '
+            . '%s'
             . 'LIMIT 1',
             $this->table,
             $field,
-            $placeholder
+            $placeholder,
+            $deletedCondition
         );
 
         $row = $this->database->fetchOne(
@@ -306,6 +407,21 @@ final readonly class WordPressBlueprintRepository implements
         if ($id < 1) {
             throw new InvalidArgumentException(
                 'Blueprint identifier must be positive.'
+            );
+        }
+    }
+
+    private function assertUuid(string $uuid): void
+    {
+        if (
+            preg_match(
+                '/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}'
+                . '[0-9a-f]{12}$/Di',
+                $uuid
+            ) !== 1
+        ) {
+            throw new InvalidArgumentException(
+                'Blueprint UUID is invalid.'
             );
         }
     }
