@@ -22,7 +22,8 @@ final readonly class Bootstrap
     public function __construct(
         private ?CompatibilityChecker $compatibility = null,
         private ?Closure $flushRewriteRules = null,
-        private ?InstallationManager $installation = null
+        private ?InstallationManager $installation = null,
+        private ?Plugin $plugin = null
     ) {
     }
 
@@ -62,7 +63,7 @@ final readonly class Bootstrap
             );
         }
 
-        (new Plugin())->boot();
+        ($this->plugin ?? new Plugin())->boot();
 
         return null;
     }
