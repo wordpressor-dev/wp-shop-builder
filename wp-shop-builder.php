@@ -159,10 +159,40 @@ $fetchOne = static function (
     return $row;
 };
 
+$update = static function (
+    string $table,
+    array $data,
+    array $where,
+    array $formats,
+    array $whereFormats
+) use ($wpdb): int {
+    $result = $wpdb->update(
+        $table,
+        $data,
+        $where,
+        $formats,
+        $whereFormats
+    );
+
+    if ($result === false) {
+        throw new RuntimeException(
+            sprintf(
+                'WordPress database update failed: %s',
+                $wpdb->last_error !== ''
+                    ? $wpdb->last_error
+                    : 'Unknown database error.'
+            )
+        );
+    }
+
+    return $result;
+};
+
 $database = new WordPressDatabaseConnection(
     $insert,
     $prepare,
-    $fetchOne
+    $fetchOne,
+    $update
 );
 
 $blueprintsTable = $schema->table(
