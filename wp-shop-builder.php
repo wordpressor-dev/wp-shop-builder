@@ -4,7 +4,7 @@
  * Plugin Name: WP Shop Builder
  * Plugin URI: https://wp-shop.org
  * Description: Digital Product Platform for WordPress.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Requires at least: 6.8
  * Requires PHP: 8.3
  * Requires Plugins: woocommerce
@@ -17,9 +17,11 @@
 declare(strict_types=1);
 
 use WPShop\App\Plugin\Bootstrap;
+use WPShop\App\Plugin\Database\WordPressSchemaManager;
 use WPShop\App\Plugin\Exception\IncompatibleEnvironment;
 use WPShop\App\Plugin\Installation\Exception\InstallationFailed;
 use WPShop\App\Plugin\Installation\InstallationManager;
+use WPShop\App\Plugin\Installation\MigrationRegistry;
 use WPShop\App\Plugin\Installation\MigrationRunner;
 use WPShop\App\Plugin\Installation\OptionInstalledVersionStore;
 use WPShop\App\Plugin\Plugin;
@@ -29,6 +31,8 @@ if (! defined('ABSPATH')) {
 }
 
 require_once __DIR__ . '/vendor/autoload.php';
+
+global $wpdb;
 
 $getOption = static function (
     string $name,
@@ -49,12 +53,29 @@ $updateOption = static function (
     );
 };
 
+$applySchema = static function (string $sql): void {
+    require_once ABSPATH
+        . 'wp-admin/includes/upgrade.php';
+
+    dbDelta($sql);
+};
+
+$schema = new WordPressSchemaManager(
+    $wpdb->prefix,
+    $wpdb->get_charset_collate(),
+    $applySchema
+);
+
+$registry = MigrationRegistry::create($schema);
+
 $versionStore = new OptionInstalledVersionStore(
     $getOption,
     $updateOption
 );
 
-$migrations = new MigrationRunner([]);
+$migrations = new MigrationRunner(
+    $registry->all()
+);
 
 $installation = new InstallationManager(
     $versionStore,
