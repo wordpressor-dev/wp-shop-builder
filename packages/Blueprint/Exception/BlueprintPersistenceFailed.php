@@ -1,0 +1,37 @@
+<?php
+
+declare(strict_types=1);
+
+namespace WPShop\Blueprint\Exception;
+
+use RuntimeException;
+use Throwable;
+
+final class BlueprintPersistenceFailed extends RuntimeException
+{
+    public static function creation(
+        Throwable $previous
+    ): self {
+        return new self(
+            'Blueprint creation failed.',
+            0,
+            $previous
+        );
+    }
+
+    public static function lookup(
+        string $field,
+        int|string $value,
+        Throwable $previous
+    ): self {
+        return new self(
+            sprintf(
+                'Blueprint lookup by %s "%s" failed.',
+                $field,
+                (string) $value
+            ),
+            0,
+            $previous
+        );
+    }
+}
