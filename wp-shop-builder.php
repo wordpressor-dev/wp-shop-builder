@@ -18,6 +18,11 @@ declare(strict_types=1);
 
 use WPShop\App\Plugin\Bootstrap;
 use WPShop\App\Plugin\Exception\IncompatibleEnvironment;
+use WPShop\App\Plugin\Installation\Exception\InstallationFailed;
+use WPShop\App\Plugin\Installation\InstallationManager;
+use WPShop\App\Plugin\Installation\MigrationRunner;
+use WPShop\App\Plugin\Installation\OptionInstalledVersionStore;
+use WPShop\App\Plugin\Plugin;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -25,13 +30,46 @@ if (! defined('ABSPATH')) {
 
 require_once __DIR__ . '/vendor/autoload.php';
 
+$getOption = static function (
+    string $name,
+    mixed $default
+): mixed {
+    return get_option($name, $default);
+};
+
+$updateOption = static function (
+    string $name,
+    mixed $value,
+    bool $autoload
+): bool {
+    return update_option(
+        $name,
+        $value,
+        $autoload
+    );
+};
+
+$versionStore = new OptionInstalledVersionStore(
+    $getOption,
+    $updateOption
+);
+
+$migrations = new MigrationRunner([]);
+
+$installation = new InstallationManager(
+    $versionStore,
+    $migrations,
+    Plugin::VERSION
+);
+
 $flushRewriteRules = static function (bool $hard): void {
     flush_rewrite_rules($hard);
 };
 
 $bootstrap = new Bootstrap(
     null,
-    $flushRewriteRules
+    $flushRewriteRules,
+    $installation
 );
 
 register_activation_hook(
@@ -39,7 +77,9 @@ register_activation_hook(
     static function () use ($bootstrap): void {
         try {
             $bootstrap->activate();
-        } catch (IncompatibleEnvironment $exception) {
+        } catch (
+            IncompatibleEnvironment | InstallationFailed $exception
+        ) {
             $message = sprintf(
                 'WP Shop Builder cannot be activated. %s',
                 $exception->getMessage()
@@ -47,7 +87,10 @@ register_activation_hook(
 
             wp_die(
                 esc_html($message),
-                esc_html__('WP Shop Builder', 'wp-shop-builder'),
+                esc_html__(
+                    'WP Shop Builder',
+                    'wp-shop-builder'
+                ),
                 ['back_link' => true]
             );
         }

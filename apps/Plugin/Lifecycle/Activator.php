@@ -7,6 +7,7 @@ namespace WPShop\App\Plugin\Lifecycle;
 use Closure;
 use WPShop\App\Plugin\Compatibility\CompatibilityChecker;
 use WPShop\App\Plugin\Exception\IncompatibleEnvironment;
+use WPShop\App\Plugin\Installation\InstallationManager;
 
 final readonly class Activator
 {
@@ -15,7 +16,8 @@ final readonly class Activator
      */
     public function __construct(
         private CompatibilityChecker $compatibility,
-        private ?Closure $flushRewriteRules = null
+        private ?Closure $flushRewriteRules = null,
+        private ?InstallationManager $installation = null
     ) {
     }
 
@@ -26,6 +28,8 @@ final readonly class Activator
         if (! $result->isCompatible()) {
             throw IncompatibleEnvironment::fromResult($result);
         }
+
+        $this->installation?->synchronize();
 
         $flushRewriteRules = $this->flushRewriteRules;
 
