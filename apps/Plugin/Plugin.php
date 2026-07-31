@@ -8,7 +8,7 @@ use WPShop\WordPress\Bootstrap\Bootstrap as WordPressBootstrap;
 
 final class Plugin
 {
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.2.0';
 
     public function boot(): void
     {
