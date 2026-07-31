@@ -21,7 +21,7 @@
     },
     "scripts": {
         "test": "phpunit",
-        "stan": "phpstan analyse --no-progress",
+        "stan": "phpstan analyse packages apps --no-progress",
         "cs": "phpcs",
         "cs-fix": "phpcbf",
         "rector": "rector process --dry-run",
