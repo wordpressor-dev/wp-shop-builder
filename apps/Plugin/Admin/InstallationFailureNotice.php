@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\Admin;
 
-use WPShop\App\Plugin\Compatibility\CompatibilityResult;
+use WPShop\App\Plugin\Installation\Exception\InstallationFailed;
 
-final readonly class CompatibilityNotice implements AdminNoticeInterface
+final readonly class InstallationFailureNotice implements AdminNoticeInterface
 {
     public function __construct(
-        private CompatibilityResult $result
+        private InstallationFailed $exception
     ) {
     }
 
     public function message(): string
     {
         return sprintf(
-            'WP Shop Builder is inactive. %s',
-            $this->result->message()
+            'WP Shop Builder could not complete installation or update. %s',
+            $this->exception->getMessage()
         );
     }
 

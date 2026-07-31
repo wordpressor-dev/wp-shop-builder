@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin;
 
 use Closure;
+use WPShop\App\Plugin\Admin\AdminNoticeInterface;
 use WPShop\App\Plugin\Admin\CompatibilityNotice;
+use WPShop\App\Plugin\Admin\InstallationFailureNotice;
 use WPShop\App\Plugin\Compatibility\CompatibilityChecker;
+use WPShop\App\Plugin\Installation\Exception\InstallationFailed;
+use WPShop\App\Plugin\Installation\InstallationManager;
 use WPShop\App\Plugin\Lifecycle\Activator;
 use WPShop\App\Plugin\Lifecycle\Deactivator;
 
@@ -17,7 +21,8 @@ final readonly class Bootstrap
      */
     public function __construct(
         private ?CompatibilityChecker $compatibility = null,
-        private ?Closure $flushRewriteRules = null
+        private ?Closure $flushRewriteRules = null,
+        private ?InstallationManager $installation = null
     ) {
     }
 
@@ -25,7 +30,8 @@ final readonly class Bootstrap
     {
         $activator = new Activator(
             $this->compatibility(),
-            $this->flushRewriteRules
+            $this->flushRewriteRules,
+            $this->installation
         );
 
         $activator->activate();
@@ -40,12 +46,20 @@ final readonly class Bootstrap
         $deactivator->deactivate();
     }
 
-    public function boot(): ?CompatibilityNotice
+    public function boot(): ?AdminNoticeInterface
     {
         $result = $this->compatibility()->check();
 
         if (! $result->isCompatible()) {
             return new CompatibilityNotice($result);
+        }
+
+        try {
+            $this->installation?->synchronize();
+        } catch (InstallationFailed $exception) {
+            return new InstallationFailureNotice(
+                $exception
+            );
         }
 
         (new Plugin())->boot();
