@@ -236,4 +236,11 @@ final class LifecycleDatabase implements
 
         return $this->row;
     }
+
+    public function fetchAll(
+        string $sql,
+        array $parameters = []
+    ): array {
+        return [];
+    }
 }

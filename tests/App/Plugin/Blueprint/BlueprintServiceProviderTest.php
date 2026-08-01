@@ -111,4 +111,11 @@ final class ProviderDatabaseConnection implements
     ): ?array {
         return null;
     }
+
+    public function fetchAll(
+        string $sql,
+        array $parameters = []
+    ): array {
+        return [];
+    }
 }

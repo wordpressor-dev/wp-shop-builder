@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Exception\BlueprintNotFound;
@@ -283,6 +284,46 @@ final class BlueprintServiceTest extends TestCase
             ->getByUuidIncludingDeleted(self::UUID);
     }
 
+    public function testGetsBlueprintCollectionThroughRepository(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->collection = [$this->blueprint()];
+
+        $query = new BlueprintQuery(
+            type: 'plugin',
+            state: 'published'
+        );
+
+        $collection = (new BlueprintService($repository))
+            ->getAll($query);
+
+        self::assertSame(
+            $repository->collection,
+            $collection
+        );
+
+        self::assertSame(
+            $query,
+            $repository->collectionQuery
+        );
+    }
+
+    public function testReturnsEmptyBlueprintCollection(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $query = new BlueprintQuery();
+
+        $collection = (new BlueprintService($repository))
+            ->getAll($query);
+
+        self::assertSame([], $collection);
+
+        self::assertSame(
+            $query,
+            $repository->collectionQuery
+        );
+    }
+
     private function updateData(): BlueprintUpdateData
     {
         return new BlueprintUpdateData(
@@ -327,6 +368,13 @@ final class RecordingBlueprintRepository implements
     public ?BlueprintCreateData $creationData = null;
 
     public ?BlueprintUpdateData $updateData = null;
+
+    /**
+     * @var list<Blueprint>
+     */
+    public array $collection = [];
+
+    public ?BlueprintQuery $collectionQuery = null;
 
     public ?int $updatedId = null;
 
@@ -377,6 +425,14 @@ final class RecordingBlueprintRepository implements
         $this->restoredId = $id;
 
         return $this->blueprint;
+    }
+
+    public function findAll(
+        BlueprintQuery $query
+    ): array {
+        $this->collectionQuery = $query;
+
+        return $this->collection;
     }
 
     public function findById(int $id): ?Blueprint

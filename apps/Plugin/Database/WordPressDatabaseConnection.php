@@ -32,12 +32,16 @@ final readonly class WordPressDatabaseConnection implements
      *     list<string>,
      *     list<string>
      * ): int $update
+     * @param null|Closure(
+     *     string
+     * ): list<array<string, mixed>> $fetchAll
      */
     public function __construct(
         private Closure $insert,
         private Closure $prepare,
         private Closure $fetchOne,
-        private ?Closure $update = null
+        private ?Closure $update = null,
+        private ?Closure $fetchAll = null
     ) {
     }
 
@@ -157,33 +161,80 @@ final readonly class WordPressDatabaseConnection implements
         string $sql,
         array $parameters = []
     ): ?array {
-        if (trim($sql) === '') {
-            throw new InvalidArgumentException(
-                'Database query cannot be empty.'
-            );
-        }
+        self::assertQuery($sql);
 
         try {
-            $preparedSql = $sql;
-
-            if ($parameters !== []) {
-                $preparedSql = ($this->prepare)(
-                    $sql,
-                    $parameters
-                );
-
-                if (trim($preparedSql) === '') {
-                    throw new UnexpectedValueException(
-                        'Database query preparation returned an empty query.'
-                    );
-                }
-            }
+            $preparedSql = $this->prepareQuery(
+                $sql,
+                $parameters
+            );
 
             return ($this->fetchOne)($preparedSql);
         } catch (Throwable $exception) {
             throw DatabaseOperationFailed::operation(
                 'fetch one',
                 $exception
+            );
+        }
+    }
+
+    public function fetchAll(
+        string $sql,
+        array $parameters = []
+    ): array {
+        self::assertQuery($sql);
+
+        try {
+            if ($this->fetchAll === null) {
+                throw new UnexpectedValueException(
+                    'Database fetch all operation is not configured.'
+                );
+            }
+
+            $preparedSql = $this->prepareQuery(
+                $sql,
+                $parameters
+            );
+
+            return ($this->fetchAll)($preparedSql);
+        } catch (Throwable $exception) {
+            throw DatabaseOperationFailed::operation(
+                'fetch all',
+                $exception
+            );
+        }
+    }
+
+    /**
+     * @param list<int|float|string> $parameters
+     */
+    private function prepareQuery(
+        string $sql,
+        array $parameters
+    ): string {
+        if ($parameters === []) {
+            return $sql;
+        }
+
+        $preparedSql = ($this->prepare)(
+            $sql,
+            $parameters
+        );
+
+        if (trim($preparedSql) === '') {
+            throw new UnexpectedValueException(
+                'Database query preparation returned an empty query.'
+            );
+        }
+
+        return $preparedSql;
+    }
+
+    private static function assertQuery(string $sql): void
+    {
+        if (trim($sql) === '') {
+            throw new InvalidArgumentException(
+                'Database query cannot be empty.'
             );
         }
     }

@@ -283,4 +283,11 @@ final class RestoreDatabase implements
 
         return array_shift($this->rows);
     }
+
+    public function fetchAll(
+        string $sql,
+        array $parameters = []
+    ): array {
+        return [];
+    }
 }

@@ -39,4 +39,14 @@ interface DatabaseConnectionInterface
         string $sql,
         array $parameters = []
     ): ?array;
+
+    /**
+     * @param list<int|float|string> $parameters
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function fetchAll(
+        string $sql,
+        array $parameters = []
+    ): array;
 }

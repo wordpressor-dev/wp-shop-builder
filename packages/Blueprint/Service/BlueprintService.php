@@ -6,6 +6,7 @@ namespace WPShop\Blueprint\Service;
 
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Contracts\BlueprintServiceInterface;
@@ -107,5 +108,11 @@ final readonly class BlueprintService implements
         }
 
         return $blueprint;
+    }
+
+    public function getAll(
+        BlueprintQuery $query
+    ): array {
+        return $this->repository->findAll($query);
     }
 }

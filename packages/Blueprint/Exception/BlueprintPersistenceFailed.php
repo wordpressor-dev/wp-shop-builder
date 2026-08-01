@@ -61,6 +61,16 @@ final class BlueprintPersistenceFailed extends RuntimeException
         );
     }
 
+    public static function collection(
+        Throwable $previous
+    ): self {
+        return new self(
+            'Blueprint collection lookup failed.',
+            0,
+            $previous
+        );
+    }
+
     public static function lookup(
         string $field,
         int|string $value,

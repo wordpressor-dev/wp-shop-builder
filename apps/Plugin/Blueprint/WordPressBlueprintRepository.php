@@ -12,6 +12,7 @@ use UnexpectedValueException;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Exception\BlueprintPersistenceFailed;
@@ -365,6 +366,69 @@ final readonly class WordPressBlueprintRepository implements
         }
     }
 
+    public function findAll(
+        BlueprintQuery $query
+    ): array {
+        try {
+            $conditions = ['1 = 1'];
+            $parameters = [];
+
+            if (! $query->includingDeleted()) {
+                $conditions[] = 'deleted_at IS NULL';
+            }
+
+            if ($query->type() !== null) {
+                $conditions[] = 'type = %s';
+                $parameters[] = $query->type();
+            }
+
+            if ($query->state() !== null) {
+                $conditions[] = 'state = %s';
+                $parameters[] = $query->state();
+            }
+
+            if ($query->workflow() !== null) {
+                $conditions[] = 'workflow = %s';
+                $parameters[] = $query->workflow();
+            }
+
+            $parameters[] = $query->limit();
+            $parameters[] = $query->offset();
+
+            $sql = sprintf(
+                'SELECT id, uuid, slug, type, '
+                . 'provider_id, developer_id, '
+                . 'current_release_id, state, workflow, '
+                . 'created_at, updated_at, deleted_at '
+                . 'FROM %s '
+                . 'WHERE %s '
+                . 'ORDER BY %s %s '
+                . 'LIMIT %%d OFFSET %%d',
+                $this->table,
+                implode(' AND ', $conditions),
+                $this->sortColumn($query->sortBy()),
+                strtoupper($query->sortDirection())
+            );
+
+            $rows = $this->database->fetchAll(
+                $sql,
+                $parameters
+            );
+
+            $blueprints = [];
+
+            foreach ($rows as $row) {
+                $blueprints[] = $this->mapper->map($row);
+            }
+
+            return $blueprints;
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::collection(
+                $exception
+            );
+        }
+    }
+
     private function fetch(
         string $field,
         string $placeholder,
@@ -400,6 +464,22 @@ final readonly class WordPressBlueprintRepository implements
         }
 
         return $this->mapper->map($row);
+    }
+
+    private function sortColumn(string $sortBy): string
+    {
+        return match ($sortBy) {
+            BlueprintQuery::SORT_ID => 'id',
+            BlueprintQuery::SORT_SLUG => 'slug',
+            BlueprintQuery::SORT_TYPE => 'type',
+            BlueprintQuery::SORT_STATE => 'state',
+            BlueprintQuery::SORT_WORKFLOW => 'workflow',
+            BlueprintQuery::SORT_CREATED_AT => 'created_at',
+            BlueprintQuery::SORT_UPDATED_AT => 'updated_at',
+            default => throw new UnexpectedValueException(
+                'Blueprint collection sort field is invalid.'
+            ),
+        };
     }
 
     private function assertPositiveId(int $id): void
