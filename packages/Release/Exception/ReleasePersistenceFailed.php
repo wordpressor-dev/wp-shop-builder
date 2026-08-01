@@ -19,6 +19,20 @@ final class ReleasePersistenceFailed extends RuntimeException
         );
     }
 
+    public static function update(
+        int $id,
+        Throwable $previous
+    ): self {
+        return new self(
+            sprintf(
+                'Release %d update failed.',
+                $id
+            ),
+            0,
+            $previous
+        );
+    }
+
     public static function lookup(
         string $field,
         int|string $value,
