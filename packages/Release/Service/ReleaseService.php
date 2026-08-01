@@ -9,6 +9,8 @@ use WPShop\Release\Contracts\ReleaseServiceInterface;
 use WPShop\Release\Exception\ReleaseNotFound;
 use WPShop\Release\Release;
 use WPShop\Release\ReleaseCreateData;
+use WPShop\Release\ReleasePage;
+use WPShop\Release\ReleaseQuery;
 use WPShop\Release\ReleaseUpdateData;
 
 final readonly class ReleaseService implements
@@ -71,5 +73,17 @@ final readonly class ReleaseService implements
         }
 
         return $release;
+    }
+
+    public function getAll(
+        ReleaseQuery $query
+    ): array {
+        return $this->repository->findAll($query);
+    }
+
+    public function getPage(
+        ReleaseQuery $query
+    ): ReleasePage {
+        return $this->repository->findPage($query);
     }
 }

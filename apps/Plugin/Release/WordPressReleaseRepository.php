@@ -14,6 +14,8 @@ use WPShop\Release\Contracts\ReleaseRepositoryInterface;
 use WPShop\Release\Exception\ReleasePersistenceFailed;
 use WPShop\Release\Release;
 use WPShop\Release\ReleaseCreateData;
+use WPShop\Release\ReleasePage;
+use WPShop\Release\ReleaseQuery;
 use WPShop\Release\ReleaseUpdateData;
 
 final readonly class WordPressReleaseRepository implements
@@ -218,12 +220,144 @@ final readonly class WordPressReleaseRepository implements
 
             return $this->mapper->map($row);
         } catch (Throwable $exception) {
-            throw ReleasePersistenceFailed::blueprintVersionLookup(
-                $blueprintId,
-                $version,
+            throw ReleasePersistenceFailed
+                ::blueprintVersionLookup(
+                    $blueprintId,
+                    $version,
+                    $exception
+                );
+        }
+    }
+
+    public function findAll(
+        ReleaseQuery $query
+    ): array {
+        try {
+            return $this->fetchCollection($query);
+        } catch (Throwable $exception) {
+            throw ReleasePersistenceFailed::collection(
                 $exception
             );
         }
+    }
+
+    public function findPage(
+        ReleaseQuery $query
+    ): ReleasePage {
+        try {
+            return new ReleasePage(
+                $this->fetchCollection($query),
+                $this->countCollection($query),
+                $query->limit(),
+                $query->offset()
+            );
+        } catch (Throwable $exception) {
+            throw ReleasePersistenceFailed::collection(
+                $exception
+            );
+        }
+    }
+
+    /**
+     * @return list<Release>
+     */
+    private function fetchCollection(
+        ReleaseQuery $query
+    ): array {
+        $filter = $this->collectionFilter($query);
+        $parameters = $filter['parameters'];
+
+        $parameters[] = $query->limit();
+        $parameters[] = $query->offset();
+
+        $sql = sprintf(
+            'SELECT id, blueprint_id, version, status, '
+            . 'manifest_id, published, validation_score, '
+            . 'created_at '
+            . 'FROM %s '
+            . 'WHERE %s '
+            . 'ORDER BY %s %s '
+            . 'LIMIT %%d OFFSET %%d',
+            $this->table,
+            implode(
+                ' AND ',
+                $filter['conditions']
+            ),
+            $this->sortColumn($query->sortBy()),
+            strtoupper($query->sortDirection())
+        );
+
+        $rows = $this->database->fetchAll(
+            $sql,
+            $parameters
+        );
+
+        $releases = [];
+
+        foreach ($rows as $row) {
+            $releases[] = $this->mapper->map($row);
+        }
+
+        return $releases;
+    }
+
+    private function countCollection(
+        ReleaseQuery $query
+    ): int {
+        $filter = $this->collectionFilter($query);
+
+        $sql = sprintf(
+            'SELECT COUNT(*) '
+            . 'FROM %s '
+            . 'WHERE %s',
+            $this->table,
+            implode(
+                ' AND ',
+                $filter['conditions']
+            )
+        );
+
+        return $this->database->fetchInteger(
+            $sql,
+            $filter['parameters']
+        );
+    }
+
+    /**
+     * @return array{
+     *     conditions: list<string>,
+     *     parameters: list<int|float|string>
+     * }
+     */
+    private function collectionFilter(
+        ReleaseQuery $query
+    ): array {
+        $conditions = ['1 = 1'];
+        $parameters = [];
+
+        if ($query->blueprintId() !== null) {
+            $conditions[] = 'blueprint_id = %d';
+            $parameters[] = $query->blueprintId();
+        }
+
+        if ($query->status() !== null) {
+            $conditions[] = 'status = %s';
+            $parameters[] = $query->status();
+        }
+
+        $published = $query->published();
+
+        if ($published !== null) {
+            $conditions[] = 'published = %d';
+            $parameters[] = $published
+                ? 1
+                : 0;
+        }
+
+        return [
+            'conditions' => $conditions,
+            'parameters' => $parameters,
+        ];
     }
 
     private function fetchById(int $id): ?Release
@@ -248,6 +382,26 @@ final readonly class WordPressReleaseRepository implements
         }
 
         return $this->mapper->map($row);
+    }
+
+    private function sortColumn(string $sortBy): string
+    {
+        return match ($sortBy) {
+            ReleaseQuery::SORT_ID => 'id',
+            ReleaseQuery::SORT_BLUEPRINT_ID =>
+                'blueprint_id',
+            ReleaseQuery::SORT_VERSION => 'version',
+            ReleaseQuery::SORT_STATUS => 'status',
+            ReleaseQuery::SORT_PUBLISHED =>
+                'published',
+            ReleaseQuery::SORT_VALIDATION_SCORE =>
+                'validation_score',
+            ReleaseQuery::SORT_CREATED_AT =>
+                'created_at',
+            default => throw new UnexpectedValueException(
+                'Release collection sort field is invalid.'
+            ),
+        };
     }
 
     private function assertPositiveId(
