@@ -6,6 +6,7 @@ namespace WPShop\Blueprint\Contracts;
 
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintPage;
 use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 
@@ -42,4 +43,8 @@ interface BlueprintRepositoryInterface
     public function findAll(
         BlueprintQuery $query
     ): array;
+
+    public function findPage(
+        BlueprintQuery $query
+    ): BlueprintPage;
 }

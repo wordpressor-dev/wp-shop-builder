@@ -118,4 +118,11 @@ final class ProviderDatabaseConnection implements
     ): array {
         return [];
     }
+
+    public function fetchInteger(
+        string $sql,
+        array $parameters = []
+    ): int {
+        return 0;
+    }
 }

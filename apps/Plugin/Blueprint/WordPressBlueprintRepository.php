@@ -12,6 +12,7 @@ use UnexpectedValueException;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintPage;
 use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
@@ -370,63 +371,132 @@ final readonly class WordPressBlueprintRepository implements
         BlueprintQuery $query
     ): array {
         try {
-            $conditions = ['1 = 1'];
-            $parameters = [];
-
-            if (! $query->includingDeleted()) {
-                $conditions[] = 'deleted_at IS NULL';
-            }
-
-            if ($query->type() !== null) {
-                $conditions[] = 'type = %s';
-                $parameters[] = $query->type();
-            }
-
-            if ($query->state() !== null) {
-                $conditions[] = 'state = %s';
-                $parameters[] = $query->state();
-            }
-
-            if ($query->workflow() !== null) {
-                $conditions[] = 'workflow = %s';
-                $parameters[] = $query->workflow();
-            }
-
-            $parameters[] = $query->limit();
-            $parameters[] = $query->offset();
-
-            $sql = sprintf(
-                'SELECT id, uuid, slug, type, '
-                . 'provider_id, developer_id, '
-                . 'current_release_id, state, workflow, '
-                . 'created_at, updated_at, deleted_at '
-                . 'FROM %s '
-                . 'WHERE %s '
-                . 'ORDER BY %s %s '
-                . 'LIMIT %%d OFFSET %%d',
-                $this->table,
-                implode(' AND ', $conditions),
-                $this->sortColumn($query->sortBy()),
-                strtoupper($query->sortDirection())
-            );
-
-            $rows = $this->database->fetchAll(
-                $sql,
-                $parameters
-            );
-
-            $blueprints = [];
-
-            foreach ($rows as $row) {
-                $blueprints[] = $this->mapper->map($row);
-            }
-
-            return $blueprints;
+            return $this->fetchCollection($query);
         } catch (Throwable $exception) {
             throw BlueprintPersistenceFailed::collection(
                 $exception
             );
         }
+    }
+
+    public function findPage(
+        BlueprintQuery $query
+    ): BlueprintPage {
+        try {
+            return new BlueprintPage(
+                $this->fetchCollection($query),
+                $this->countCollection($query),
+                $query->limit(),
+                $query->offset()
+            );
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::collection(
+                $exception
+            );
+        }
+    }
+
+    /**
+     * @return list<Blueprint>
+     */
+    private function fetchCollection(
+        BlueprintQuery $query
+    ): array {
+        $filter = $this->collectionFilter($query);
+        $parameters = $filter['parameters'];
+
+        $parameters[] = $query->limit();
+        $parameters[] = $query->offset();
+
+        $sql = sprintf(
+            'SELECT id, uuid, slug, type, '
+            . 'provider_id, developer_id, '
+            . 'current_release_id, state, workflow, '
+            . 'created_at, updated_at, deleted_at '
+            . 'FROM %s '
+            . 'WHERE %s '
+            . 'ORDER BY %s %s '
+            . 'LIMIT %%d OFFSET %%d',
+            $this->table,
+            implode(
+                ' AND ',
+                $filter['conditions']
+            ),
+            $this->sortColumn($query->sortBy()),
+            strtoupper($query->sortDirection())
+        );
+
+        $rows = $this->database->fetchAll(
+            $sql,
+            $parameters
+        );
+
+        $blueprints = [];
+
+        foreach ($rows as $row) {
+            $blueprints[] = $this->mapper->map($row);
+        }
+
+        return $blueprints;
+    }
+
+    private function countCollection(
+        BlueprintQuery $query
+    ): int {
+        $filter = $this->collectionFilter($query);
+
+        $sql = sprintf(
+            'SELECT COUNT(*) '
+            . 'FROM %s '
+            . 'WHERE %s',
+            $this->table,
+            implode(
+                ' AND ',
+                $filter['conditions']
+            )
+        );
+
+        return $this->database->fetchInteger(
+            $sql,
+            $filter['parameters']
+        );
+    }
+
+    /**
+     * @return array{
+     *     conditions: list<string>,
+     *     parameters: list<int|float|string>
+     * }
+     */
+    private function collectionFilter(
+        BlueprintQuery $query
+    ): array {
+        $conditions = ['1 = 1'];
+        $parameters = [];
+
+        if (! $query->includingDeleted()) {
+            $conditions[] = 'deleted_at IS NULL';
+        }
+
+        if ($query->type() !== null) {
+            $conditions[] = 'type = %s';
+            $parameters[] = $query->type();
+        }
+
+        if ($query->state() !== null) {
+            $conditions[] = 'state = %s';
+            $parameters[] = $query->state();
+        }
+
+        if ($query->workflow() !== null) {
+            $conditions[] = 'workflow = %s';
+            $parameters[] = $query->workflow();
+        }
+
+        return [
+            'conditions' => $conditions,
+            'parameters' => $parameters,
+        ];
     }
 
     private function fetch(

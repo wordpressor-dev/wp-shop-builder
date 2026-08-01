@@ -300,4 +300,11 @@ final class CollectionDatabase implements
 
         return $this->rows;
     }
+
+    public function fetchInteger(
+        string $sql,
+        array $parameters = []
+    ): int {
+        return 0;
+    }
 }

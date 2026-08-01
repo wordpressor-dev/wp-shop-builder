@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintPage;
 use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
@@ -324,6 +325,68 @@ final class BlueprintServiceTest extends TestCase
         );
     }
 
+    public function testGetsBlueprintPageThroughRepository(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $repository->page = new BlueprintPage(
+            [$this->blueprint()],
+            101,
+            25,
+            50
+        );
+
+        $query = new BlueprintQuery(
+            type: 'plugin',
+            state: 'published',
+            limit: 25,
+            offset: 50
+        );
+
+        $page = (new BlueprintService($repository))
+            ->getPage($query);
+
+        self::assertSame(
+            $repository->page,
+            $page
+        );
+
+        self::assertSame(
+            $query,
+            $repository->pageQuery
+        );
+    }
+
+    public function testReturnsEmptyBlueprintPage(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $repository->page = new BlueprintPage(
+            [],
+            0,
+            50,
+            0
+        );
+
+        $query = new BlueprintQuery();
+
+        $page = (new BlueprintService($repository))
+            ->getPage($query);
+
+        self::assertSame(
+            $repository->page,
+            $page
+        );
+
+        self::assertSame(
+            $query,
+            $repository->pageQuery
+        );
+
+        self::assertSame(0, $page->total());
+        self::assertSame(0, $page->totalPages());
+    }
+
     private function updateData(): BlueprintUpdateData
     {
         return new BlueprintUpdateData(
@@ -375,6 +438,10 @@ final class RecordingBlueprintRepository implements
     public array $collection = [];
 
     public ?BlueprintQuery $collectionQuery = null;
+
+    public ?BlueprintPage $page = null;
+
+    public ?BlueprintQuery $pageQuery = null;
 
     public ?int $updatedId = null;
 
@@ -433,6 +500,17 @@ final class RecordingBlueprintRepository implements
         $this->collectionQuery = $query;
 
         return $this->collection;
+    }
+
+    public function findPage(
+        BlueprintQuery $query
+    ): BlueprintPage {
+        $this->pageQuery = $query;
+
+        return $this->page
+            ?? throw new \LogicException(
+                'Blueprint page fixture is missing.'
+            );
     }
 
     public function findById(int $id): ?Blueprint

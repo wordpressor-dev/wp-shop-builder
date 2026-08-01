@@ -49,4 +49,12 @@ interface DatabaseConnectionInterface
         string $sql,
         array $parameters = []
     ): array;
+
+    /**
+     * @param list<int|float|string> $parameters
+     */
+    public function fetchInteger(
+        string $sql,
+        array $parameters = []
+    ): int;
 }
