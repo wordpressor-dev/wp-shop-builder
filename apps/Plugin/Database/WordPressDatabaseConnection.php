@@ -35,13 +35,17 @@ final readonly class WordPressDatabaseConnection implements
      * @param null|Closure(
      *     string
      * ): list<array<string, mixed>> $fetchAll
+     * @param null|Closure(
+     *     string
+     * ): (int|string|null) $fetchInteger
      */
     public function __construct(
         private Closure $insert,
         private Closure $prepare,
         private Closure $fetchOne,
         private ?Closure $update = null,
-        private ?Closure $fetchAll = null
+        private ?Closure $fetchAll = null,
+        private ?Closure $fetchInteger = null
     ) {
     }
 
@@ -200,6 +204,67 @@ final readonly class WordPressDatabaseConnection implements
         } catch (Throwable $exception) {
             throw DatabaseOperationFailed::operation(
                 'fetch all',
+                $exception
+            );
+        }
+    }
+
+    public function fetchInteger(
+        string $sql,
+        array $parameters = []
+    ): int {
+        self::assertQuery($sql);
+
+        try {
+            if ($this->fetchInteger === null) {
+                throw new UnexpectedValueException(
+                    'Database fetch integer operation is not configured.'
+                );
+            }
+
+            $preparedSql = $this->prepareQuery(
+                $sql,
+                $parameters
+            );
+
+            $value = ($this->fetchInteger)(
+                $preparedSql
+            );
+
+            if (is_int($value)) {
+                if ($value < 0) {
+                    throw new UnexpectedValueException(
+                        'Database integer query returned an invalid result.'
+                    );
+                }
+
+                return $value;
+            }
+
+            if (
+                ! is_string($value)
+                || preg_match(
+                    '/^(?:0|[1-9][0-9]*)$/D',
+                    $value
+                ) !== 1
+            ) {
+                throw new UnexpectedValueException(
+                    'Database integer query returned an invalid result.'
+                );
+            }
+
+            $integer = (int) $value;
+
+            if ((string) $integer !== $value) {
+                throw new UnexpectedValueException(
+                    'Database integer query returned an invalid result.'
+                );
+            }
+
+            return $integer;
+        } catch (Throwable $exception) {
+            throw DatabaseOperationFailed::operation(
+                'fetch integer',
                 $exception
             );
         }

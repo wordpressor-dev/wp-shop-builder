@@ -226,12 +226,43 @@ $fetchAll = static function (
     return array_values($rows);
 };
 
+$fetchInteger = static function (
+    string $sql
+) use ($wpdb): int|string|null {
+    $value = $wpdb->get_var($sql);
+
+    if ($value === null) {
+        if ($wpdb->last_error !== '') {
+            throw new RuntimeException(
+                sprintf(
+                    'WordPress database integer query failed: %s',
+                    $wpdb->last_error
+                )
+            );
+        }
+
+        return null;
+    }
+
+    if (
+        ! is_int($value)
+        && ! is_string($value)
+    ) {
+        throw new UnexpectedValueException(
+            'WordPress database integer query returned an invalid result.'
+        );
+    }
+
+    return $value;
+};
+
 $database = new WordPressDatabaseConnection(
     $insert,
     $prepare,
     $fetchOne,
     $update,
-    $fetchAll
+    $fetchAll,
+    $fetchInteger
 );
 
 $blueprintsTable = $schema->table(
