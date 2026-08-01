@@ -16,7 +16,7 @@
 
 declare(strict_types=1);
 
-use WPShop\App\Plugin\Blueprint\BlueprintServiceProvider;
+use WPShop\App\Plugin\PluginServiceProvider;
 use WPShop\App\Plugin\Bootstrap;
 use WPShop\App\Plugin\Database\WordPressDatabaseConnection;
 use WPShop\App\Plugin\Database\WordPressSchemaManager;
@@ -269,6 +269,10 @@ $blueprintsTable = $schema->table(
     CreateInitialSchema::BLUEPRINTS_TABLE
 );
 
+$releasesTable = $schema->table(
+    CreateInitialSchema::RELEASES_TABLE
+);
+
 $uuidGenerator = static function (): string {
     return wp_generate_uuid4();
 };
@@ -282,13 +286,15 @@ $serviceProviderFactory = static function (
 ) use (
     $database,
     $blueprintsTable,
+    $releasesTable,
     $uuidGenerator,
     $clock
 ): ServiceProviderInterface {
-    return new BlueprintServiceProvider(
+    return new PluginServiceProvider(
         $container,
         $database,
         $blueprintsTable,
+        $releasesTable,
         $uuidGenerator,
         $clock
     );
