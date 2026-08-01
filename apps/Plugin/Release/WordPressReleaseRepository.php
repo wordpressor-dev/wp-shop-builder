@@ -14,6 +14,7 @@ use WPShop\Release\Contracts\ReleaseRepositoryInterface;
 use WPShop\Release\Exception\ReleasePersistenceFailed;
 use WPShop\Release\Release;
 use WPShop\Release\ReleaseCreateData;
+use WPShop\Release\ReleaseUpdateData;
 
 final readonly class WordPressReleaseRepository implements
     ReleaseRepositoryInterface
@@ -96,6 +97,63 @@ final readonly class WordPressReleaseRepository implements
             return $release;
         } catch (Throwable $exception) {
             throw ReleasePersistenceFailed::creation(
+                $exception
+            );
+        }
+    }
+
+    public function update(
+        int $id,
+        ReleaseUpdateData $data
+    ): ?Release {
+        $this->assertPositiveId(
+            $id,
+            'identifier'
+        );
+
+        try {
+            $affectedRows = $this->database->update(
+                $this->table,
+                [
+                    'version' => $data->version(),
+                    'status' => $data->status(),
+                    'manifest_id' => $data->manifestId(),
+                    'published' => $data->published()
+                        ? 1
+                        : 0,
+                    'validation_score' =>
+                        $data->validationScore(),
+                ],
+                [
+                    'id' => $id,
+                ],
+                [
+                    '%s',
+                    '%s',
+                    '%d',
+                    '%d',
+                    '%f',
+                ],
+                [
+                    '%d',
+                ]
+            );
+
+            $release = $this->fetchById($id);
+
+            if (
+                $affectedRows > 0
+                && $release === null
+            ) {
+                throw new UnexpectedValueException(
+                    'Updated release could not be loaded.'
+                );
+            }
+
+            return $release;
+        } catch (Throwable $exception) {
+            throw ReleasePersistenceFailed::update(
+                $id,
                 $exception
             );
         }
