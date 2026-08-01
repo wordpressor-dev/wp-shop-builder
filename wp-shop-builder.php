@@ -188,11 +188,50 @@ $update = static function (
     return $result;
 };
 
+$fetchAll = static function (
+    string $sql
+) use ($wpdb): array {
+    $rows = $wpdb->get_results(
+        $sql,
+        ARRAY_A
+    );
+
+    if ($rows === null) {
+        if ($wpdb->last_error !== '') {
+            throw new RuntimeException(
+                sprintf(
+                    'WordPress database collection query failed: %s',
+                    $wpdb->last_error
+                )
+            );
+        }
+
+        return [];
+    }
+
+    if (! is_array($rows)) {
+        throw new UnexpectedValueException(
+            'WordPress database collection query returned an invalid result.'
+        );
+    }
+
+    foreach ($rows as $row) {
+        if (! is_array($row)) {
+            throw new UnexpectedValueException(
+                'WordPress database collection query returned an invalid row.'
+            );
+        }
+    }
+
+    return array_values($rows);
+};
+
 $database = new WordPressDatabaseConnection(
     $insert,
     $prepare,
     $fetchOne,
-    $update
+    $update,
+    $fetchAll
 );
 
 $blueprintsTable = $schema->table(

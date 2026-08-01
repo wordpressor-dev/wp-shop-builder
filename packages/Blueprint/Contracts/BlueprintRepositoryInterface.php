@@ -6,6 +6,7 @@ namespace WPShop\Blueprint\Contracts;
 
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\BlueprintCreateData;
+use WPShop\Blueprint\BlueprintQuery;
 use WPShop\Blueprint\BlueprintUpdateData;
 
 interface BlueprintRepositoryInterface
@@ -34,4 +35,11 @@ interface BlueprintRepositoryInterface
     public function findByUuidIncludingDeleted(
         string $uuid
     ): ?Blueprint;
+
+    /**
+     * @return list<Blueprint>
+     */
+    public function findAll(
+        BlueprintQuery $query
+    ): array;
 }
