@@ -387,6 +387,80 @@ final class BlueprintServiceTest extends TestCase
         self::assertSame(0, $page->totalPages());
     }
 
+    public function testGetsBlueprintBySlug(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->blueprint = $this->blueprint();
+
+        $blueprint = (new BlueprintService($repository))
+            ->getBySlug('example-plugin');
+
+        self::assertSame(
+            $repository->blueprint,
+            $blueprint
+        );
+
+        self::assertSame(
+            'example-plugin',
+            $repository->requestedSlug
+        );
+    }
+
+    public function testThrowsWhenSlugIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Blueprint with slug "missing-plugin" was not found.'
+        );
+
+        (new BlueprintService($repository))
+            ->getBySlug('missing-plugin');
+    }
+
+    public function testGetsDeletedBlueprintBySlug(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+        $repository->blueprint = $this->blueprint();
+
+        $blueprint = (new BlueprintService($repository))
+            ->getBySlugIncludingDeleted(
+                'example-plugin'
+            );
+
+        self::assertSame(
+            $repository->blueprint,
+            $blueprint
+        );
+
+        self::assertSame(
+            'example-plugin',
+            $repository->requestedIncludingDeletedSlug
+        );
+    }
+
+    public function testThrowsWhenDeletedSlugIsMissing(): void
+    {
+        $repository = new RecordingBlueprintRepository();
+
+        $this->expectException(
+            BlueprintNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Blueprint with slug "missing-plugin" was not found.'
+        );
+
+        (new BlueprintService($repository))
+            ->getBySlugIncludingDeleted(
+                'missing-plugin'
+            );
+    }
+
     private function updateData(): BlueprintUpdateData
     {
         return new BlueprintUpdateData(
@@ -455,9 +529,13 @@ final class RecordingBlueprintRepository implements
 
     public ?string $requestedUuid = null;
 
+    public ?string $requestedSlug = null;
+
     public ?int $requestedIncludingDeletedId = null;
 
     public ?string $requestedIncludingDeletedUuid = null;
+
+    public ?string $requestedIncludingDeletedSlug = null;
 
     public function create(
         BlueprintCreateData $data
@@ -528,6 +606,14 @@ final class RecordingBlueprintRepository implements
         return $this->blueprint;
     }
 
+    public function findBySlug(
+        string $slug
+    ): ?Blueprint {
+        $this->requestedSlug = $slug;
+
+        return $this->blueprint;
+    }
+
     public function findByIdIncludingDeleted(
         int $id
     ): ?Blueprint {
@@ -540,6 +626,14 @@ final class RecordingBlueprintRepository implements
         string $uuid
     ): ?Blueprint {
         $this->requestedIncludingDeletedUuid = $uuid;
+
+        return $this->blueprint;
+    }
+
+    public function findBySlugIncludingDeleted(
+        string $slug
+    ): ?Blueprint {
+        $this->requestedIncludingDeletedSlug = $slug;
 
         return $this->blueprint;
     }

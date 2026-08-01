@@ -325,6 +325,26 @@ final readonly class WordPressBlueprintRepository implements
         }
     }
 
+    public function findBySlug(
+        string $slug
+    ): ?Blueprint {
+        $this->assertSlug($slug);
+
+        try {
+            return $this->fetch(
+                'slug',
+                '%s',
+                $slug
+            );
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::lookup(
+                'slug',
+                $slug,
+                $exception
+            );
+        }
+    }
+
     public function findByIdIncludingDeleted(
         int $id
     ): ?Blueprint {
@@ -362,6 +382,27 @@ final readonly class WordPressBlueprintRepository implements
             throw BlueprintPersistenceFailed::lookup(
                 'uuid',
                 $uuid,
+                $exception
+            );
+        }
+    }
+
+    public function findBySlugIncludingDeleted(
+        string $slug
+    ): ?Blueprint {
+        $this->assertSlug($slug);
+
+        try {
+            return $this->fetch(
+                'slug',
+                '%s',
+                $slug,
+                true
+            );
+        } catch (Throwable $exception) {
+            throw BlueprintPersistenceFailed::lookup(
+                'slug',
+                $slug,
                 $exception
             );
         }
@@ -557,6 +598,18 @@ final readonly class WordPressBlueprintRepository implements
         if ($id < 1) {
             throw new InvalidArgumentException(
                 'Blueprint identifier must be positive.'
+            );
+        }
+    }
+
+    private function assertSlug(string $slug): void
+    {
+        if (
+            trim($slug) === ''
+            || strlen($slug) > 191
+        ) {
+            throw new InvalidArgumentException(
+                'Blueprint slug must contain between 1 and 191 characters.'
             );
         }
     }

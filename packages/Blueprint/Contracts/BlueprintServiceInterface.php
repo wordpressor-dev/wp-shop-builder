@@ -29,12 +29,18 @@ interface BlueprintServiceInterface
 
     public function getByUuid(string $uuid): Blueprint;
 
+    public function getBySlug(string $slug): Blueprint;
+
     public function getByIdIncludingDeleted(
         int $id
     ): Blueprint;
 
     public function getByUuidIncludingDeleted(
         string $uuid
+    ): Blueprint;
+
+    public function getBySlugIncludingDeleted(
+        string $slug
     ): Blueprint;
 
     /**
