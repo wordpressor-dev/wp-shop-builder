@@ -33,6 +33,16 @@ final class ReleasePersistenceFailed extends RuntimeException
         );
     }
 
+    public static function collection(
+        Throwable $previous
+    ): self {
+        return new self(
+            'Release collection lookup failed.',
+            0,
+            $previous
+        );
+    }
+
     public static function lookup(
         string $field,
         int|string $value,

@@ -11,6 +11,8 @@ use WPShop\Release\Contracts\ReleaseRepositoryInterface;
 use WPShop\Release\Exception\ReleaseNotFound;
 use WPShop\Release\Release;
 use WPShop\Release\ReleaseCreateData;
+use WPShop\Release\ReleasePage;
+use WPShop\Release\ReleaseQuery;
 use WPShop\Release\ReleaseUpdateData;
 use WPShop\Release\Service\ReleaseService;
 
@@ -164,6 +166,64 @@ final class ReleaseServiceTest extends TestCase
             );
     }
 
+    public function testGetsReleaseCollectionThroughRepository(): void
+    {
+        $repository = new RecordingReleaseRepository();
+
+        $repository->releases = [
+            $this->release(),
+        ];
+
+        $query = new ReleaseQuery(
+            status: 'published'
+        );
+
+        $releases = (new ReleaseService($repository))
+            ->getAll($query);
+
+        self::assertSame(
+            $repository->releases,
+            $releases
+        );
+
+        self::assertSame(
+            $query,
+            $repository->collectionQuery
+        );
+    }
+
+    public function testGetsReleasePageThroughRepository(): void
+    {
+        $repository = new RecordingReleaseRepository();
+
+        $repository->page = new ReleasePage(
+            [
+                $this->release(),
+            ],
+            101,
+            25,
+            50
+        );
+
+        $query = new ReleaseQuery(
+            limit: 25,
+            offset: 50
+        );
+
+        $page = (new ReleaseService($repository))
+            ->getPage($query);
+
+        self::assertSame(
+            $repository->page,
+            $page
+        );
+
+        self::assertSame(
+            $query,
+            $repository->pageQuery
+        );
+    }
+
     private function updateData(): ReleaseUpdateData
     {
         return new ReleaseUpdateData(
@@ -209,6 +269,17 @@ final class RecordingReleaseRepository implements
 
     public ?string $requestedVersion = null;
 
+    /**
+     * @var list<Release>
+     */
+    public array $releases = [];
+
+    public ?ReleasePage $page = null;
+
+    public ?ReleaseQuery $collectionQuery = null;
+
+    public ?ReleaseQuery $pageQuery = null;
+
     public function create(
         ReleaseCreateData $data
     ): Release {
@@ -247,5 +318,24 @@ final class RecordingReleaseRepository implements
         $this->requestedVersion = $version;
 
         return $this->release;
+    }
+
+    public function findAll(
+        ReleaseQuery $query
+    ): array {
+        $this->collectionQuery = $query;
+
+        return $this->releases;
+    }
+
+    public function findPage(
+        ReleaseQuery $query
+    ): ReleasePage {
+        $this->pageQuery = $query;
+
+        return $this->page
+            ?? throw new LogicException(
+                'Release page fixture is missing.'
+            );
     }
 }

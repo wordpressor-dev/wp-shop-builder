@@ -6,6 +6,8 @@ namespace WPShop\Release\Contracts;
 
 use WPShop\Release\Release;
 use WPShop\Release\ReleaseCreateData;
+use WPShop\Release\ReleasePage;
+use WPShop\Release\ReleaseQuery;
 use WPShop\Release\ReleaseUpdateData;
 
 interface ReleaseServiceInterface
@@ -25,4 +27,15 @@ interface ReleaseServiceInterface
         int $blueprintId,
         string $version
     ): Release;
+
+    /**
+     * @return list<Release>
+     */
+    public function getAll(
+        ReleaseQuery $query
+    ): array;
+
+    public function getPage(
+        ReleaseQuery $query
+    ): ReleasePage;
 }
