@@ -85,6 +85,19 @@ final readonly class BlueprintService implements
         return $blueprint;
     }
 
+    public function getBySlug(string $slug): Blueprint
+    {
+        $blueprint = $this->repository->findBySlug(
+            $slug
+        );
+
+        if ($blueprint === null) {
+            throw BlueprintNotFound::bySlug($slug);
+        }
+
+        return $blueprint;
+    }
+
     public function getByIdIncludingDeleted(
         int $id
     ): Blueprint {
@@ -106,6 +119,19 @@ final readonly class BlueprintService implements
 
         if ($blueprint === null) {
             throw BlueprintNotFound::byUuid($uuid);
+        }
+
+        return $blueprint;
+    }
+
+    public function getBySlugIncludingDeleted(
+        string $slug
+    ): Blueprint {
+        $blueprint = $this->repository
+            ->findBySlugIncludingDeleted($slug);
+
+        if ($blueprint === null) {
+            throw BlueprintNotFound::bySlug($slug);
         }
 
         return $blueprint;

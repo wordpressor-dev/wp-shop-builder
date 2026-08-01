@@ -29,12 +29,18 @@ interface BlueprintRepositoryInterface
 
     public function findByUuid(string $uuid): ?Blueprint;
 
+    public function findBySlug(string $slug): ?Blueprint;
+
     public function findByIdIncludingDeleted(
         int $id
     ): ?Blueprint;
 
     public function findByUuidIncludingDeleted(
         string $uuid
+    ): ?Blueprint;
+
+    public function findBySlugIncludingDeleted(
+        string $slug
     ): ?Blueprint;
 
     /**

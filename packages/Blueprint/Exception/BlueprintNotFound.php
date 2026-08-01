@@ -27,4 +27,14 @@ final class BlueprintNotFound extends RuntimeException
             )
         );
     }
+
+    public static function bySlug(string $slug): self
+    {
+        return new self(
+            sprintf(
+                'Blueprint with slug "%s" was not found.',
+                $slug
+            )
+        );
+    }
 }
