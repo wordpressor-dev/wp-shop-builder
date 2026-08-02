@@ -9,6 +9,7 @@ use WPShop\Manifest\Contracts\ManifestServiceInterface;
 use WPShop\Manifest\Exception\ManifestNotFound;
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestUpdateData;
 
 final readonly class ManifestService implements
     ManifestServiceInterface
@@ -22,6 +23,22 @@ final readonly class ManifestService implements
         ManifestCreateData $data
     ): Manifest {
         return $this->repository->create($data);
+    }
+
+    public function update(
+        int $id,
+        ManifestUpdateData $data
+    ): Manifest {
+        $manifest = $this->repository->update(
+            $id,
+            $data
+        );
+
+        if (!$manifest instanceof \WPShop\Manifest\Manifest) {
+            throw ManifestNotFound::byId($id);
+        }
+
+        return $manifest;
     }
 
     public function getById(int $id): Manifest

@@ -43,6 +43,55 @@ final class ManifestServiceTest extends TestCase
         );
     }
 
+    public function testUpdatesManifestThroughRepository(): void
+    {
+        $repository = new RecordingManifestRepository();
+        $repository->manifest = $this->manifest();
+
+        $data = new ManifestUpdateData(
+            '{"name":"example-plugin","version":"2.0.0"}'
+        );
+
+        $manifest = (new ManifestService($repository))
+            ->update(
+                42,
+                $data
+            );
+
+        self::assertSame(
+            $repository->manifest,
+            $manifest
+        );
+
+        self::assertSame(
+            42,
+            $repository->updatedId
+        );
+
+        self::assertSame(
+            $data,
+            $repository->updateData
+        );
+    }
+
+    public function testThrowsWhenUpdatedManifestIsMissing(): void
+    {
+        $repository = new RecordingManifestRepository();
+
+        $this->expectException(
+            ManifestNotFound::class
+        );
+
+        $this->expectExceptionMessage(
+            'Manifest with identifier 42 was not found.'
+        );
+
+        (new ManifestService($repository))->update(
+            42,
+            new ManifestUpdateData('{}')
+        );
+    }
+
     public function testGetsManifestByIdentifier(): void
     {
         $repository = new RecordingManifestRepository();
@@ -137,6 +186,10 @@ final class RecordingManifestRepository implements
 
     public ?ManifestCreateData $creationData = null;
 
+    public ?int $updatedId = null;
+
+    public ?ManifestUpdateData $updateData = null;
+
     public ?int $requestedId = null;
 
     public ?int $requestedReleaseId = null;
@@ -156,6 +209,9 @@ final class RecordingManifestRepository implements
         int $id,
         ManifestUpdateData $data
     ): ?Manifest {
+        $this->updatedId = $id;
+        $this->updateData = $data;
+
         return $this->manifest;
     }
 
