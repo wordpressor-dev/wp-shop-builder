@@ -11,6 +11,7 @@ use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Exception\ManifestNotFound;
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestUpdateData;
 use WPShop\Manifest\Service\ManifestService;
 
 final class ManifestServiceTest extends TestCase
@@ -149,6 +150,13 @@ final class RecordingManifestRepository implements
             ?? throw new LogicException(
                 'Manifest fixture is missing.'
             );
+    }
+
+    public function update(
+        int $id,
+        ManifestUpdateData $data
+    ): ?Manifest {
+        return $this->manifest;
     }
 
     public function findById(

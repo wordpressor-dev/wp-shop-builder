@@ -14,6 +14,7 @@ use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Exception\ManifestPersistenceFailed;
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestUpdateData;
 
 final readonly class WordPressManifestRepository implements
     ManifestRepositoryInterface
@@ -82,6 +83,60 @@ final readonly class WordPressManifestRepository implements
             return $manifest;
         } catch (Throwable $exception) {
             throw ManifestPersistenceFailed::creation(
+                $exception
+            );
+        }
+    }
+
+    public function update(
+        int $id,
+        ManifestUpdateData $data
+    ): ?Manifest {
+        $this->assertPositiveId(
+            $id,
+            'identifier'
+        );
+
+        try {
+            $affectedRows = $this->database->update(
+                $this->table,
+                [
+                    'manifest_json' =>
+                        $data->manifestJson(),
+                    'manifest_hash' =>
+                        $data->manifestHash(),
+                ],
+                [
+                    'id' => $id,
+                ],
+                [
+                    '%s',
+                    '%s',
+                ],
+                [
+                    '%d',
+                ]
+            );
+
+            $manifest = $this->fetch(
+                'id',
+                '%d',
+                $id
+            );
+
+            if (
+                $affectedRows > 0
+                && !$manifest instanceof \WPShop\Manifest\Manifest
+            ) {
+                throw new UnexpectedValueException(
+                    'Updated manifest could not be loaded.'
+                );
+            }
+
+            return $manifest;
+        } catch (Throwable $exception) {
+            throw ManifestPersistenceFailed::update(
+                $id,
                 $exception
             );
         }

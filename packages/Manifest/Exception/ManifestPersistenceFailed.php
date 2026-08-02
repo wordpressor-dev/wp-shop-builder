@@ -19,6 +19,20 @@ final class ManifestPersistenceFailed extends RuntimeException
         );
     }
 
+    public static function update(
+        int $id,
+        Throwable $previous
+    ): self {
+        return new self(
+            sprintf(
+                'Manifest %d update failed.',
+                $id
+            ),
+            0,
+            $previous
+        );
+    }
+
     public static function lookup(
         string $field,
         int $value,
