@@ -7,13 +7,19 @@ namespace WPShop\Tests\App\Plugin;
 use DateTimeImmutable;
 use LogicException;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use WPShop\App\Plugin\Blueprint\BlueprintServiceProvider;
+use WPShop\App\Plugin\Blueprint\WordPressBlueprintRepository;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
+use WPShop\App\Plugin\Manifest\ManifestServiceProvider;
+use WPShop\App\Plugin\Manifest\WordPressManifestRepository;
 use WPShop\App\Plugin\PluginServiceProvider;
 use WPShop\App\Plugin\Release\ReleaseServiceProvider;
+use WPShop\App\Plugin\Release\WordPressReleaseRepository;
 use WPShop\Blueprint\Contracts\BlueprintServiceInterface;
 use WPShop\Core\Container\Container;
 use WPShop\Core\Kernel\Kernel;
+use WPShop\Manifest\Contracts\ManifestServiceInterface;
 use WPShop\Release\Contracts\ReleaseServiceInterface;
 
 final class PluginServiceProviderTest extends TestCase
@@ -54,6 +60,13 @@ final class PluginServiceProviderTest extends TestCase
         );
 
         self::assertInstanceOf(
+            ManifestServiceProvider::class,
+            $container->get(
+                ManifestServiceProvider::class
+            )
+        );
+
+        self::assertInstanceOf(
             BlueprintServiceInterface::class,
             $container->get(
                 BlueprintServiceInterface::class
@@ -65,6 +78,37 @@ final class PluginServiceProviderTest extends TestCase
             $container->get(
                 ReleaseServiceInterface::class
             )
+        );
+
+        self::assertInstanceOf(
+            ManifestServiceInterface::class,
+            $container->get(
+                ManifestServiceInterface::class
+            )
+        );
+
+        $this->assertRepositoryConfiguration(
+            $container->get(
+                WordPressBlueprintRepository::class
+            ),
+            $database,
+            'wp_wps_blueprints'
+        );
+
+        $this->assertRepositoryConfiguration(
+            $container->get(
+                WordPressReleaseRepository::class
+            ),
+            $database,
+            'wp_wps_releases'
+        );
+
+        $this->assertRepositoryConfiguration(
+            $container->get(
+                WordPressManifestRepository::class
+            ),
+            $database,
+            'wp_wps_manifests'
         );
 
         $provider->boot(new Kernel());
@@ -99,6 +143,7 @@ final class PluginServiceProviderTest extends TestCase
             $database,
             'wp_wps_blueprints',
             'wp_wps_releases',
+            'wp_wps_manifests',
             static fn (): string =>
                 '123e4567-e89b-12d3-a456-426614174000',
             static fn (): DateTimeImmutable =>
@@ -106,6 +151,40 @@ final class PluginServiceProviderTest extends TestCase
                     '2026-08-01 12:00:00'
                 )
         );
+    }
+
+    private function assertRepositoryConfiguration(
+        object $repository,
+        PluginProviderDatabaseConnection $database,
+        string $table
+    ): void {
+        self::assertSame(
+            $database,
+            $this->property(
+                $repository,
+                'database'
+            )
+        );
+
+        self::assertSame(
+            $table,
+            $this->property(
+                $repository,
+                'table'
+            )
+        );
+    }
+
+    private function property(
+        object $object,
+        string $name
+    ): mixed {
+        $property = new ReflectionProperty(
+            $object,
+            $name
+        );
+
+        return $property->getValue($object);
     }
 }
 
