@@ -39,24 +39,13 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 global $wpdb;
 
-$getOption = static function (
-    string $name,
-    mixed $default
-): mixed {
-    return get_option($name, $default);
-};
+$getOption = (static fn(string $name, mixed $default): mixed => get_option($name, $default));
 
-$updateOption = static function (
-    string $name,
-    mixed $value,
-    bool $autoload
-): bool {
-    return update_option(
-        $name,
-        $value,
-        $autoload
-    );
-};
+$updateOption = (static fn(string $name, mixed $value, bool $autoload): bool => update_option(
+    $name,
+    $value,
+    $autoload
+));
 
 $applySchema = static function (string $sql): void {
     require_once ABSPATH
@@ -273,32 +262,26 @@ $releasesTable = $schema->table(
     CreateInitialSchema::RELEASES_TABLE
 );
 
-$uuidGenerator = static function (): string {
-    return wp_generate_uuid4();
-};
+$manifestsTable = $schema->table(
+    CreateInitialSchema::MANIFESTS_TABLE
+);
 
-$clock = static function (): DateTimeImmutable {
-    return current_datetime();
-};
+$uuidGenerator = (static fn(): string => wp_generate_uuid4());
 
-$serviceProviderFactory = static function (
-    ContainerInterface $container
-) use (
-    $database,
-    $blueprintsTable,
-    $releasesTable,
-    $uuidGenerator,
-    $clock
-): ServiceProviderInterface {
-    return new PluginServiceProvider(
-        $container,
-        $database,
-        $blueprintsTable,
-        $releasesTable,
-        $uuidGenerator,
-        $clock
-    );
-};
+$clock = (static fn(): DateTimeImmutable => current_datetime());
+
+$serviceProviderFactory = (
+    static fn(ContainerInterface $container): ServiceProviderInterface =>
+        new PluginServiceProvider(
+            $container,
+            $database,
+            $blueprintsTable,
+            $releasesTable,
+            $manifestsTable,
+            $uuidGenerator,
+            $clock
+        )
+);
 
 $plugin = new Plugin(
     $serviceProviderFactory
@@ -352,10 +335,10 @@ add_action(
     static function () use ($bootstrap): void {
         $notice = $bootstrap->boot();
 
-        if ($notice !== null) {
+        if ($notice instanceof \WPShop\App\Plugin\Admin\AdminNoticeInterface) {
             add_action(
                 'admin_notices',
-                [$notice, 'render']
+                $notice->render(...)
             );
         }
     },
