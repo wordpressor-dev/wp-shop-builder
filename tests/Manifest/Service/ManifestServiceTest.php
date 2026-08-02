@@ -11,6 +11,8 @@ use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Exception\ManifestNotFound;
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestPage;
+use WPShop\Manifest\ManifestQuery;
 use WPShop\Manifest\ManifestUpdateData;
 use WPShop\Manifest\Service\ManifestService;
 
@@ -229,5 +231,25 @@ final class RecordingManifestRepository implements
         $this->requestedReleaseId = $releaseId;
 
         return $this->manifest;
+    }
+
+    /**
+     * @return list<Manifest>
+     */
+    public function findAll(
+        ManifestQuery $query
+    ): array {
+        return [];
+    }
+
+    public function findPage(
+        ManifestQuery $query
+    ): ManifestPage {
+        return new ManifestPage(
+            [],
+            0,
+            $query->limit(),
+            $query->offset()
+        );
     }
 }
