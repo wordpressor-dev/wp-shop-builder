@@ -9,6 +9,8 @@ use WPShop\Manifest\Contracts\ManifestServiceInterface;
 use WPShop\Manifest\Exception\ManifestNotFound;
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestPage;
+use WPShop\Manifest\ManifestQuery;
 use WPShop\Manifest\ManifestUpdateData;
 
 final readonly class ManifestService implements
@@ -65,5 +67,17 @@ final readonly class ManifestService implements
         }
 
         return $manifest;
+    }
+
+    public function getAll(
+        ManifestQuery $query
+    ): array {
+        return $this->repository->findAll($query);
+    }
+
+    public function getPage(
+        ManifestQuery $query
+    ): ManifestPage {
+        return $this->repository->findPage($query);
     }
 }
