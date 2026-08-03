@@ -164,6 +164,63 @@ final class ManifestServiceTest extends TestCase
             ->getByReleaseId(7);
     }
 
+    public function testGetsManifestCollectionThroughRepository(): void
+    {
+        $repository = new RecordingManifestRepository();
+
+        $repository->manifests = [
+            $this->manifest(),
+        ];
+
+        $query = new ManifestQuery(
+            releaseId: 7
+        );
+
+        $manifests = (new ManifestService($repository))
+            ->getAll($query);
+
+        self::assertSame(
+            $repository->manifests,
+            $manifests
+        );
+
+        self::assertSame(
+            $query,
+            $repository->collectionQuery
+        );
+    }
+
+    public function testGetsManifestPageThroughRepository(): void
+    {
+        $repository = new RecordingManifestRepository();
+
+        $repository->page = new ManifestPage(
+            [
+                $this->manifest(),
+            ],
+            101,
+            25,
+            50
+        );
+
+        $query = new ManifestQuery(
+            limit: 25,
+            offset: 50
+        );
+
+        $page = (new ManifestService($repository))
+            ->getPage($query);
+
+        self::assertSame(
+            $repository->page,
+            $page
+        );
+
+        self::assertSame(
+            $query,
+            $repository->pageQuery
+        );
+    }
     private function manifest(): Manifest
     {
         return new Manifest(
@@ -195,6 +252,17 @@ final class RecordingManifestRepository implements
     public ?int $requestedId = null;
 
     public ?int $requestedReleaseId = null;
+
+    /**
+     * @var list<Manifest>
+     */
+    public array $manifests = [];
+
+    public ?ManifestPage $page = null;
+
+    public ?ManifestQuery $collectionQuery = null;
+
+    public ?ManifestQuery $pageQuery = null;
 
     public function create(
         ManifestCreateData $data
@@ -239,17 +307,19 @@ final class RecordingManifestRepository implements
     public function findAll(
         ManifestQuery $query
     ): array {
-        return [];
+        $this->collectionQuery = $query;
+
+        return $this->manifests;
     }
 
     public function findPage(
         ManifestQuery $query
     ): ManifestPage {
-        return new ManifestPage(
-            [],
-            0,
-            $query->limit(),
-            $query->offset()
-        );
+        $this->pageQuery = $query;
+
+        return $this->page
+            ?? throw new LogicException(
+                'Manifest page fixture is missing.'
+            );
     }
 }

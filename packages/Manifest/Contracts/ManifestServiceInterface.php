@@ -6,6 +6,8 @@ namespace WPShop\Manifest\Contracts;
 
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestPage;
+use WPShop\Manifest\ManifestQuery;
 use WPShop\Manifest\ManifestUpdateData;
 
 interface ManifestServiceInterface
@@ -24,4 +26,15 @@ interface ManifestServiceInterface
     public function getByReleaseId(
         int $releaseId
     ): Manifest;
+
+    /**
+     * @return list<Manifest>
+     */
+    public function getAll(
+        ManifestQuery $query
+    ): array;
+
+    public function getPage(
+        ManifestQuery $query
+    ): ManifestPage;
 }
