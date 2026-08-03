@@ -9,11 +9,18 @@ use DateTimeImmutable;
 use LogicException;
 use WPShop\App\Plugin\Blueprint\BlueprintServiceProvider;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
+use WPShop\App\Plugin\Database\Contracts\TransactionManagerInterface;
+use WPShop\App\Plugin\Database\WordPressTransactionManager;
 use WPShop\App\Plugin\Manifest\ManifestServiceProvider;
+use WPShop\App\Plugin\Release\ReleasePublicationService;
 use WPShop\App\Plugin\Release\ReleaseServiceProvider;
+use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
+use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
+use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
+use WPShop\Release\Contracts\ReleaseRepositoryInterface;
 
 final class PluginServiceProvider extends AbstractServiceProvider
 {
@@ -29,6 +36,7 @@ final class PluginServiceProvider extends AbstractServiceProvider
     /**
      * @param Closure(): string $uuidGenerator
      * @param Closure(): DateTimeImmutable $clock
+     * @param Closure(string): (int|bool) $query
      */
     public function __construct(
         ContainerInterface $container,
@@ -37,13 +45,29 @@ final class PluginServiceProvider extends AbstractServiceProvider
         private readonly string $releasesTable,
         private readonly string $manifestsTable,
         private readonly Closure $uuidGenerator,
-        private readonly Closure $clock
+        private readonly Closure $clock,
+        private readonly Closure $query
     ) {
         parent::__construct($container);
     }
 
     public function register(): void
     {
+        $transactionManager =
+            new WordPressTransactionManager(
+                $this->query
+            );
+
+        $this->container->set(
+            TransactionManagerInterface::class,
+            $transactionManager
+        );
+
+        $this->container->set(
+            WordPressTransactionManager::class,
+            $transactionManager
+        );
+
         $this->blueprintProvider =
             new BlueprintServiceProvider(
                 $this->container,
@@ -88,6 +112,50 @@ final class PluginServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ManifestServiceProvider::class,
             $this->manifestProvider
+        );
+
+        $releaseRepository = $this->container->get(
+            ReleaseRepositoryInterface::class
+        );
+
+        $blueprintRepository = $this->container->get(
+            BlueprintRepositoryInterface::class
+        );
+
+        $manifestRepository = $this->container->get(
+            ManifestRepositoryInterface::class
+        );
+
+        if (
+            ! $releaseRepository instanceof
+                ReleaseRepositoryInterface
+            || ! $blueprintRepository instanceof
+                BlueprintRepositoryInterface
+            || ! $manifestRepository instanceof
+                ManifestRepositoryInterface
+        ) {
+            throw new LogicException(
+                'Plugin domain repositories must be registered '
+                . 'before publication services.'
+            );
+        }
+
+        $publicationService =
+            new ReleasePublicationService(
+                $releaseRepository,
+                $blueprintRepository,
+                $manifestRepository,
+                $transactionManager
+            );
+
+        $this->container->set(
+            ReleasePublicationServiceInterface::class,
+            $publicationService
+        );
+
+        $this->container->set(
+            ReleasePublicationService::class,
+            $publicationService
         );
     }
 
