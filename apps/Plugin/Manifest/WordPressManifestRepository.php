@@ -14,6 +14,8 @@ use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Exception\ManifestPersistenceFailed;
 use WPShop\Manifest\Manifest;
 use WPShop\Manifest\ManifestCreateData;
+use WPShop\Manifest\ManifestPage;
+use WPShop\Manifest\ManifestQuery;
 use WPShop\Manifest\ManifestUpdateData;
 
 final readonly class WordPressManifestRepository implements
@@ -180,6 +182,146 @@ final readonly class WordPressManifestRepository implements
                 $exception
             );
         }
+    }
+
+    /**
+     * @return list<Manifest>
+     */
+    public function findAll(
+        ManifestQuery $query
+    ): array {
+        try {
+            return $this->fetchCollection($query);
+        } catch (Throwable $exception) {
+            throw ManifestPersistenceFailed::collection(
+                $exception
+            );
+        }
+    }
+
+    public function findPage(
+        ManifestQuery $query
+    ): ManifestPage {
+        try {
+            return new ManifestPage(
+                $this->fetchCollection($query),
+                $this->countCollection($query),
+                $query->limit(),
+                $query->offset()
+            );
+        } catch (Throwable $exception) {
+            throw ManifestPersistenceFailed::collection(
+                $exception
+            );
+        }
+    }
+
+    /**
+     * @return list<Manifest>
+     */
+    private function fetchCollection(
+        ManifestQuery $query
+    ): array {
+        $filter = $this->collectionFilter($query);
+        $parameters = $filter['parameters'];
+
+        $parameters[] = $query->limit();
+        $parameters[] = $query->offset();
+
+        $sql = sprintf(
+            'SELECT id, release_id, manifest_json, '
+            . 'manifest_hash, created_at '
+            . 'FROM %s '
+            . 'WHERE %s '
+            . 'ORDER BY %s %s '
+            . 'LIMIT %%d OFFSET %%d',
+            $this->table,
+            implode(
+                ' AND ',
+                $filter['conditions']
+            ),
+            $this->sortColumn($query->sortBy()),
+            strtoupper($query->sortDirection())
+        );
+
+        $rows = $this->database->fetchAll(
+            $sql,
+            $parameters
+        );
+
+        $manifests = [];
+
+        foreach ($rows as $row) {
+            $manifests[] = $this->mapper->map($row);
+        }
+
+        return $manifests;
+    }
+
+    private function countCollection(
+        ManifestQuery $query
+    ): int {
+        $filter = $this->collectionFilter($query);
+
+        $sql = sprintf(
+            'SELECT COUNT(*) '
+            . 'FROM %s '
+            . 'WHERE %s',
+            $this->table,
+            implode(
+                ' AND ',
+                $filter['conditions']
+            )
+        );
+
+        return $this->database->fetchInteger(
+            $sql,
+            $filter['parameters']
+        );
+    }
+
+    /**
+     * @return array{
+     *     conditions: list<string>,
+     *     parameters: list<int|float|string>
+     * }
+     */
+    private function collectionFilter(
+        ManifestQuery $query
+    ): array {
+        $conditions = ['1 = 1'];
+        $parameters = [];
+
+        if ($query->releaseId() !== null) {
+            $conditions[] = 'release_id = %d';
+            $parameters[] = $query->releaseId();
+        }
+
+        if ($query->manifestHash() !== null) {
+            $conditions[] = 'manifest_hash = %s';
+            $parameters[] = $query->manifestHash();
+        }
+
+        return [
+            'conditions' => $conditions,
+            'parameters' => $parameters,
+        ];
+    }
+
+    private function sortColumn(string $sortBy): string
+    {
+        return match ($sortBy) {
+            ManifestQuery::SORT_ID => 'id',
+            ManifestQuery::SORT_RELEASE_ID =>
+                'release_id',
+            ManifestQuery::SORT_MANIFEST_HASH =>
+                'manifest_hash',
+            ManifestQuery::SORT_CREATED_AT =>
+                'created_at',
+            default => throw new UnexpectedValueException(
+                'Manifest collection sort field is invalid.'
+            ),
+        };
     }
 
     private function fetch(
