@@ -18,6 +18,7 @@ use WPShop\App\Plugin\Manifest\ManifestServiceProvider;
 use WPShop\App\Plugin\Manifest\WordPressManifestRepository;
 use WPShop\App\Plugin\PluginServiceProvider;
 use WPShop\App\Plugin\Release\ReleasePublicationService;
+use WPShop\App\Plugin\Release\ReleasePublisherService;
 use WPShop\App\Plugin\Release\ReleaseServiceProvider;
 use WPShop\App\Plugin\Release\WordPressReleaseRepository;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
@@ -26,9 +27,14 @@ use WPShop\Core\Container\Container;
 use WPShop\Core\Kernel\Kernel;
 use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Contracts\ManifestServiceInterface;
+use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\PublisherRegistry;
+use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
+use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
 use WPShop\Release\Contracts\ReleaseRepositoryInterface;
 use WPShop\Release\Contracts\ReleaseServiceInterface;
+use WPShop\Release\Policy\DefaultReleasePublicationPolicy;
 
 final class PluginServiceProviderTest extends TestCase
 {
@@ -239,6 +245,110 @@ final class PluginServiceProviderTest extends TestCase
             $this->property(
                 $publicationService,
                 'transactionManager'
+            )
+        );
+
+        $publisherRegistry = $container->get(
+            PublisherRegistryInterface::class
+        );
+
+        if (
+            ! $publisherRegistry instanceof
+                PublisherRegistry
+        ) {
+            self::fail(
+                'Publisher registry was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $publisherRegistry,
+            $container->get(
+                PublisherRegistry::class
+            )
+        );
+
+        $publicationPolicy = $container->get(
+            ReleasePublicationPolicyInterface::class
+        );
+
+        if (
+            ! $publicationPolicy instanceof
+                DefaultReleasePublicationPolicy
+        ) {
+            self::fail(
+                'Release publication policy was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $publicationPolicy,
+            $container->get(
+                DefaultReleasePublicationPolicy::class
+            )
+        );
+
+        $publisherService = $container->get(
+            ReleasePublisherServiceInterface::class
+        );
+
+        if (
+            ! $publisherService instanceof
+                ReleasePublisherService
+        ) {
+            self::fail(
+                'Release publisher service was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $publisherService,
+            $container->get(
+                ReleasePublisherService::class
+            )
+        );
+
+        self::assertSame(
+            $container->get(
+                ReleaseRepositoryInterface::class
+            ),
+            $this->property(
+                $publisherService,
+                'releaseRepository'
+            )
+        );
+
+        self::assertSame(
+            $container->get(
+                BlueprintRepositoryInterface::class
+            ),
+            $this->property(
+                $publisherService,
+                'blueprintRepository'
+            )
+        );
+
+        self::assertSame(
+            $publicationPolicy,
+            $this->property(
+                $publisherService,
+                'publicationPolicy'
+            )
+        );
+
+        self::assertSame(
+            $publisherRegistry,
+            $this->property(
+                $publisherService,
+                'publisherRegistry'
+            )
+        );
+
+        self::assertSame(
+            $publicationService,
+            $this->property(
+                $publisherService,
+                'publicationService'
             )
         );
     }

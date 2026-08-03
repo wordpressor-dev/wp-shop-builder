@@ -13,14 +13,20 @@ use WPShop\App\Plugin\Database\Contracts\TransactionManagerInterface;
 use WPShop\App\Plugin\Database\WordPressTransactionManager;
 use WPShop\App\Plugin\Manifest\ManifestServiceProvider;
 use WPShop\App\Plugin\Release\ReleasePublicationService;
+use WPShop\App\Plugin\Release\ReleasePublisherService;
 use WPShop\App\Plugin\Release\ReleaseServiceProvider;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
 use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
+use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\PublisherRegistry;
+use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
+use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
 use WPShop\Release\Contracts\ReleaseRepositoryInterface;
+use WPShop\Release\Policy\DefaultReleasePublicationPolicy;
 
 final class PluginServiceProvider extends AbstractServiceProvider
 {
@@ -156,6 +162,50 @@ final class PluginServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ReleasePublicationService::class,
             $publicationService
+        );
+
+        $publisherRegistry = new PublisherRegistry();
+
+        $this->container->set(
+            PublisherRegistryInterface::class,
+            $publisherRegistry
+        );
+
+        $this->container->set(
+            PublisherRegistry::class,
+            $publisherRegistry
+        );
+
+        $publicationPolicy =
+            new DefaultReleasePublicationPolicy();
+
+        $this->container->set(
+            ReleasePublicationPolicyInterface::class,
+            $publicationPolicy
+        );
+
+        $this->container->set(
+            DefaultReleasePublicationPolicy::class,
+            $publicationPolicy
+        );
+
+        $publisherService =
+            new ReleasePublisherService(
+                $releaseRepository,
+                $blueprintRepository,
+                $publicationPolicy,
+                $publisherRegistry,
+                $publicationService
+            );
+
+        $this->container->set(
+            ReleasePublisherServiceInterface::class,
+            $publisherService
+        );
+
+        $this->container->set(
+            ReleasePublisherService::class,
+            $publisherService
         );
     }
 
