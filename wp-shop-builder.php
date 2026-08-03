@@ -270,6 +270,11 @@ $uuidGenerator = (static fn(): string => wp_generate_uuid4());
 
 $clock = (static fn(): DateTimeImmutable => current_datetime());
 
+$query = (
+    static fn(string $sql): int|bool =>
+        $wpdb->query($sql)
+);
+
 $serviceProviderFactory = (
     static fn(ContainerInterface $container): ServiceProviderInterface =>
         new PluginServiceProvider(
@@ -279,7 +284,8 @@ $serviceProviderFactory = (
             $releasesTable,
             $manifestsTable,
             $uuidGenerator,
-            $clock
+            $clock,
+            $query
         )
 );
 

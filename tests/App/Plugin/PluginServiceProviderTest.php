@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WPShop\Tests\App\Plugin;
 
+use Closure;
 use DateTimeImmutable;
 use LogicException;
 use PHPUnit\Framework\TestCase;
@@ -11,15 +12,22 @@ use ReflectionProperty;
 use WPShop\App\Plugin\Blueprint\BlueprintServiceProvider;
 use WPShop\App\Plugin\Blueprint\WordPressBlueprintRepository;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
+use WPShop\App\Plugin\Database\Contracts\TransactionManagerInterface;
+use WPShop\App\Plugin\Database\WordPressTransactionManager;
 use WPShop\App\Plugin\Manifest\ManifestServiceProvider;
 use WPShop\App\Plugin\Manifest\WordPressManifestRepository;
 use WPShop\App\Plugin\PluginServiceProvider;
+use WPShop\App\Plugin\Release\ReleasePublicationService;
 use WPShop\App\Plugin\Release\ReleaseServiceProvider;
 use WPShop\App\Plugin\Release\WordPressReleaseRepository;
+use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Contracts\BlueprintServiceInterface;
 use WPShop\Core\Container\Container;
 use WPShop\Core\Kernel\Kernel;
+use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Contracts\ManifestServiceInterface;
+use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
+use WPShop\Release\Contracts\ReleaseRepositoryInterface;
 use WPShop\Release\Contracts\ReleaseServiceInterface;
 
 final class PluginServiceProviderTest extends TestCase
@@ -114,6 +122,127 @@ final class PluginServiceProviderTest extends TestCase
         $provider->boot(new Kernel());
     }
 
+    public function testRegistersPublicationWorkflowServices(): void
+    {
+        $container = new Container();
+
+        $database =
+            new PluginProviderDatabaseConnection();
+
+        /** @var list<string> $queries */
+        $queries = [];
+
+        $query = static function (
+            string $sql
+        ) use (&$queries): int {
+            $queries[] = $sql;
+
+            return 0;
+        };
+
+        $provider = $this->provider(
+            $container,
+            $database,
+            $query
+        );
+
+        $provider->register();
+
+        $transactionManager = $container->get(
+            TransactionManagerInterface::class
+        );
+
+        if (
+            ! $transactionManager instanceof
+                WordPressTransactionManager
+        ) {
+            self::fail(
+                'WordPress transaction manager was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $transactionManager,
+            $container->get(
+                WordPressTransactionManager::class
+            )
+        );
+
+        self::assertSame(
+            'publication-result',
+            $transactionManager->transactional(
+                static fn(): string =>
+                    'publication-result'
+            )
+        );
+
+        self::assertSame(
+            [
+                'START TRANSACTION',
+                'COMMIT',
+            ],
+            $queries
+        );
+
+        $publicationService = $container->get(
+            ReleasePublicationServiceInterface::class
+        );
+
+        if (
+            ! $publicationService instanceof
+                ReleasePublicationService
+        ) {
+            self::fail(
+                'Release publication service was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $publicationService,
+            $container->get(
+                ReleasePublicationService::class
+            )
+        );
+
+        self::assertSame(
+            $container->get(
+                ReleaseRepositoryInterface::class
+            ),
+            $this->property(
+                $publicationService,
+                'releaseRepository'
+            )
+        );
+
+        self::assertSame(
+            $container->get(
+                BlueprintRepositoryInterface::class
+            ),
+            $this->property(
+                $publicationService,
+                'blueprintRepository'
+            )
+        );
+
+        self::assertSame(
+            $container->get(
+                ManifestRepositoryInterface::class
+            ),
+            $this->property(
+                $publicationService,
+                'manifestRepository'
+            )
+        );
+
+        self::assertSame(
+            $transactionManager,
+            $this->property(
+                $publicationService,
+                'transactionManager'
+            )
+        );
+    }
+
     public function testBootRequiresRegistration(): void
     {
         $container = new Container();
@@ -136,7 +265,8 @@ final class PluginServiceProviderTest extends TestCase
 
     private function provider(
         Container $container,
-        PluginProviderDatabaseConnection $database
+        PluginProviderDatabaseConnection $database,
+        ?Closure $query = null
     ): PluginServiceProvider {
         return new PluginServiceProvider(
             $container,
@@ -144,12 +274,13 @@ final class PluginServiceProviderTest extends TestCase
             'wp_wps_blueprints',
             'wp_wps_releases',
             'wp_wps_manifests',
-            static fn (): string =>
+            static fn(): string =>
                 '123e4567-e89b-12d3-a456-426614174000',
-            static fn (): DateTimeImmutable =>
+            static fn(): DateTimeImmutable =>
                 new DateTimeImmutable(
                     '2026-08-01 12:00:00'
-                )
+                ),
+            $query ?? static fn(string $sql): int => 0
         );
     }
 
