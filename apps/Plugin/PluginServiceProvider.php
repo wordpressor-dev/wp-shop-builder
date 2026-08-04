@@ -20,8 +20,12 @@ use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
 use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
+use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
+use WPShop\Publisher\Contracts\ArtifactStorageInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\PublisherRegistry;
+use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -50,6 +54,7 @@ final class PluginServiceProvider extends AbstractServiceProvider
         private readonly string $blueprintsTable,
         private readonly string $releasesTable,
         private readonly string $manifestsTable,
+        private readonly string $artifactRoot,
         private readonly Closure $uuidGenerator,
         private readonly Closure $clock,
         private readonly Closure $query
@@ -176,6 +181,33 @@ final class PluginServiceProvider extends AbstractServiceProvider
             $publisherRegistry
         );
 
+        $artifactStorage = new LocalArtifactStorage(
+            $this->artifactRoot
+        );
+
+        $this->container->set(
+            ArtifactStorageInterface::class,
+            $artifactStorage
+        );
+
+        $this->container->set(
+            LocalArtifactStorage::class,
+            $artifactStorage
+        );
+
+        $artifactManifestDecorator =
+            new JsonArtifactManifestDecorator();
+
+        $this->container->set(
+            ArtifactManifestDecoratorInterface::class,
+            $artifactManifestDecorator
+        );
+
+        $this->container->set(
+            JsonArtifactManifestDecorator::class,
+            $artifactManifestDecorator
+        );
+
         $publicationPolicy =
             new DefaultReleasePublicationPolicy();
 
@@ -195,6 +227,8 @@ final class PluginServiceProvider extends AbstractServiceProvider
                 $blueprintRepository,
                 $publicationPolicy,
                 $publisherRegistry,
+                $artifactStorage,
+                $artifactManifestDecorator,
                 $publicationService
             );
 

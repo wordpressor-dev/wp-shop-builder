@@ -7,15 +7,20 @@ namespace WPShop\Tests\Publisher;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use WPShop\Publisher\Exception\InvalidArtifactManifest;
+use WPShop\Publisher\PublicationArtifact;
 use WPShop\Publisher\PublicationResult;
 
 final class PublicationResultTest extends TestCase
 {
     public function testExposesPublicationResult(): void
     {
+        $artifact = $this->artifact();
+
         $result = new PublicationResult(
             '{"name":"example"}',
-            98.75
+            98.75,
+            $artifact
         );
 
         self::assertSame(
@@ -27,13 +32,19 @@ final class PublicationResultTest extends TestCase
             98.75,
             $result->validationScore()
         );
+
+        self::assertSame(
+            $artifact,
+            $result->artifact()
+        );
     }
 
     public function testAcceptsNullValidationScore(): void
     {
         $result = new PublicationResult(
             '{"name":"example"}',
-            null
+            null,
+            $this->artifact()
         );
 
         self::assertNull($result->validationScore());
@@ -46,7 +57,8 @@ final class PublicationResultTest extends TestCase
             (
                 new PublicationResult(
                     '{}',
-                    0.0
+                    0.0,
+                    $this->artifact()
                 )
             )->validationScore()
         );
@@ -56,41 +68,28 @@ final class PublicationResultTest extends TestCase
             (
                 new PublicationResult(
                     '{}',
-                    100.0
+                    100.0,
+                    $this->artifact()
                 )
             )->validationScore()
         );
     }
 
-    public function testRejectsEmptyManifestJson(): void
-    {
+    #[DataProvider('invalidManifests')]
+    public function testRejectsInvalidManifest(
+        string $manifestJson,
+        string $message
+    ): void {
         $this->expectException(
-            InvalidArgumentException::class
+            InvalidArtifactManifest::class
         );
 
-        $this->expectExceptionMessage(
-            'Publication result manifestJson cannot be empty.'
-        );
+        $this->expectExceptionMessage($message);
 
         new PublicationResult(
-            '   ',
-            null
-        );
-    }
-
-    public function testRejectsInvalidManifestJson(): void
-    {
-        $this->expectException(
-            InvalidArgumentException::class
-        );
-
-        $this->expectExceptionMessage(
-            'Publication result manifestJson must contain valid JSON.'
-        );
-
-        new PublicationResult(
-            '{"invalid":',
-            null
+            $manifestJson,
+            null,
+            $this->artifact()
         );
     }
 
@@ -108,8 +107,40 @@ final class PublicationResultTest extends TestCase
 
         new PublicationResult(
             '{}',
-            $validationScore
+            $validationScore,
+            $this->artifact()
         );
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function invalidManifests(): iterable
+    {
+        yield 'empty' => [
+            '   ',
+            'Publication manifest JSON cannot be empty.',
+        ];
+
+        yield 'invalid JSON' => [
+            '{"invalid":',
+            'Publication manifest must contain valid JSON.',
+        ];
+
+        yield 'array' => [
+            '[]',
+            'Publication manifest JSON must contain an object.',
+        ];
+
+        yield 'scalar' => [
+            '1',
+            'Publication manifest JSON must contain an object.',
+        ];
+
+        yield 'reserved property' => [
+            '{"_artifact":{}}',
+            'Publication manifest cannot contain the reserved "_artifact" property.',
+        ];
     }
 
     /**
@@ -121,5 +152,14 @@ final class PublicationResultTest extends TestCase
         yield 'above maximum' => [100.01];
         yield 'infinite' => [INF];
         yield 'not a number' => [NAN];
+    }
+
+    private function artifact(): PublicationArtifact
+    {
+        return new PublicationArtifact(
+            '/tmp/package.zip',
+            'package.zip',
+            'application/zip'
+        );
     }
 }

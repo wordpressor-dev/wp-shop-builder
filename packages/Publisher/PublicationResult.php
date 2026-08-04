@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace WPShop\Publisher;
 
-use InvalidArgumentException;
 use JsonException;
+use WPShop\Publisher\Exception\InvalidArtifactManifest;
 
 final readonly class PublicationResult
 {
     public function __construct(
         private string $manifestJson,
-        private ?float $validationScore
+        private ?float $validationScore,
+        private PublicationArtifact $artifact
     ) {
         $this->assertValidManifestJson($manifestJson);
         $this->assertValidationScore($validationScore);
@@ -27,28 +28,37 @@ final readonly class PublicationResult
         return $this->validationScore;
     }
 
+    public function artifact(): PublicationArtifact
+    {
+        return $this->artifact;
+    }
+
     private function assertValidManifestJson(
         string $manifestJson
     ): void {
         if (trim($manifestJson) === '') {
-            throw new InvalidArgumentException(
-                'Publication result manifestJson cannot be empty.'
-            );
+            throw InvalidArtifactManifest::emptyManifest();
         }
 
         try {
-            json_decode(
+            $manifest = json_decode(
                 $manifestJson,
-                true,
+                false,
                 512,
                 JSON_THROW_ON_ERROR
             );
         } catch (JsonException $exception) {
-            throw new InvalidArgumentException(
-                'Publication result manifestJson must contain valid JSON.',
-                0,
+            throw InvalidArtifactManifest::invalidJson(
                 $exception
             );
+        }
+
+        if (! is_object($manifest)) {
+            throw InvalidArtifactManifest::objectRequired();
+        }
+
+        if (property_exists($manifest, '_artifact')) {
+            throw InvalidArtifactManifest::reservedArtifactProperty();
         }
     }
 
@@ -64,7 +74,7 @@ final readonly class PublicationResult
             || $validationScore < 0.0
             || $validationScore > 100.0
         ) {
-            throw new InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 'Publication result validationScore must be between 0 and 100.'
             );
         }
