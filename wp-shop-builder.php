@@ -266,6 +266,11 @@ $manifestsTable = $schema->table(
     CreateInitialSchema::MANIFESTS_TABLE
 );
 
+$artifactRoot = rtrim(
+    WP_CONTENT_DIR,
+    '/\\'
+) . '/uploads/wp-shop-builder/artifacts';
+
 $uuidGenerator = (static fn(): string => wp_generate_uuid4());
 
 $clock = (static fn(): DateTimeImmutable => current_datetime());
@@ -283,6 +288,7 @@ $serviceProviderFactory = (
             $blueprintsTable,
             $releasesTable,
             $manifestsTable,
+            $artifactRoot,
             $uuidGenerator,
             $clock,
             $query

@@ -27,8 +27,12 @@ use WPShop\Core\Container\Container;
 use WPShop\Core\Kernel\Kernel;
 use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Contracts\ManifestServiceInterface;
+use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
+use WPShop\Publisher\Contracts\ArtifactStorageInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\PublisherRegistry;
+use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -268,6 +272,55 @@ final class PluginServiceProviderTest extends TestCase
             )
         );
 
+        $artifactStorage = $container->get(
+            ArtifactStorageInterface::class
+        );
+
+        if (
+            ! $artifactStorage instanceof
+                LocalArtifactStorage
+        ) {
+            self::fail(
+                'Local artifact storage was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $artifactStorage,
+            $container->get(
+                LocalArtifactStorage::class
+            )
+        );
+
+        self::assertSame(
+            sys_get_temp_dir()
+                . '/wp-shop-builder-artifacts',
+            $this->property(
+                $artifactStorage,
+                'root'
+            )
+        );
+
+        $artifactManifestDecorator = $container->get(
+            ArtifactManifestDecoratorInterface::class
+        );
+
+        if (
+            ! $artifactManifestDecorator instanceof
+                JsonArtifactManifestDecorator
+        ) {
+            self::fail(
+                'Artifact manifest decorator was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $artifactManifestDecorator,
+            $container->get(
+                JsonArtifactManifestDecorator::class
+            )
+        );
+
         $publicationPolicy = $container->get(
             ReleasePublicationPolicyInterface::class
         );
@@ -345,6 +398,22 @@ final class PluginServiceProviderTest extends TestCase
         );
 
         self::assertSame(
+            $artifactStorage,
+            $this->property(
+                $publisherService,
+                'artifactStorage'
+            )
+        );
+
+        self::assertSame(
+            $artifactManifestDecorator,
+            $this->property(
+                $publisherService,
+                'artifactManifestDecorator'
+            )
+        );
+
+        self::assertSame(
             $publicationService,
             $this->property(
                 $publisherService,
@@ -384,6 +453,8 @@ final class PluginServiceProviderTest extends TestCase
             'wp_wps_blueprints',
             'wp_wps_releases',
             'wp_wps_manifests',
+            sys_get_temp_dir()
+                . '/wp-shop-builder-artifacts',
             static fn(): string =>
                 '123e4567-e89b-12d3-a456-426614174000',
             static fn(): DateTimeImmutable =>

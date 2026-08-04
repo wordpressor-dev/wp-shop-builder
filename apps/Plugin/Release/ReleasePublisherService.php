@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\Release;
 
+use Throwable;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Blueprint\Exception\BlueprintNotFound;
+use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
+use WPShop\Publisher\Contracts\ArtifactStorageInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\Exception\ArtifactCleanupFailed;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -24,6 +28,8 @@ final readonly class ReleasePublisherService implements
         private BlueprintRepositoryInterface $blueprintRepository,
         private ReleasePublicationPolicyInterface $publicationPolicy,
         private PublisherRegistryInterface $publisherRegistry,
+        private ArtifactStorageInterface $artifactStorage,
+        private ArtifactManifestDecoratorInterface $artifactManifestDecorator,
         private ReleasePublicationServiceInterface $publicationService
     ) {
     }
@@ -62,12 +68,39 @@ final readonly class ReleasePublisherService implements
             $release
         );
 
-        return $this->publicationService->publish(
-            new ReleasePublicationData(
-                $release->id(),
-                $result->manifestJson(),
-                $result->validationScore()
-            )
+        $storedArtifact = $this->artifactStorage->store(
+            $blueprint,
+            $release,
+            $result->artifact()
         );
+
+        try {
+            $manifestJson =
+                $this->artifactManifestDecorator->decorate(
+                    $result->manifestJson(),
+                    $storedArtifact
+                );
+
+            return $this->publicationService->publish(
+                new ReleasePublicationData(
+                    $release->id(),
+                    $manifestJson,
+                    $result->validationScore()
+                )
+            );
+        } catch (Throwable $initialFailure) {
+            try {
+                $this->artifactStorage->delete(
+                    $storedArtifact
+                );
+            } catch (Throwable $cleanupFailure) {
+                throw ArtifactCleanupFailed::because(
+                    $initialFailure,
+                    $cleanupFailure
+                );
+            }
+
+            throw $initialFailure;
+        }
     }
 }
