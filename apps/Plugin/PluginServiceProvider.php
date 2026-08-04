@@ -20,12 +20,17 @@ use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
 use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
+use WPShop\Publisher\Assembly\PharZipPackageAssembler;
 use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
 use WPShop\Publisher\Contracts\ArtifactStorageInterface;
+use WPShop\Publisher\Contracts\PackageAssemblerInterface;
+use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\PublisherRegistry;
+use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
+use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -54,6 +59,8 @@ final class PluginServiceProvider extends AbstractServiceProvider
         private readonly string $blueprintsTable,
         private readonly string $releasesTable,
         private readonly string $manifestsTable,
+        private readonly string $sourceRoot,
+        private readonly string $workspaceRoot,
         private readonly string $artifactRoot,
         private readonly Closure $uuidGenerator,
         private readonly Closure $clock,
@@ -169,7 +176,50 @@ final class PluginServiceProvider extends AbstractServiceProvider
             $publicationService
         );
 
+        $sourceResolver = new LocalPackageSourceResolver(
+            $this->sourceRoot
+        );
+
+        $this->container->set(
+            PackageSourceResolverInterface::class,
+            $sourceResolver
+        );
+
+        $this->container->set(
+            LocalPackageSourceResolver::class,
+            $sourceResolver
+        );
+
+        $packageAssembler = new PharZipPackageAssembler(
+            $this->workspaceRoot
+        );
+
+        $this->container->set(
+            PackageAssemblerInterface::class,
+            $packageAssembler
+        );
+
+        $this->container->set(
+            PharZipPackageAssembler::class,
+            $packageAssembler
+        );
+
+        $pluginPublisher = new WordPressPluginPublisher(
+            $sourceResolver,
+            $packageAssembler
+        );
+
+        $this->container->set(
+            WordPressPluginPublisher::class,
+            $pluginPublisher
+        );
+
         $publisherRegistry = new PublisherRegistry();
+
+        $publisherRegistry->register(
+            WordPressPluginPublisher::BLUEPRINT_TYPE,
+            $pluginPublisher
+        );
 
         $this->container->set(
             PublisherRegistryInterface::class,

@@ -266,10 +266,14 @@ $manifestsTable = $schema->table(
     CreateInitialSchema::MANIFESTS_TABLE
 );
 
-$artifactRoot = rtrim(
+$packageRoot = rtrim(
     WP_CONTENT_DIR,
     '/\\'
-) . '/uploads/wp-shop-builder/artifacts';
+) . '/uploads/wp-shop-builder';
+
+$sourceRoot = $packageRoot . '/sources';
+$workRoot = $packageRoot . '/work';
+$artifactRoot = $packageRoot . '/artifacts';
 
 $uuidGenerator = (static fn(): string => wp_generate_uuid4());
 
@@ -288,6 +292,8 @@ $serviceProviderFactory = (
             $blueprintsTable,
             $releasesTable,
             $manifestsTable,
+            $sourceRoot,
+            $workRoot,
             $artifactRoot,
             $uuidGenerator,
             $clock,
