@@ -9,6 +9,7 @@ use JsonException;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Publisher\Contracts\PackageAssemblerInterface;
 use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
+use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherInterface;
 use WPShop\Release\Release;
 
@@ -19,6 +20,7 @@ final readonly class WordPressPluginPublisher implements
 
     public function __construct(
         private PackageSourceResolverInterface $sourceResolver,
+        private PluginPackageValidatorInterface $packageValidator,
         private PackageAssemblerInterface $packageAssembler
     ) {
     }
@@ -42,6 +44,11 @@ final readonly class WordPressPluginPublisher implements
             $release
         );
 
+        $validation = $this->packageValidator->validate(
+            $source,
+            $release
+        );
+
         $artifact = $this->packageAssembler->assemble(
             $blueprint,
             $release,
@@ -61,7 +68,7 @@ final readonly class WordPressPluginPublisher implements
 
         return new PublicationResult(
             $manifestJson,
-            null,
+            $validation->score(),
             $artifact
         );
     }

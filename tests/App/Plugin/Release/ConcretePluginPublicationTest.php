@@ -14,9 +14,11 @@ use WPShop\Blueprint\Blueprint;
 use WPShop\Blueprint\Contracts\BlueprintRepositoryInterface;
 use WPShop\Publisher\Assembly\PharZipPackageAssembler;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
+use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\PublisherRegistry;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
+use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
@@ -74,7 +76,11 @@ final class ConcretePluginPublicationTest extends TestCase
                 $sourceDirectory
                     . DIRECTORY_SEPARATOR
                     . 'example-plugin.php',
-                "<?php\n/* Plugin Name: Example */\n"
+                "<?php\n"
+                    . "/*\n"
+                    . " * Plugin Name: Example\n"
+                    . " * Version: 1.0.0\n"
+                    . " */\n"
             )
         );
 
@@ -94,6 +100,9 @@ final class ConcretePluginPublicationTest extends TestCase
                 $this->directory
                     . DIRECTORY_SEPARATOR
                     . 'sources'
+            ),
+            new WordPressPluginPackageValidator(
+                new WordPressPluginHeaderParser()
             ),
             new PharZipPackageAssembler(
                 $this->directory
@@ -212,7 +221,8 @@ final class ConcretePluginPublicationTest extends TestCase
                             $artifact['size'] ?? null
                         );
 
-                        self::assertNull(
+                        self::assertSame(
+                            100.0,
                             $data->validationScore()
                         );
 
@@ -309,7 +319,7 @@ final class ConcretePluginPublicationTest extends TestCase
             'published',
             20,
             true,
-            null,
+            100.0,
             new DateTimeImmutable(
                 '2026-08-03 10:00:00'
             )

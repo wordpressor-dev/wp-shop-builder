@@ -32,11 +32,15 @@ use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
 use WPShop\Publisher\Contracts\ArtifactStorageInterface;
 use WPShop\Publisher\Contracts\PackageAssemblerInterface;
 use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
+use WPShop\Publisher\Contracts\PluginHeaderParserInterface;
+use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
+use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\PublisherRegistry;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
+use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
@@ -335,6 +339,56 @@ final class PluginServiceProviderTest extends TestCase
             )
         );
 
+        $pluginHeaderParser = $container->get(
+            PluginHeaderParserInterface::class
+        );
+
+        if (
+            ! $pluginHeaderParser instanceof
+                WordPressPluginHeaderParser
+        ) {
+            self::fail(
+                'WordPress plugin header parser '
+                . 'was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $pluginHeaderParser,
+            $container->get(
+                WordPressPluginHeaderParser::class
+            )
+        );
+
+        $pluginPackageValidator = $container->get(
+            PluginPackageValidatorInterface::class
+        );
+
+        if (
+            ! $pluginPackageValidator instanceof
+                WordPressPluginPackageValidator
+        ) {
+            self::fail(
+                'WordPress plugin package validator '
+                . 'was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $pluginPackageValidator,
+            $container->get(
+                WordPressPluginPackageValidator::class
+            )
+        );
+
+        self::assertSame(
+            $pluginHeaderParser,
+            $this->property(
+                $pluginPackageValidator,
+                'headerParser'
+            )
+        );
+
         $pluginPublisher = $container->get(
             WordPressPluginPublisher::class
         );
@@ -344,6 +398,14 @@ final class PluginServiceProviderTest extends TestCase
             $this->property(
                 $pluginPublisher,
                 'sourceResolver'
+            )
+        );
+
+        self::assertSame(
+            $pluginPackageValidator,
+            $this->property(
+                $pluginPublisher,
+                'packageValidator'
             )
         );
 
