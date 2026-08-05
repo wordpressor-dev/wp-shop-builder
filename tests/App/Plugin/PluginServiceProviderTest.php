@@ -27,12 +27,17 @@ use WPShop\Core\Container\Container;
 use WPShop\Core\Kernel\Kernel;
 use WPShop\Manifest\Contracts\ManifestRepositoryInterface;
 use WPShop\Manifest\Contracts\ManifestServiceInterface;
+use WPShop\Publisher\Assembly\PharZipPackageAssembler;
 use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
 use WPShop\Publisher\Contracts\ArtifactStorageInterface;
+use WPShop\Publisher\Contracts\PackageAssemblerInterface;
+use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\PublisherRegistry;
+use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
+use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -272,6 +277,89 @@ final class PluginServiceProviderTest extends TestCase
             )
         );
 
+        $sourceResolver = $container->get(
+            PackageSourceResolverInterface::class
+        );
+
+        if (
+            ! $sourceResolver instanceof
+                LocalPackageSourceResolver
+        ) {
+            self::fail(
+                'Local package source resolver was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $sourceResolver,
+            $container->get(
+                LocalPackageSourceResolver::class
+            )
+        );
+
+        self::assertSame(
+            sys_get_temp_dir()
+                . '/wp-shop-builder-sources',
+            $this->property(
+                $sourceResolver,
+                'root'
+            )
+        );
+
+        $packageAssembler = $container->get(
+            PackageAssemblerInterface::class
+        );
+
+        if (
+            ! $packageAssembler instanceof
+                PharZipPackageAssembler
+        ) {
+            self::fail(
+                'Phar ZIP package assembler was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $packageAssembler,
+            $container->get(
+                PharZipPackageAssembler::class
+            )
+        );
+
+        self::assertSame(
+            sys_get_temp_dir()
+                . '/wp-shop-builder-work',
+            $this->property(
+                $packageAssembler,
+                'workspaceRoot'
+            )
+        );
+
+        $pluginPublisher = $container->get(
+            WordPressPluginPublisher::class
+        );
+
+        self::assertSame(
+            $sourceResolver,
+            $this->property(
+                $pluginPublisher,
+                'sourceResolver'
+            )
+        );
+
+        self::assertSame(
+            $packageAssembler,
+            $this->property(
+                $pluginPublisher,
+                'packageAssembler'
+            )
+        );
+
+        self::assertSame(
+            $pluginPublisher,
+            $publisherRegistry->publisherFor('plugin')
+        );
+
         $artifactStorage = $container->get(
             ArtifactStorageInterface::class
         );
@@ -453,6 +541,10 @@ final class PluginServiceProviderTest extends TestCase
             'wp_wps_blueprints',
             'wp_wps_releases',
             'wp_wps_manifests',
+            sys_get_temp_dir()
+                . '/wp-shop-builder-sources',
+            sys_get_temp_dir()
+                . '/wp-shop-builder-work',
             sys_get_temp_dir()
                 . '/wp-shop-builder-artifacts',
             static fn(): string =>
