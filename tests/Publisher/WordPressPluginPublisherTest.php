@@ -10,28 +10,27 @@ use PHPUnit\Framework\TestCase;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Publisher\Contracts\PackageAssemblerInterface;
 use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
+use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
+use WPShop\Publisher\Exception\PluginPackageValidationFailed;
 use WPShop\Publisher\PackageSource;
+use WPShop\Publisher\PluginHeader;
+use WPShop\Publisher\PluginPackageValidation;
 use WPShop\Publisher\PublicationArtifact;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Release;
 
 final class WordPressPluginPublisherTest extends TestCase
 {
-    public function testBuildsPluginManifestAndArtifact(): void
+    public function testValidatesBeforePackageAssembly(): void
     {
         $blueprint = $this->blueprint();
         $release = $this->release();
+        $source = $this->source();
+        $artifact = $this->artifact();
+        $validation = $this->validation();
 
-        $source = new PackageSource(
-            '/tmp/example-source',
-            'example-plugin'
-        );
-
-        $artifact = new PublicationArtifact(
-            '/tmp/package.zip',
-            'package.zip',
-            'application/zip'
-        );
+        /** @var list<string> $operations */
+        $operations = [];
 
         $resolver = $this->createMock(
             PackageSourceResolverInterface::class
@@ -41,7 +40,35 @@ final class WordPressPluginPublisherTest extends TestCase
             ->expects(self::once())
             ->method('resolve')
             ->with($blueprint, $release)
-            ->willReturn($source);
+            ->willReturnCallback(
+                static function () use (
+                    &$operations,
+                    $source
+                ): PackageSource {
+                    $operations[] = 'resolve';
+
+                    return $source;
+                }
+            );
+
+        $validator = $this->createMock(
+            PluginPackageValidatorInterface::class
+        );
+
+        $validator
+            ->expects(self::once())
+            ->method('validate')
+            ->with($source, $release)
+            ->willReturnCallback(
+                static function () use (
+                    &$operations,
+                    $validation
+                ): PluginPackageValidation {
+                    $operations[] = 'validate';
+
+                    return $validation;
+                }
+            );
 
         $assembler = $this->createMock(
             PackageAssemblerInterface::class
@@ -55,14 +82,35 @@ final class WordPressPluginPublisherTest extends TestCase
                 $release,
                 $source
             )
-            ->willReturn($artifact);
+            ->willReturnCallback(
+                static function () use (
+                    &$operations,
+                    $artifact
+                ): PublicationArtifact {
+                    $operations[] = 'assemble';
 
-        $result = (new WordPressPluginPublisher(
-            $resolver,
-            $assembler
-        ))->publish(
+                    return $artifact;
+                }
+            );
+
+        $result = (
+            new WordPressPluginPublisher(
+                $resolver,
+                $validator,
+                $assembler
+            )
+        )->publish(
             $blueprint,
             $release
+        );
+
+        self::assertSame(
+            [
+                'resolve',
+                'validate',
+                'assemble',
+            ],
+            $operations
         );
 
         self::assertSame(
@@ -72,7 +120,8 @@ final class WordPressPluginPublisherTest extends TestCase
             $result->manifestJson()
         );
 
-        self::assertNull(
+        self::assertSame(
+            100.0,
             $result->validationScore()
         );
 
@@ -80,6 +129,66 @@ final class WordPressPluginPublisherTest extends TestCase
             $artifact,
             $result->artifact()
         );
+    }
+
+    public function testValidationFailurePreventsAssembly(): void
+    {
+        $source = $this->source();
+
+        $resolver = $this->createMock(
+            PackageSourceResolverInterface::class
+        );
+
+        $resolver
+            ->method('resolve')
+            ->willReturn($source);
+
+        $failure =
+            PluginPackageValidationFailed::versionMismatch(
+                '1.0.0',
+                '2.0.0'
+            );
+
+        $validator = $this->createMock(
+            PluginPackageValidatorInterface::class
+        );
+
+        $validator
+            ->expects(self::once())
+            ->method('validate')
+            ->willThrowException($failure);
+
+        $assembler = $this->createMock(
+            PackageAssemblerInterface::class
+        );
+
+        $assembler
+            ->expects(self::never())
+            ->method('assemble');
+
+        try {
+            (
+                new WordPressPluginPublisher(
+                    $resolver,
+                    $validator,
+                    $assembler
+                )
+            )->publish(
+                $this->blueprint(),
+                $this->release()
+            );
+
+            self::fail(
+                'Plugin validation failure was not propagated.'
+            );
+        } catch (
+            PluginPackageValidationFailed $exception
+        ) {
+            self::assertSame(
+                $failure,
+                $exception
+            );
+        }
     }
 
     public function testRejectsNonPluginBlueprint(): void
@@ -92,6 +201,14 @@ final class WordPressPluginPublisherTest extends TestCase
             ->expects(self::never())
             ->method('resolve');
 
+        $validator = $this->createMock(
+            PluginPackageValidatorInterface::class
+        );
+
+        $validator
+            ->expects(self::never())
+            ->method('validate');
+
         $assembler = $this->createMock(
             PackageAssemblerInterface::class
         );
@@ -102,6 +219,7 @@ final class WordPressPluginPublisherTest extends TestCase
 
         $publisher = new WordPressPluginPublisher(
             $resolver,
+            $validator,
             $assembler
         );
 
@@ -117,6 +235,34 @@ final class WordPressPluginPublisherTest extends TestCase
         $publisher->publish(
             $this->blueprint('theme'),
             $this->release()
+        );
+    }
+
+    private function source(): PackageSource
+    {
+        return new PackageSource(
+            '/tmp/example-source',
+            'example-plugin'
+        );
+    }
+
+    private function validation(): PluginPackageValidation
+    {
+        return new PluginPackageValidation(
+            new PluginHeader(
+                'Example Plugin',
+                '1.0.0'
+            ),
+            100.0
+        );
+    }
+
+    private function artifact(): PublicationArtifact
+    {
+        return new PublicationArtifact(
+            '/tmp/package.zip',
+            'package.zip',
+            'application/zip'
         );
     }
 
