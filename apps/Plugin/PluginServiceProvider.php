@@ -24,6 +24,7 @@ use WPShop\Publisher\Assembly\PharZipPackageAssembler;
 use WPShop\Publisher\Contracts\ArtifactManifestDecoratorInterface;
 use WPShop\Publisher\Contracts\ArtifactStorageInterface;
 use WPShop\Publisher\Contracts\PackageAssemblerInterface;
+use WPShop\Publisher\Contracts\PackageEntryFilenameResolverInterface;
 use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Contracts\PluginHeaderParserInterface;
 use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
@@ -31,6 +32,7 @@ use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\PublisherRegistry;
+use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
@@ -180,8 +182,22 @@ final class PluginServiceProvider extends AbstractServiceProvider
             $publicationService
         );
 
+        $entryFilenameResolver =
+            new WordPressPackageEntryFilenameResolver();
+
+        $this->container->set(
+            PackageEntryFilenameResolverInterface::class,
+            $entryFilenameResolver
+        );
+
+        $this->container->set(
+            WordPressPackageEntryFilenameResolver::class,
+            $entryFilenameResolver
+        );
+
         $sourceResolver = new LocalPackageSourceResolver(
-            $this->sourceRoot
+            $this->sourceRoot,
+            $entryFilenameResolver
         );
 
         $this->container->set(

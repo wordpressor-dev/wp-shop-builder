@@ -11,11 +11,16 @@ use WPShop\Publisher\PackageSource;
 
 final class PackageSourceTest extends TestCase
 {
-    public function testExposesValidatedPackageSource(): void
-    {
+    #[DataProvider('packageSources')]
+    public function testExposesValidatedPackageSource(
+        string $archiveRoot,
+        string $entryFilename,
+        string $archiveEntry
+    ): void {
         $source = new PackageSource(
             '/tmp/example-source',
-            'example-plugin'
+            $archiveRoot,
+            $entryFilename
         );
 
         self::assertSame(
@@ -24,24 +29,24 @@ final class PackageSourceTest extends TestCase
         );
 
         self::assertSame(
-            'example-plugin',
+            $archiveRoot,
             $source->archiveRoot()
         );
 
         self::assertSame(
-            'example-plugin.php',
+            $entryFilename,
             $source->entryFilename()
         );
 
         self::assertSame(
             '/tmp/example-source'
                 . DIRECTORY_SEPARATOR
-                . 'example-plugin.php',
+                . $entryFilename,
             $source->entryPath()
         );
 
         self::assertSame(
-            'example-plugin/example-plugin.php',
+            $archiveEntry,
             $source->archiveEntry()
         );
     }
@@ -60,7 +65,8 @@ final class PackageSourceTest extends TestCase
 
         new PackageSource(
             $directory,
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
     }
 
@@ -78,8 +84,46 @@ final class PackageSourceTest extends TestCase
 
         new PackageSource(
             '/tmp/example-source',
-            $archiveRoot
+            $archiveRoot,
+            'example-plugin.php'
         );
+    }
+
+    #[DataProvider('unsafeEntryFilenames')]
+    public function testRejectsUnsafeEntryFilename(
+        string $entryFilename
+    ): void {
+        $this->expectException(
+            InvalidArgumentException::class
+        );
+
+        $this->expectExceptionMessage(
+            'Package entry filename must be a safe basename.'
+        );
+
+        new PackageSource(
+            '/tmp/example-source',
+            'example-package',
+            $entryFilename
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function packageSources(): iterable
+    {
+        yield 'plugin' => [
+            'example-plugin',
+            'example-plugin.php',
+            'example-plugin/example-plugin.php',
+        ];
+
+        yield 'theme' => [
+            'example-theme',
+            'style.css',
+            'example-theme/style.css',
+        ];
     }
 
     /**
@@ -106,5 +150,23 @@ final class PackageSourceTest extends TestCase
         yield 'leading hyphen' => ['-example'];
         yield 'trailing hyphen' => ['example-'];
         yield 'too long' => [str_repeat('a', 192)];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unsafeEntryFilenames(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'whitespace' => ['   '];
+        yield 'leading whitespace' => [' style.css'];
+        yield 'trailing whitespace' => ['style.css '];
+        yield 'current directory' => ['.'];
+        yield 'parent directory' => ['..'];
+        yield 'forward directory' => ['nested/style.css'];
+        yield 'backward directory' => ['nested\\style.css'];
+        yield 'path traversal' => ['../style.css'];
+        yield 'embedded traversal' => ['style..css'];
+        yield 'null byte' => ["style\0.css"];
     }
 }

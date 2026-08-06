@@ -185,7 +185,8 @@ final class PharZipPackageAssemblerTest extends TestCase
             $this->directory
                 . DIRECTORY_SEPARATOR
                 . 'missing',
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
 
         $this->expectException(
@@ -299,7 +300,8 @@ final class PharZipPackageAssemblerTest extends TestCase
 
         return new PackageSource(
             $sourceDirectory,
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
     }
 

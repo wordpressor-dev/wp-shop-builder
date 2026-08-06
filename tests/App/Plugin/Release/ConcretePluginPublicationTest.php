@@ -16,6 +16,7 @@ use WPShop\Publisher\Assembly\PharZipPackageAssembler;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\PublisherRegistry;
+use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
@@ -99,7 +100,8 @@ final class ConcretePluginPublicationTest extends TestCase
             new LocalPackageSourceResolver(
                 $this->directory
                     . DIRECTORY_SEPARATOR
-                    . 'sources'
+                    . 'sources',
+                new WordPressPackageEntryFilenameResolver()
             ),
             new WordPressPluginPackageValidator(
                 new WordPressPluginHeaderParser()

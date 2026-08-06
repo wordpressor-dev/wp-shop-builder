@@ -44,7 +44,8 @@ final class WordPressPluginPackageValidatorTest extends TestCase
     {
         $source = new PackageSource(
             '/tmp/example-source',
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
 
         $release = $this->release();
@@ -90,7 +91,8 @@ final class WordPressPluginPackageValidatorTest extends TestCase
     {
         $source = new PackageSource(
             '/tmp/example-source',
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
 
         $failure =
@@ -162,7 +164,8 @@ final class WordPressPluginPackageValidatorTest extends TestCase
         )->validate(
             new PackageSource(
                 '/tmp/example-source',
-                'example-plugin'
+                'example-plugin',
+                'example-plugin.php'
             ),
             $this->release()
         );
@@ -202,7 +205,8 @@ final class WordPressPluginPackageValidatorTest extends TestCase
         )->validate(
             new PackageSource(
                 '/tmp/example-source',
-                'example-plugin'
+                'example-plugin',
+                'example-plugin.php'
             ),
             $this->release()
         );
@@ -315,7 +319,8 @@ final class WordPressPluginPackageValidatorTest extends TestCase
 
         return new PackageSource(
             $sourceDirectory,
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
     }
 
