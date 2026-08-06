@@ -6,6 +6,7 @@ namespace WPShop\Publisher\Source;
 
 use InvalidArgumentException;
 use WPShop\Blueprint\Blueprint;
+use WPShop\Publisher\Contracts\PackageEntryFilenameResolverInterface;
 use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Exception\PackageSourceResolutionFailed;
 use WPShop\Publisher\PackageSource;
@@ -16,8 +17,10 @@ final readonly class LocalPackageSourceResolver implements
 {
     private string $root;
 
-    public function __construct(string $root)
-    {
+    public function __construct(
+        string $root,
+        private PackageEntryFilenameResolverInterface $entryFilenameResolver
+    ) {
         $normalizedRoot = rtrim(
             trim($root),
             '/\\'
@@ -45,7 +48,8 @@ final readonly class LocalPackageSourceResolver implements
                 . $blueprint->uuid()
                 . DIRECTORY_SEPARATOR
                 . $release->id(),
-            $blueprint->slug()
+            $blueprint->slug(),
+            $this->entryFilenameResolver->resolve($blueprint)
         );
 
         if (is_link($source->sourceDirectory())) {

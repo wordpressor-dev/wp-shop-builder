@@ -10,10 +10,12 @@ final readonly class PackageSource
 {
     public function __construct(
         private string $sourceDirectory,
-        private string $archiveRoot
+        private string $archiveRoot,
+        private string $entryFilename
     ) {
         $this->assertSourceDirectory($sourceDirectory);
         $this->assertArchiveRoot($archiveRoot);
+        $this->assertEntryFilename($entryFilename);
     }
 
     public function sourceDirectory(): string
@@ -28,21 +30,21 @@ final readonly class PackageSource
 
     public function entryFilename(): string
     {
-        return $this->archiveRoot . '.php';
+        return $this->entryFilename;
     }
 
     public function entryPath(): string
     {
         return $this->sourceDirectory
             . DIRECTORY_SEPARATOR
-            . $this->entryFilename();
+            . $this->entryFilename;
     }
 
     public function archiveEntry(): string
     {
         return $this->archiveRoot
             . '/'
-            . $this->entryFilename();
+            . $this->entryFilename;
     }
 
     private function assertSourceDirectory(
@@ -69,6 +71,24 @@ final readonly class PackageSource
         ) {
             throw new InvalidArgumentException(
                 'Package archive root must be a safe lowercase slug.'
+            );
+        }
+    }
+
+    private function assertEntryFilename(string $entryFilename): void
+    {
+        if (
+            $entryFilename === ''
+            || trim($entryFilename) !== $entryFilename
+            || $entryFilename === '.'
+            || $entryFilename === '..'
+            || str_contains($entryFilename, "\0")
+            || str_contains($entryFilename, '/')
+            || str_contains($entryFilename, '\\')
+            || str_contains($entryFilename, '..')
+        ) {
+            throw new InvalidArgumentException(
+                'Package entry filename must be a safe basename.'
             );
         }
     }

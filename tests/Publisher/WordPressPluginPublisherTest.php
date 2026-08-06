@@ -242,7 +242,8 @@ final class WordPressPluginPublisherTest extends TestCase
     {
         return new PackageSource(
             '/tmp/example-source',
-            'example-plugin'
+            'example-plugin',
+            'example-plugin.php'
         );
     }
 

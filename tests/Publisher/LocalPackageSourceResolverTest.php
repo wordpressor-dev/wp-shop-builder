@@ -7,11 +7,13 @@ namespace WPShop\Tests\Publisher;
 use DateTimeImmutable;
 use FilesystemIterator;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use WPShop\Blueprint\Blueprint;
 use WPShop\Publisher\Exception\PackageSourceResolutionFailed;
+use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Release\Release;
 
@@ -36,8 +38,13 @@ final class LocalPackageSourceResolverTest extends TestCase
         $this->removeDirectory($this->directory);
     }
 
-    public function testResolvesDeterministicLocalSource(): void
-    {
+    #[DataProvider('supportedSources')]
+    public function testResolvesDeterministicLocalSource(
+        string $type,
+        string $slug,
+        string $entryFilename,
+        string $archiveEntry
+    ): void {
         $sourceDirectory = $this->sourceDirectory();
 
         self::assertTrue(
@@ -48,13 +55,15 @@ final class LocalPackageSourceResolverTest extends TestCase
             file_put_contents(
                 $sourceDirectory
                     . DIRECTORY_SEPARATOR
-                    . 'example-plugin.php',
-                "<?php\n"
+                    . $entryFilename,
+                $type === 'plugin'
+                    ? "<?php\n"
+                    : "/* Theme Name: Example */\n"
             )
         );
 
         $source = $this->resolver()->resolve(
-            $this->blueprint(),
+            $this->blueprint($slug, $type),
             $this->release()
         );
 
@@ -64,8 +73,18 @@ final class LocalPackageSourceResolverTest extends TestCase
         );
 
         self::assertSame(
-            'example-plugin',
+            $slug,
             $source->archiveRoot()
+        );
+
+        self::assertSame(
+            $entryFilename,
+            $source->entryFilename()
+        );
+
+        self::assertSame(
+            $archiveEntry,
+            $source->archiveEntry()
         );
     }
 
@@ -79,7 +98,10 @@ final class LocalPackageSourceResolverTest extends TestCase
             'Local package source root cannot be empty.'
         );
 
-        new LocalPackageSourceResolver('   ');
+        new LocalPackageSourceResolver(
+            '   ',
+            new WordPressPackageEntryFilenameResolver()
+        );
     }
 
     public function testRejectsMissingSourceDirectory(): void
@@ -101,15 +123,19 @@ final class LocalPackageSourceResolverTest extends TestCase
         );
     }
 
-    public function testRejectsMissingPluginEntryFile(): void
-    {
+    #[DataProvider('missingEntries')]
+    public function testRejectsMissingEntryFile(
+        string $type,
+        string $slug,
+        string $entryFilename
+    ): void {
         self::assertTrue(
             mkdir($this->sourceDirectory(), 0775, true)
         );
 
         $entryPath = $this->sourceDirectory()
             . DIRECTORY_SEPARATOR
-            . 'example-plugin.php';
+            . $entryFilename;
 
         $this->expectException(
             PackageSourceResolutionFailed::class
@@ -123,7 +149,7 @@ final class LocalPackageSourceResolverTest extends TestCase
         );
 
         $this->resolver()->resolve(
-            $this->blueprint(),
+            $this->blueprint($slug, $type),
             $this->release()
         );
     }
@@ -144,8 +170,12 @@ final class LocalPackageSourceResolverTest extends TestCase
         );
     }
 
-    public function testRejectsSymbolicLinkEntryFile(): void
-    {
+    #[DataProvider('symbolicLinkEntries')]
+    public function testRejectsSymbolicLinkEntryFile(
+        string $type,
+        string $slug,
+        string $entryFilename
+    ): void {
         $sourceDirectory = $this->sourceDirectory();
 
         self::assertTrue(
@@ -154,15 +184,15 @@ final class LocalPackageSourceResolverTest extends TestCase
 
         $target = $this->directory
             . DIRECTORY_SEPARATOR
-            . 'real-plugin.php';
+            . 'real-entry';
 
         self::assertIsInt(
-            file_put_contents($target, "<?php\n")
+            file_put_contents($target, 'entry')
         );
 
         $link = $sourceDirectory
             . DIRECTORY_SEPARATOR
-            . 'example-plugin.php';
+            . $entryFilename;
 
         if (! @symlink($target, $link)) {
             self::markTestSkipped(
@@ -182,9 +212,65 @@ final class LocalPackageSourceResolverTest extends TestCase
         );
 
         $this->resolver()->resolve(
-            $this->blueprint(),
+            $this->blueprint($slug, $type),
             $this->release()
         );
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string, string}>
+     */
+    public static function supportedSources(): iterable
+    {
+        yield 'plugin' => [
+            'plugin',
+            'example-plugin',
+            'example-plugin.php',
+            'example-plugin/example-plugin.php',
+        ];
+
+        yield 'theme' => [
+            'theme',
+            'example-theme',
+            'style.css',
+            'example-theme/style.css',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function missingEntries(): iterable
+    {
+        yield 'plugin' => [
+            'plugin',
+            'example-plugin',
+            'example-plugin.php',
+        ];
+
+        yield 'theme' => [
+            'theme',
+            'example-theme',
+            'style.css',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function symbolicLinkEntries(): iterable
+    {
+        yield 'plugin' => [
+            'plugin',
+            'example-plugin',
+            'example-plugin.php',
+        ];
+
+        yield 'theme' => [
+            'theme',
+            'example-theme',
+            'style.css',
+        ];
     }
 
     private function resolver(): LocalPackageSourceResolver
@@ -192,7 +278,8 @@ final class LocalPackageSourceResolverTest extends TestCase
         return new LocalPackageSourceResolver(
             $this->directory
                 . DIRECTORY_SEPARATOR
-                . 'sources'
+                . 'sources',
+            new WordPressPackageEntryFilenameResolver()
         );
     }
 
@@ -208,13 +295,14 @@ final class LocalPackageSourceResolverTest extends TestCase
     }
 
     private function blueprint(
-        string $slug = 'example-plugin'
+        string $slug = 'example-plugin',
+        string $type = 'plugin'
     ): Blueprint {
         return new Blueprint(
             5,
             '123e4567-e89b-12d3-a456-426614174000',
             $slug,
-            'plugin',
+            $type,
             null,
             null,
             null,
