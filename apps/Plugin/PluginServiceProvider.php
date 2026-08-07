@@ -41,6 +41,7 @@ use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
+use WPShop\Publisher\WordPressThemePublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -295,11 +296,27 @@ final class PluginServiceProvider extends AbstractServiceProvider
             $pluginPublisher
         );
 
+        $themePublisher = new WordPressThemePublisher(
+            $sourceResolver,
+            $themePackageValidator,
+            $packageAssembler
+        );
+
+        $this->container->set(
+            WordPressThemePublisher::class,
+            $themePublisher
+        );
+
         $publisherRegistry = new PublisherRegistry();
 
         $publisherRegistry->register(
             WordPressPluginPublisher::BLUEPRINT_TYPE,
             $pluginPublisher
+        );
+
+        $publisherRegistry->register(
+            WordPressThemePublisher::BLUEPRINT_TYPE,
+            $themePublisher
         );
 
         $this->container->set(
