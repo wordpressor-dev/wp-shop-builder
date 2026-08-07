@@ -48,4 +48,19 @@ final class ThemePackageValidationFailed extends RuntimeException
             )
         );
     }
+
+    public static function invalidStructure(
+        string $sourceDirectory,
+        Throwable $previous
+    ): self {
+        return new self(
+            sprintf(
+                'Theme package structure "%s" is invalid. %s',
+                $sourceDirectory,
+                $previous->getMessage()
+            ),
+            0,
+            $previous
+        );
+    }
 }

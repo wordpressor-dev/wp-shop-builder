@@ -21,6 +21,7 @@ use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
+use WPShop\Publisher\Validation\WordPressThemeStructureValidator;
 use WPShop\Publisher\WordPressThemePublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
@@ -81,6 +82,17 @@ final class ConcreteThemePublicationTest extends TestCase
             )
         );
 
+        $indexContents = "<?php\n";
+
+        self::assertIsInt(
+            file_put_contents(
+                $sourceDirectory
+                    . DIRECTORY_SEPARATOR
+                    . 'index.php',
+                $indexContents
+            )
+        );
+
         $publisher = new WordPressThemePublisher(
             new LocalPackageSourceResolver(
                 $this->directory
@@ -89,7 +101,8 @@ final class ConcreteThemePublicationTest extends TestCase
                 new WordPressPackageEntryFilenameResolver()
             ),
             new WordPressThemePackageValidator(
-                new WordPressThemeHeaderParser()
+                new WordPressThemeHeaderParser(),
+                new WordPressThemeStructureValidator()
             ),
             new PharZipPackageAssembler(
                 $this->directory
@@ -260,12 +273,33 @@ final class ConcreteThemePublicationTest extends TestCase
             ]->getContent()
         );
 
+        self::assertTrue(
+            isset(
+                $archive[
+                    'example-theme/index.php'
+                ]
+            )
+        );
+
+        self::assertSame(
+            $indexContents,
+            $archive[
+                'example-theme/index.php'
+            ]->getContent()
+        );
+
         unset($archive);
 
         self::assertFileExists(
             $sourceDirectory
                 . DIRECTORY_SEPARATOR
                 . 'style.css'
+        );
+
+        self::assertFileExists(
+            $sourceDirectory
+                . DIRECTORY_SEPARATOR
+                . 'index.php'
         );
 
         self::assertFileDoesNotExist(

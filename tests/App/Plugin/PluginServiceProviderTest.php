@@ -38,6 +38,7 @@ use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
+use WPShop\Publisher\Contracts\ThemeStructureValidatorInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\Parser\WordPressThemeHeaderParser;
@@ -47,6 +48,7 @@ use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
+use WPShop\Publisher\Validation\WordPressThemeStructureValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Publisher\WordPressThemePublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
@@ -446,6 +448,27 @@ final class PluginServiceProviderTest extends TestCase
             )
         );
 
+        $themeStructureValidator = $container->get(
+            ThemeStructureValidatorInterface::class
+        );
+
+        if (
+            ! $themeStructureValidator instanceof
+                WordPressThemeStructureValidator
+        ) {
+            self::fail(
+                'WordPress theme structure validator '
+                    . 'was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $themeStructureValidator,
+            $container->get(
+                WordPressThemeStructureValidator::class
+            )
+        );
+
         $themePackageValidator = $container->get(
             ThemePackageValidatorInterface::class
         );
@@ -472,6 +495,14 @@ final class PluginServiceProviderTest extends TestCase
             $this->property(
                 $themePackageValidator,
                 'headerParser'
+            )
+        );
+
+        self::assertSame(
+            $themeStructureValidator,
+            $this->property(
+                $themePackageValidator,
+                'structureValidator'
             )
         );
 
