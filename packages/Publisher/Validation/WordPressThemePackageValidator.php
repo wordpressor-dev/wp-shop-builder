@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace WPShop\Publisher\Validation;
 
+use WPShop\Publisher\Contracts\ThemeCompatibilityValidatorInterface;
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
 use WPShop\Publisher\Contracts\ThemeStructureValidatorInterface;
+use WPShop\Publisher\Exception\ThemeCompatibilityValidationFailed;
 use WPShop\Publisher\Exception\ThemeHeaderParsingFailed;
 use WPShop\Publisher\Exception\ThemePackageValidationFailed;
 use WPShop\Publisher\Exception\ThemeStructureValidationFailed;
@@ -21,6 +23,7 @@ final readonly class WordPressThemePackageValidator implements
 
     public function __construct(
         private ThemeHeaderParserInterface $headerParser,
+        private ThemeCompatibilityValidatorInterface $compatibilityValidator,
         private ThemeStructureValidatorInterface $structureValidator
     ) {
     }
@@ -57,6 +60,18 @@ final readonly class WordPressThemePackageValidator implements
         ) {
             throw ThemePackageValidationFailed
                 ::invalidTemplateSlug($template);
+        }
+
+        try {
+            $this->compatibilityValidator->validate($header);
+        } catch (
+            ThemeCompatibilityValidationFailed $exception
+        ) {
+            throw ThemePackageValidationFailed
+                ::invalidCompatibility(
+                    $source->entryPath(),
+                    $exception
+                );
         }
 
         try {

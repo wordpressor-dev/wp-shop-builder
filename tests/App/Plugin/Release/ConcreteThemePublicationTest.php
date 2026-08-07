@@ -20,6 +20,7 @@ use WPShop\Publisher\PublisherRegistry;
 use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
+use WPShop\Publisher\Validation\WordPressThemeCompatibilityValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\Validation\WordPressThemeStructureValidator;
 use WPShop\Publisher\WordPressThemePublisher;
@@ -71,6 +72,9 @@ final class ConcreteThemePublicationTest extends TestCase
         $styleContents = "/*\n"
             . "Theme Name: Example Theme\n"
             . "Version: 1.0.0\n"
+            . "Requires at least: 6.8\n"
+            . "Tested up to: 6.9\n"
+            . "Requires PHP: 8.3\n"
             . "*/\n";
 
         self::assertIsInt(
@@ -102,6 +106,7 @@ final class ConcreteThemePublicationTest extends TestCase
             ),
             new WordPressThemePackageValidator(
                 new WordPressThemeHeaderParser(),
+                new WordPressThemeCompatibilityValidator(),
                 new WordPressThemeStructureValidator()
             ),
             new PharZipPackageAssembler(

@@ -36,6 +36,7 @@ use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Contracts\PluginHeaderParserInterface;
 use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\Contracts\ThemeCompatibilityValidatorInterface;
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
 use WPShop\Publisher\Contracts\ThemeStructureValidatorInterface;
@@ -47,6 +48,7 @@ use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
+use WPShop\Publisher\Validation\WordPressThemeCompatibilityValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\Validation\WordPressThemeStructureValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
@@ -448,6 +450,27 @@ final class PluginServiceProviderTest extends TestCase
             )
         );
 
+        $themeCompatibilityValidator = $container->get(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        if (
+            ! $themeCompatibilityValidator instanceof
+                WordPressThemeCompatibilityValidator
+        ) {
+            self::fail(
+                'WordPress theme compatibility validator '
+                    . 'was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $themeCompatibilityValidator,
+            $container->get(
+                WordPressThemeCompatibilityValidator::class
+            )
+        );
+
         $themeStructureValidator = $container->get(
             ThemeStructureValidatorInterface::class
         );
@@ -495,6 +518,14 @@ final class PluginServiceProviderTest extends TestCase
             $this->property(
                 $themePackageValidator,
                 'headerParser'
+            )
+        );
+
+        self::assertSame(
+            $themeCompatibilityValidator,
+            $this->property(
+                $themePackageValidator,
+                'compatibilityValidator'
             )
         );
 
