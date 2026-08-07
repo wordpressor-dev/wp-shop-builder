@@ -31,6 +31,7 @@ use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
+use WPShop\Publisher\Contracts\ThemeStructureValidatorInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\Parser\WordPressThemeHeaderParser;
@@ -40,6 +41,7 @@ use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
+use WPShop\Publisher\Validation\WordPressThemeStructureValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Publisher\WordPressThemePublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
@@ -270,9 +272,23 @@ final class PluginServiceProvider extends AbstractServiceProvider
             $themeHeaderParser
         );
 
+        $themeStructureValidator =
+            new WordPressThemeStructureValidator();
+
+        $this->container->set(
+            ThemeStructureValidatorInterface::class,
+            $themeStructureValidator
+        );
+
+        $this->container->set(
+            WordPressThemeStructureValidator::class,
+            $themeStructureValidator
+        );
+
         $themePackageValidator =
             new WordPressThemePackageValidator(
-                $themeHeaderParser
+                $themeHeaderParser,
+                $themeStructureValidator
             );
 
         $this->container->set(

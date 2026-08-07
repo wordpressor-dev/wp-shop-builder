@@ -6,8 +6,10 @@ namespace WPShop\Publisher\Validation;
 
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
+use WPShop\Publisher\Contracts\ThemeStructureValidatorInterface;
 use WPShop\Publisher\Exception\ThemeHeaderParsingFailed;
 use WPShop\Publisher\Exception\ThemePackageValidationFailed;
+use WPShop\Publisher\Exception\ThemeStructureValidationFailed;
 use WPShop\Publisher\PackageSource;
 use WPShop\Publisher\ThemePackageValidation;
 use WPShop\Release\Release;
@@ -18,7 +20,8 @@ final readonly class WordPressThemePackageValidator implements
     private const float SCORE = 100.0;
 
     public function __construct(
-        private ThemeHeaderParserInterface $headerParser
+        private ThemeHeaderParserInterface $headerParser,
+        private ThemeStructureValidatorInterface $structureValidator
     ) {
     }
 
@@ -54,6 +57,18 @@ final readonly class WordPressThemePackageValidator implements
         ) {
             throw ThemePackageValidationFailed
                 ::invalidTemplateSlug($template);
+        }
+
+        try {
+            $this->structureValidator->validate($source);
+        } catch (
+            ThemeStructureValidationFailed $exception
+        ) {
+            throw ThemePackageValidationFailed
+                ::invalidStructure(
+                    $source->sourceDirectory(),
+                    $exception
+                );
         }
 
         return new ThemePackageValidation(
