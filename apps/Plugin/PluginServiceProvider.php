@@ -29,13 +29,17 @@ use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Contracts\PluginHeaderParserInterface;
 use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
+use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
+use WPShop\Publisher\Parser\WordPressThemeHeaderParser;
 use WPShop\Publisher\PublisherRegistry;
 use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
+use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
@@ -250,6 +254,34 @@ final class PluginServiceProvider extends AbstractServiceProvider
         $this->container->set(
             WordPressPluginPackageValidator::class,
             $pluginPackageValidator
+        );
+
+        $themeHeaderParser =
+            new WordPressThemeHeaderParser();
+
+        $this->container->set(
+            ThemeHeaderParserInterface::class,
+            $themeHeaderParser
+        );
+
+        $this->container->set(
+            WordPressThemeHeaderParser::class,
+            $themeHeaderParser
+        );
+
+        $themePackageValidator =
+            new WordPressThemePackageValidator(
+                $themeHeaderParser
+            );
+
+        $this->container->set(
+            ThemePackageValidatorInterface::class,
+            $themePackageValidator
+        );
+
+        $this->container->set(
+            WordPressThemePackageValidator::class,
+            $themePackageValidator
         );
 
         $pluginPublisher = new WordPressPluginPublisher(
