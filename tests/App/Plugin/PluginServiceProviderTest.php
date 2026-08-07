@@ -38,7 +38,6 @@ use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
-use WPShop\Publisher\Exception\PublisherNotFound;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
 use WPShop\Publisher\Parser\WordPressThemeHeaderParser;
@@ -49,6 +48,7 @@ use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
+use WPShop\Publisher\WordPressThemePublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
 use WPShop\Release\Contracts\ReleasePublisherServiceInterface;
@@ -508,19 +508,38 @@ final class PluginServiceProviderTest extends TestCase
             $publisherRegistry->publisherFor('plugin')
         );
 
-        try {
-            $publisherRegistry->publisherFor('theme');
+        $themePublisher = $container->get(
+            WordPressThemePublisher::class
+        );
 
-            self::fail(
-                'Theme publisher must not be registered.'
-            );
-        } catch (PublisherNotFound $exception) {
-            self::assertSame(
-                'No publisher is registered '
-                    . 'for Blueprint type "theme".',
-                $exception->getMessage()
-            );
-        }
+        self::assertSame(
+            $sourceResolver,
+            $this->property(
+                $themePublisher,
+                'sourceResolver'
+            )
+        );
+
+        self::assertSame(
+            $themePackageValidator,
+            $this->property(
+                $themePublisher,
+                'packageValidator'
+            )
+        );
+
+        self::assertSame(
+            $packageAssembler,
+            $this->property(
+                $themePublisher,
+                'packageAssembler'
+            )
+        );
+
+        self::assertSame(
+            $themePublisher,
+            $publisherRegistry->publisherFor('theme')
+        );
 
         $artifactStorage = $container->get(
             ArtifactStorageInterface::class
