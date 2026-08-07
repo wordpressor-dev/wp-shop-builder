@@ -36,13 +36,18 @@ use WPShop\Publisher\Contracts\PackageSourceResolverInterface;
 use WPShop\Publisher\Contracts\PluginHeaderParserInterface;
 use WPShop\Publisher\Contracts\PluginPackageValidatorInterface;
 use WPShop\Publisher\Contracts\PublisherRegistryInterface;
+use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
+use WPShop\Publisher\Contracts\ThemePackageValidatorInterface;
+use WPShop\Publisher\Exception\PublisherNotFound;
 use WPShop\Publisher\Manifest\JsonArtifactManifestDecorator;
 use WPShop\Publisher\Parser\WordPressPluginHeaderParser;
+use WPShop\Publisher\Parser\WordPressThemeHeaderParser;
 use WPShop\Publisher\PublisherRegistry;
 use WPShop\Publisher\Resolution\WordPressPackageEntryFilenameResolver;
 use WPShop\Publisher\Source\LocalPackageSourceResolver;
 use WPShop\Publisher\Storage\LocalArtifactStorage;
 use WPShop\Publisher\Validation\WordPressPluginPackageValidator;
+use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\WordPressPluginPublisher;
 use WPShop\Release\Contracts\ReleasePublicationPolicyInterface;
 use WPShop\Release\Contracts\ReleasePublicationServiceInterface;
@@ -420,6 +425,56 @@ final class PluginServiceProviderTest extends TestCase
             )
         );
 
+        $themeHeaderParser = $container->get(
+            ThemeHeaderParserInterface::class
+        );
+
+        if (
+            ! $themeHeaderParser instanceof
+                WordPressThemeHeaderParser
+        ) {
+            self::fail(
+                'WordPress theme header parser '
+                . 'was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $themeHeaderParser,
+            $container->get(
+                WordPressThemeHeaderParser::class
+            )
+        );
+
+        $themePackageValidator = $container->get(
+            ThemePackageValidatorInterface::class
+        );
+
+        if (
+            ! $themePackageValidator instanceof
+                WordPressThemePackageValidator
+        ) {
+            self::fail(
+                'WordPress theme package validator '
+                . 'was not registered.'
+            );
+        }
+
+        self::assertSame(
+            $themePackageValidator,
+            $container->get(
+                WordPressThemePackageValidator::class
+            )
+        );
+
+        self::assertSame(
+            $themeHeaderParser,
+            $this->property(
+                $themePackageValidator,
+                'headerParser'
+            )
+        );
+
         $pluginPublisher = $container->get(
             WordPressPluginPublisher::class
         );
@@ -452,6 +507,20 @@ final class PluginServiceProviderTest extends TestCase
             $pluginPublisher,
             $publisherRegistry->publisherFor('plugin')
         );
+
+        try {
+            $publisherRegistry->publisherFor('theme');
+
+            self::fail(
+                'Theme publisher must not be registered.'
+            );
+        } catch (PublisherNotFound $exception) {
+            self::assertSame(
+                'No publisher is registered '
+                    . 'for Blueprint type "theme".',
+                $exception->getMessage()
+            );
+        }
 
         $artifactStorage = $container->get(
             ArtifactStorageInterface::class
