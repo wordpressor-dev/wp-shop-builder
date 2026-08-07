@@ -49,6 +49,21 @@ final class ThemePackageValidationFailed extends RuntimeException
         );
     }
 
+    public static function invalidCompatibility(
+        string $entryPath,
+        Throwable $previous
+    ): self {
+        return new self(
+            sprintf(
+                'Theme package compatibility metadata "%s" is invalid. %s',
+                $entryPath,
+                $previous->getMessage()
+            ),
+            0,
+            $previous
+        );
+    }
+
     public static function invalidStructure(
         string $sourceDirectory,
         Throwable $previous

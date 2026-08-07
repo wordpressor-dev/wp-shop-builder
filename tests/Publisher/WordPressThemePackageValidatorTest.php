@@ -10,14 +10,17 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use WPShop\Publisher\Contracts\ThemeCompatibilityValidatorInterface;
 use WPShop\Publisher\Contracts\ThemeHeaderParserInterface;
 use WPShop\Publisher\Contracts\ThemeStructureValidatorInterface;
+use WPShop\Publisher\Exception\ThemeCompatibilityValidationFailed;
 use WPShop\Publisher\Exception\ThemeHeaderParsingFailed;
 use WPShop\Publisher\Exception\ThemePackageValidationFailed;
 use WPShop\Publisher\Exception\ThemeStructureValidationFailed;
 use WPShop\Publisher\PackageSource;
 use WPShop\Publisher\Parser\WordPressThemeHeaderParser;
 use WPShop\Publisher\ThemeHeader;
+use WPShop\Publisher\Validation\WordPressThemeCompatibilityValidator;
 use WPShop\Publisher\Validation\WordPressThemePackageValidator;
 use WPShop\Publisher\Validation\WordPressThemeStructureValidator;
 use WPShop\Release\Release;
@@ -54,6 +57,9 @@ final class WordPressThemePackageValidatorTest extends TestCase
         $header = new ThemeHeader(
             'Example Theme',
             '1.0.0',
+            testedUpTo: '6.9',
+            requiresAtLeast: '6.8',
+            requiresPhp: '8.3',
             template: 'parent-theme'
         );
 
@@ -67,6 +73,15 @@ final class WordPressThemePackageValidatorTest extends TestCase
             ->with($source->entryPath())
             ->willReturn($header);
 
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::once())
+            ->method('validate')
+            ->with($header);
+
         $structureValidator = $this->createMock(
             ThemeStructureValidatorInterface::class
         );
@@ -79,6 +94,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         $validation = (
             new WordPressThemePackageValidator(
                 $parser,
+                $compatibilityValidator,
                 $structureValidator
             )
         )->validate(
@@ -119,6 +135,14 @@ final class WordPressThemePackageValidatorTest extends TestCase
             ->method('parse')
             ->willThrowException($failure);
 
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::never())
+            ->method('validate');
+
         $structureValidator = $this->createMock(
             ThemeStructureValidatorInterface::class
         );
@@ -131,6 +155,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
             (
                 new WordPressThemePackageValidator(
                     $parser,
+                    $compatibilityValidator,
                     $structureValidator
                 )
             )->validate(
@@ -156,7 +181,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         }
     }
 
-    public function testRejectsVersionMismatchBeforeStructure(): void
+    public function testRejectsVersionMismatchBeforeCompatibility(): void
     {
         $parser = $this->createMock(
             ThemeHeaderParserInterface::class
@@ -170,6 +195,14 @@ final class WordPressThemePackageValidatorTest extends TestCase
                     '2.0.0'
                 )
             );
+
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::never())
+            ->method('validate');
 
         $structureValidator = $this->createMock(
             ThemeStructureValidatorInterface::class
@@ -191,6 +224,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         (
             new WordPressThemePackageValidator(
                 $parser,
+                $compatibilityValidator,
                 $structureValidator
             )
         )->validate(
@@ -204,7 +238,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
     }
 
     #[DataProvider('invalidTemplateSlugs')]
-    public function testRejectsInvalidTemplateSlugBeforeStructure(
+    public function testRejectsInvalidTemplateSlugBeforeCompatibility(
         string $slug
     ): void {
         $parser = $this->createMock(
@@ -220,6 +254,14 @@ final class WordPressThemePackageValidatorTest extends TestCase
                     template: $slug
                 )
             );
+
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::never())
+            ->method('validate');
 
         $structureValidator = $this->createMock(
             ThemeStructureValidatorInterface::class
@@ -243,6 +285,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         (
             new WordPressThemePackageValidator(
                 $parser,
+                $compatibilityValidator,
                 $structureValidator
             )
         )->validate(
@@ -263,18 +306,27 @@ final class WordPressThemePackageValidatorTest extends TestCase
             'style.css'
         );
 
+        $header = new ThemeHeader(
+            'Example Theme',
+            '1.0.0'
+        );
+
         $parser = $this->createMock(
             ThemeHeaderParserInterface::class
         );
 
         $parser
             ->method('parse')
-            ->willReturn(
-                new ThemeHeader(
-                    'Example Theme',
-                    '1.0.0'
-                )
-            );
+            ->willReturn($header);
+
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::once())
+            ->method('validate')
+            ->with($header);
 
         $structureValidator = $this->createMock(
             ThemeStructureValidatorInterface::class
@@ -288,6 +340,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         $validation = (
             new WordPressThemePackageValidator(
                 $parser,
+                $compatibilityValidator,
                 $structureValidator
             )
         )->validate(
@@ -300,7 +353,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         );
     }
 
-    public function testValidatesStructureAfterHeaderChecks(): void
+    public function testValidatesCompatibilityBeforeStructure(): void
     {
         $source = new PackageSource(
             '/tmp/example-source',
@@ -311,6 +364,15 @@ final class WordPressThemePackageValidatorTest extends TestCase
         /** @var list<string> $events */
         $events = [];
 
+        $header = new ThemeHeader(
+            'Example Theme',
+            '1.0.0',
+            testedUpTo: '6.9',
+            requiresAtLeast: '6.8',
+            requiresPhp: '8.3',
+            template: 'parent-theme'
+        );
+
         $parser = $this->createMock(
             ThemeHeaderParserInterface::class
         );
@@ -318,14 +380,26 @@ final class WordPressThemePackageValidatorTest extends TestCase
         $parser
             ->method('parse')
             ->willReturnCallback(
-                static function () use (&$events): ThemeHeader {
+                static function () use (
+                    &$events,
+                    $header
+                ): ThemeHeader {
                     $events[] = 'header';
 
-                    return new ThemeHeader(
-                        'Example Theme',
-                        '1.0.0',
-                        template: 'parent-theme'
-                    );
+                    return $header;
+                }
+            );
+
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->method('validate')
+            ->with($header)
+            ->willReturnCallback(
+                static function () use (&$events): void {
+                    $events[] = 'compatibility';
                 }
             );
 
@@ -335,6 +409,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
 
         $structureValidator
             ->method('validate')
+            ->with($source)
             ->willReturnCallback(
                 static function () use (&$events): void {
                     $events[] = 'structure';
@@ -344,6 +419,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         (
             new WordPressThemePackageValidator(
                 $parser,
+                $compatibilityValidator,
                 $structureValidator
             )
         )->validate(
@@ -354,10 +430,92 @@ final class WordPressThemePackageValidatorTest extends TestCase
         self::assertSame(
             [
                 'header',
+                'compatibility',
                 'structure',
             ],
             $events
         );
+    }
+
+    public function testWrapsCompatibilityFailureBeforeStructure(): void
+    {
+        $source = new PackageSource(
+            '/tmp/example-source',
+            'example-theme',
+            'style.css'
+        );
+
+        $header = new ThemeHeader(
+            'Example Theme',
+            '1.0.0',
+            requiresPhp: 'eight.three'
+        );
+
+        $parser = $this->createMock(
+            ThemeHeaderParserInterface::class
+        );
+
+        $parser
+            ->method('parse')
+            ->willReturn($header);
+
+        $failure =
+            ThemeCompatibilityValidationFailed::invalidVersion(
+                'Requires PHP',
+                'eight.three'
+            );
+
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::once())
+            ->method('validate')
+            ->with($header)
+            ->willThrowException($failure);
+
+        $structureValidator = $this->createMock(
+            ThemeStructureValidatorInterface::class
+        );
+
+        $structureValidator
+            ->expects(self::never())
+            ->method('validate');
+
+        try {
+            (
+                new WordPressThemePackageValidator(
+                    $parser,
+                    $compatibilityValidator,
+                    $structureValidator
+                )
+            )->validate(
+                $source,
+                $this->release()
+            );
+
+            self::fail(
+                'Compatibility validation failure was not wrapped.'
+            );
+        } catch (
+            ThemePackageValidationFailed $exception
+        ) {
+            self::assertSame(
+                $failure,
+                $exception->getPrevious()
+            );
+
+            self::assertSame(
+                sprintf(
+                    'Theme package compatibility metadata "%s" '
+                        . 'is invalid. %s',
+                    $source->entryPath(),
+                    $failure->getMessage()
+                ),
+                $exception->getMessage()
+            );
+        }
     }
 
     public function testWrapsStructureValidationFailure(): void
@@ -368,18 +526,27 @@ final class WordPressThemePackageValidatorTest extends TestCase
             'style.css'
         );
 
+        $header = new ThemeHeader(
+            'Example Theme',
+            '1.0.0'
+        );
+
         $parser = $this->createMock(
             ThemeHeaderParserInterface::class
         );
 
         $parser
             ->method('parse')
-            ->willReturn(
-                new ThemeHeader(
-                    'Example Theme',
-                    '1.0.0'
-                )
-            );
+            ->willReturn($header);
+
+        $compatibilityValidator = $this->createMock(
+            ThemeCompatibilityValidatorInterface::class
+        );
+
+        $compatibilityValidator
+            ->expects(self::once())
+            ->method('validate')
+            ->with($header);
 
         $failure =
             ThemeStructureValidationFailed::missingEntryPoint(
@@ -399,6 +566,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
             (
                 new WordPressThemePackageValidator(
                     $parser,
+                    $compatibilityValidator,
                     $structureValidator
                 )
             )->validate(
@@ -438,6 +606,7 @@ final class WordPressThemePackageValidatorTest extends TestCase
         (
             new WordPressThemePackageValidator(
                 new WordPressThemeHeaderParser(),
+                new WordPressThemeCompatibilityValidator(),
                 new WordPressThemeStructureValidator()
             )
         )->validate(
@@ -487,6 +656,9 @@ final class WordPressThemePackageValidatorTest extends TestCase
                 "/*\n"
                     . " * Theme Name: Example Theme\n"
                     . " * Version: 1.0.0\n"
+                    . " * Tested up to: 6.9\n"
+                    . " * Requires at least: 6.8\n"
+                    . " * Requires PHP: 8.3\n"
                     . " * Template: parent-theme\n"
                     . " */\n"
             )
