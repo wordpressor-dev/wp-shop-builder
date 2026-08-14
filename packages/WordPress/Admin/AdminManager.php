@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace WPShop\WordPress\Admin;
 
-use WPShop\WordPress\Admin\Contracts\AdminPageInterface;
-
 final class AdminManager
 {
     public function __construct(
         private readonly AdminMenu $menu,
-        private readonly AdminPageInterface $dashboard
+        private readonly AdminPageRegistry $pages
     ) {
     }
 
     public function __invoke(): void
     {
-        $this->menu->register($this->dashboard);
+        foreach ($this->pages->pages() as $page) {
+            $this->menu->register($page);
+        }
+
+        foreach ($this->pages->submenus() as $page) {
+            $this->menu->registerSubmenu($page);
+        }
     }
 }
