@@ -32,4 +32,26 @@ final class WordPressAdminApi implements AdminApiInterface
             $position
         );
     }
+
+    public function addSubmenuPage(
+        string $parentSlug,
+        string $pageTitle,
+        string $menuTitle,
+        string $capability,
+        string $menuSlug,
+        callable $callback
+    ): void {
+        if (!function_exists('add_submenu_page')) {
+            throw WordPressFunctionUnavailable::named('add_submenu_page');
+        }
+
+        add_submenu_page(
+            $parentSlug,
+            $pageTitle,
+            $menuTitle,
+            $capability,
+            $menuSlug,
+            $callback
+        );
+    }
 }
