@@ -9,6 +9,7 @@ use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
 use WPShop\WordPress\Admin\AdminManager;
 use WPShop\WordPress\Admin\AdminMenu;
+use WPShop\WordPress\Admin\AdminPageRegistry;
 use WPShop\WordPress\Admin\Contracts\AdminApiInterface;
 use WPShop\WordPress\Admin\Contracts\AdminPageInterface;
 use WPShop\WordPress\Admin\DashboardPage;
@@ -33,11 +34,18 @@ final class AdminServiceProvider extends AbstractServiceProvider
         $api = new WordPressAdminApi();
         $menu = new AdminMenu($api);
         $dashboard = new DashboardPage($this->application);
-        $this->manager = new AdminManager($menu, $dashboard);
+        $pages = new AdminPageRegistry();
+        $pages->addPage($dashboard);
+
+        $this->manager = new AdminManager(
+            $menu,
+            $pages
+        );
 
         $this->container->set(AdminApiInterface::class, $api);
         $this->container->set(WordPressAdminApi::class, $api);
         $this->container->set(AdminMenu::class, $menu);
+        $this->container->set(AdminPageRegistry::class, $pages);
         $this->container->set(AdminPageInterface::class, $dashboard);
         $this->container->set(DashboardPage::class, $dashboard);
         $this->container->set(AdminManager::class, $this->manager);
