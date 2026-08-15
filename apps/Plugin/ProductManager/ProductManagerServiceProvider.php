@@ -66,10 +66,6 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $tagRepository = new WordPressCatalogTagRepository();
         $tagSelector = new ExistingTagSelector($tagRepository);
-        $controller = new ProductManagerController(
-            $envatoClient,
-            $tagSelector
-        );
         $functionCaller = new WordPressFunctionCaller();
         $draftGateway = new WordPressWooCommerceDraftGateway(
             $functionCaller(...)
@@ -112,6 +108,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $translationRegistrar,
             $functionCaller(...)
         );
+        $controller = new ProductManagerController(
+            $envatoClient,
+            $tagSelector,
+            $draftCreator,
+            $translator
+        );
         $page = new ProductManagerPage();
 
         $registry->addSubmenu($page);
@@ -143,10 +145,6 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ExistingTagSelector::class,
             $tagSelector
-        );
-        $this->container->set(
-            ProductManagerController::class,
-            $controller
         );
         $this->container->set(
             WordPressFunctionCaller::class,
@@ -207,6 +205,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             TranslatePressProductTranslator::class,
             $translator
+        );
+        $this->container->set(
+            ProductManagerController::class,
+            $controller
         );
         $this->container->set(
             ProductManagerPage::class,
