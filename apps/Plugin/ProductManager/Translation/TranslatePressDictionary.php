@@ -255,7 +255,7 @@ final class TranslatePressDictionary implements
             );
             $rows = $this->database->fetchAll(
                 $sql,
-                array_values($chunk)
+                $chunk
             );
 
             foreach ($rows as $row) {
