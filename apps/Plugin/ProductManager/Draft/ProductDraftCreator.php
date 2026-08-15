@@ -6,12 +6,17 @@ namespace WPShop\App\Plugin\ProductManager\Draft;
 
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
+use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 
 final class ProductDraftCreator
 {
+    /**
+     * @param list<ProductDraftWriterInterface> $writers
+     */
     public function __construct(
         private readonly ProductDraftGatewayInterface $gateway,
-        private readonly ProductDraftValidator $validator
+        private readonly ProductDraftValidator $validator,
+        private readonly array $writers = []
     ) {
     }
 
@@ -104,14 +109,45 @@ final class ProductDraftCreator
             );
         }
 
+        $logs = [
+            'DRAFT CREATED; ID ' . $productId,
+            'TITLE = ' . $data->title(),
+            'CORE PRODUCT = READY',
+        ];
+
+        foreach ($this->writers as $writer) {
+            try {
+                $logs = array_merge(
+                    $logs,
+                    $writer->write(
+                        $productId,
+                        $data
+                    )
+                );
+            } catch (Throwable $exception) {
+                return new ProductDraftResult(
+                    false,
+                    $productId,
+                    array_merge(
+                        $logs,
+                        [
+                            'DRAFT CREATED BUT FINALIZATION FAILED.',
+                            'WRITER = ' . $writer::class,
+                            'ERROR TYPE: ' . $exception::class,
+                            'ERROR MESSAGE: ' . $exception->getMessage(),
+                            'ACTION: keep Draft for repair; do not publish yet.',
+                        ]
+                    )
+                );
+            }
+        }
+
+        $logs[] = 'FINALIZATION = READY';
+
         return new ProductDraftResult(
             true,
             $productId,
-            [
-                'DRAFT CREATED; ID ' . $productId,
-                'TITLE = ' . $data->title(),
-                'CORE PRODUCT = READY',
-            ]
+            $logs
         );
     }
 }
