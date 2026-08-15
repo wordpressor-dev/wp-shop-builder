@@ -43,19 +43,19 @@ final class ProductDraftCreatorTest extends TestCase
     {
         $gateway = new ProductDraftCreatorGateway();
         $gateway->createdProductId = 5028;
-        $calls = [];
+        $recorder = new ProductDraftWriterRecorder();
         $creator = new ProductDraftCreator(
             $gateway,
             new ProductDraftValidator(),
             [
                 new ProductDraftCreatorWriter(
                     'TAXONOMY = READY',
-                    $calls,
+                    $recorder,
                     'taxonomy'
                 ),
                 new ProductDraftCreatorWriter(
                     'META = READY',
-                    $calls,
+                    $recorder,
                     'meta'
                 ),
             ]
@@ -66,7 +66,7 @@ final class ProductDraftCreatorTest extends TestCase
         self::assertTrue($result->success);
         self::assertSame(
             ['taxonomy', 'meta'],
-            $calls
+            $recorder->calls
         );
         self::assertContains(
             'TAXONOMY = READY',
@@ -256,15 +256,18 @@ final class ProductDraftCreatorGateway implements
     }
 }
 
+final class ProductDraftWriterRecorder
+{
+    /** @var list<string> */
+    public array $calls = [];
+}
+
 final class ProductDraftCreatorWriter implements
     ProductDraftWriterInterface
 {
-    /**
-     * @param list<string> $calls
-     */
     public function __construct(
         private readonly string $log,
-        private array &$calls,
+        private readonly ProductDraftWriterRecorder $recorder,
         private readonly string $name
     ) {
     }
@@ -273,7 +276,7 @@ final class ProductDraftCreatorWriter implements
         int $productId,
         ProductDraftData $data
     ): array {
-        $this->calls[] = $this->name;
+        $this->recorder->calls[] = $this->name;
 
         return [$this->log];
     }
