@@ -6,10 +6,12 @@ namespace WPShop\App\Plugin\ProductManager\Write;
 
 use Closure;
 use RuntimeException;
+use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
-final class ProductTaxonomyWriter
+final class ProductTaxonomyWriter implements
+    ProductDraftWriterInterface
 {
     /**
      * @param Closure(string, mixed...): mixed $call
