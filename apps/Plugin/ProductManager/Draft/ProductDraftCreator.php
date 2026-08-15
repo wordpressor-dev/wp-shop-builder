@@ -23,22 +23,79 @@ final class ProductDraftCreator
     public function preflight(
         ProductDraftData $data
     ): ProductDraftResult {
-        $check = $this->checkBeforeCreate($data);
+        $issues = $this->validator->validate($data);
+        $logs = [
+            'NO PRODUCT WRITTEN = YES',
+        ];
 
-        if (! $check->success) {
-            return $check;
+        try {
+            $slugOwner = trim($data->slug) !== ''
+                ? $this->gateway->findBySlug($data->slug)
+                : null;
+            $skuOwner = trim($data->skuFilename) !== ''
+                ? $this->gateway->findBySku($data->skuFilename)
+                : null;
+        } catch (Throwable $exception) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    'NO PRODUCT WRITTEN = YES',
+                    'STOP: DUPLICATE CHECK FAILED.',
+                    'ERROR TYPE: ' . $exception::class,
+                    'ERROR MESSAGE: ' . $exception->getMessage(),
+                ]
+            );
+        }
+
+        if ($slugOwner instanceof ExistingProduct) {
+            $issues[] = 'PRODUCT SLUG ALREADY EXISTS: '
+                . $data->slug;
+            $issues[] = 'SLUG OWNER PRODUCT ID: '
+                . $slugOwner->id;
+            $issues[] = 'SLUG OWNER STATUS: '
+                . $slugOwner->status;
+        } elseif (trim($data->slug) !== '') {
+            $logs[] = 'SLUG = AVAILABLE: ' . $data->slug;
+        }
+
+        if ($skuOwner instanceof ExistingProduct) {
+            $issues[] = 'SKU ALREADY EXISTS: '
+                . $data->skuFilename;
+            $issues[] = 'SKU OWNER PRODUCT ID: '
+                . $skuOwner->id;
+            $issues[] = 'SKU OWNER STATUS: '
+                . $skuOwner->status;
+
+            if ($skuOwner->status === 'trash') {
+                $issues[] = 'ACTION: permanently delete the old test product from Trash or clear its SKU.';
+            }
+        } elseif (trim($data->skuFilename) !== '') {
+            $logs[] = 'SKU = AVAILABLE: ' . $data->skuFilename;
+        }
+
+        if ($issues !== []) {
+            return new ProductDraftResult(
+                false,
+                null,
+                array_merge(
+                    $logs,
+                    ['PREFLIGHT = REVIEW REQUIRED'],
+                    $issues
+                )
+            );
         }
 
         return new ProductDraftResult(
             true,
             null,
-            [
-                'PREFLIGHT = READY',
-                'NO PRODUCT WRITTEN = YES',
-                'TITLE = ' . $data->title(),
-                'SLUG = AVAILABLE: ' . $data->slug,
-                'SKU = AVAILABLE: ' . $data->skuFilename,
-            ]
+            array_merge(
+                $logs,
+                [
+                    'PREFLIGHT = READY',
+                    'TITLE = ' . $data->title(),
+                ]
+            )
         );
     }
 
