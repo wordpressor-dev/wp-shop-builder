@@ -44,7 +44,7 @@ final class WordPressWooCommerceDraftGateway implements
             return null;
         }
 
-        $id = (int) $ids[0];
+        $id = (int) reset($ids);
 
         if ($id <= 0) {
             return null;
