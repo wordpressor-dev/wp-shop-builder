@@ -95,17 +95,17 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $translationMapBuilder = new TranslationMapBuilder();
         $translationDictionary = new TranslatePressDictionary(
             $database,
-            $functionCaller,
+            $functionCaller(...),
             $translationMapBuilder
         );
         $translationRegistrar = new TranslatePressRegistrar(
-            $functionCaller
+            $functionCaller(...)
         );
         $translator = new TranslatePressProductTranslator(
             $translationMapBuilder,
             $translationDictionary,
             $translationRegistrar,
-            $functionCaller
+            $functionCaller(...)
         );
         $page = new ProductManagerPage();
 
