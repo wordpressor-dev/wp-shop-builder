@@ -4,19 +4,22 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Translation;
 
+use Closure;
 use RuntimeException;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
-use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 
 final class TranslatePressDictionary implements
     TranslationDictionaryInterface
 {
     private ?string $table = null;
 
+    /**
+     * @param Closure(string, mixed...): mixed $call
+     */
     public function __construct(
         private readonly DatabaseConnectionInterface $database,
-        private readonly WordPressFunctionCaller $wordpress,
+        private readonly Closure $call,
         private readonly TranslationMapBuilder $mapBuilder
     ) {
     }
@@ -95,7 +98,7 @@ final class TranslatePressDictionary implements
         TranslationDictionaryStatus $status
     ): void {
         $key = 'wp_shop_pm_v14_trp_backup_' . $productId;
-        $existing = ($this->wordpress)(
+        $existing = ($this->call)(
             'get_option',
             $key,
             false
@@ -116,13 +119,13 @@ final class TranslatePressDictionary implements
             }
         }
 
-        ($this->wordpress)(
+        ($this->call)(
             'add_option',
             $key,
             [
                 'product_id' => $productId,
                 'slug' => $slug,
-                'created_at' => (string) ($this->wordpress)(
+                'created_at' => (string) ($this->call)(
                     'current_time',
                     'mysql'
                 ),
