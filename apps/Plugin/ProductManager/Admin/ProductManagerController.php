@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Admin;
 
+use InvalidArgumentException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
+use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Translation\ProductTranslationResult;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
@@ -20,7 +22,8 @@ final class ProductManagerController
         private readonly EnvatoClientInterface $envato,
         private readonly ExistingTagSelector $tags,
         private readonly ?ProductDraftCreator $draftCreator = null,
-        private readonly ?TranslatePressProductTranslator $translator = null
+        private readonly ?TranslatePressProductTranslator $translator = null,
+        private readonly ?ExistingCatalogTagParser $tagParser = null
     ) {
     }
 
@@ -81,6 +84,24 @@ final class ProductManagerController
                 'EDITORIAL CONTENT = MANUAL',
             ]
         );
+    }
+
+    /**
+     * @return list<CatalogTag>
+     */
+    public function parseExistingTags(string $value): array
+    {
+        if ($this->tagParser === null) {
+            if (trim($value) === '') {
+                return [];
+            }
+
+            throw new InvalidArgumentException(
+                'Catalog tag parser is unavailable.'
+            );
+        }
+
+        return $this->tagParser->parse($value);
     }
 
     public function createDraft(
