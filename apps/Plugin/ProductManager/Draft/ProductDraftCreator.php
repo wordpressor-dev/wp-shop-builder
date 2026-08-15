@@ -31,9 +31,24 @@ final class ProductDraftCreator
             );
         }
 
-        $slugOwner = $this->gateway->findBySlug(
-            $data->slug
-        );
+        try {
+            $slugOwner = $this->gateway->findBySlug(
+                $data->slug
+            );
+            $skuOwner = $this->gateway->findBySku(
+                $data->skuFilename
+            );
+        } catch (Throwable $exception) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    'STOP: DUPLICATE CHECK FAILED.',
+                    'ERROR TYPE: ' . $exception::class,
+                    'ERROR MESSAGE: ' . $exception->getMessage(),
+                ]
+            );
+        }
 
         if ($slugOwner instanceof ExistingProduct) {
             return new ProductDraftResult(
@@ -47,10 +62,6 @@ final class ProductDraftCreator
                 ]
             );
         }
-
-        $skuOwner = $this->gateway->findBySku(
-            $data->skuFilename
-        );
 
         if ($skuOwner instanceof ExistingProduct) {
             return new ProductDraftResult(
