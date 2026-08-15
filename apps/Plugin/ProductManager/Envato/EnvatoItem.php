@@ -8,6 +8,7 @@ final readonly class EnvatoItem
 {
     /**
      * @param list<string> $tags
+     * @param array<string, mixed> $source
      */
     public function __construct(
         public int $itemId,
@@ -20,7 +21,8 @@ final readonly class EnvatoItem
         public int $sales,
         public ?string $publishedAt,
         public array $tags,
-        public string $skuFilename
+        public string $skuFilename,
+        public array $source
     ) {
     }
 }
