@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Tags;
 
 use Closure;
+use RuntimeException;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 
 final class WordPressCatalogTagRepository implements
@@ -23,17 +24,10 @@ final class WordPressCatalogTagRepository implements
             string $name,
             string $slug
         ): bool {
-            if (
-                ! function_exists('taxonomy_exists')
-                || ! function_exists('get_term_by')
-            ) {
-                return false;
-            }
-
-            $taxonomyExists = Closure::fromCallable(
+            $taxonomyExists = self::wordpressCallable(
                 'taxonomy_exists'
             );
-            $getTermBy = Closure::fromCallable(
+            $getTermBy = self::wordpressCallable(
                 'get_term_by'
             );
 
@@ -72,5 +66,17 @@ final class WordPressCatalogTagRepository implements
             $name,
             $slug
         );
+    }
+
+    private static function wordpressCallable(
+        string $name
+    ): Closure {
+        if (! is_callable($name)) {
+            throw new RuntimeException(
+                'WordPress taxonomy API is unavailable: ' . $name
+            );
+        }
+
+        return Closure::fromCallable($name);
     }
 }
