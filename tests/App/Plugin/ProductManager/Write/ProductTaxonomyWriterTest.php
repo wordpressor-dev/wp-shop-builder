@@ -32,7 +32,11 @@ final class ProductTaxonomyWriterTest extends TestCase
             static function (
                 string $name,
                 mixed ...$arguments
-            ) use (&$setTerms, &$meta, $terms): mixed {
+            ) use (
+                &$setTerms,
+                &$meta,
+                $terms
+            ): mixed {
                 if ($name === 'sanitize_title') {
                     return strtolower((string) $arguments[0]);
                 }
