@@ -79,7 +79,10 @@ final class ProductManagerPage implements SubmenuPageInterface
                     $result->fields
                 );
             }
-        } elseif ($action === 'create_draft') {
+        } elseif (
+            $action === 'preflight_draft'
+            || $action === 'create_draft'
+        ) {
             $this->verifyNonce('wp_shop_pm_create_draft');
             $fields = $this->postedDraftFields($fields);
 
@@ -87,13 +90,17 @@ final class ProductManagerPage implements SubmenuPageInterface
                 $tags = $this->controller->parseExistingTags(
                     $fields['tags']
                 );
-                $result = $this->controller->createDraft(
-                    $this->draftData($fields, $tags)
-                );
+                $data = $this->draftData($fields, $tags);
+                $result = $action === 'preflight_draft'
+                    ? $this->controller->preflightDraft($data)
+                    : $this->controller->createDraft($data);
                 $logs = $result->logs;
                 $success = $result->success;
 
-                if ($result->productId !== null) {
+                if (
+                    $action === 'create_draft'
+                    && $result->productId !== null
+                ) {
                     $lastProductId = $result->productId;
                     $translationProductId = $result->productId;
                     $translationEnglish = [
@@ -111,7 +118,9 @@ final class ProductManagerPage implements SubmenuPageInterface
             } catch (Throwable $exception) {
                 $success = false;
                 $logs = [
-                    'CREATE REQUEST = RECEIVED',
+                    $action === 'preflight_draft'
+                        ? 'PREFLIGHT REQUEST = RECEIVED'
+                        : 'CREATE REQUEST = RECEIVED',
                     'STOP: DRAFT NOT CREATED.',
                     'ERROR TYPE: ' . $exception::class,
                     'ERROR MESSAGE: ' . $exception->getMessage(),
@@ -333,6 +342,7 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">2. Review & Create Draft</h2>';
         echo '<p><strong>Safety:</strong> RU Short + Long + SureRank Meta are required. Tags must already exist in both <code>product_tag</code> and <code>pa_tags</code>. Hit/New are editorial only.</p>';
         echo '<p><strong>Version check:</strong> before creating the Draft, compare the Version field with the ThemeForest changelog. Envato machine-readable version metadata can lag behind the author changelog.</p>';
+        echo '<p><strong>Preflight:</strong> checks Version → SKU, required fields, slug, SKU conflicts, Item ID and existing tags without writing a WooCommerce product.</p>';
         echo '<form method="post">';
         $this->nonceField('wp_shop_pm_create_draft');
         $this->hiddenAction('create_draft');
@@ -418,7 +428,10 @@ final class ProductManagerPage implements SubmenuPageInterface
             'label_new',
             $fields['label_new'] === '1'
         );
-        $this->submit('Создать новый товар как Draft', 'primary');
+        echo '<p style="display:flex;gap:10px;align-items:center;">';
+        echo '<button type="submit" class="button button-secondary" onclick="this.form.elements[\'wp_shop_pm_action\'].value=\'preflight_draft\';">Проверить Draft без создания</button>';
+        echo '<button type="submit" class="button button-primary" onclick="this.form.elements[\'wp_shop_pm_action\'].value=\'create_draft\';">Создать новый товар как Draft</button>';
+        echo '</p>';
         echo '</form>';
         echo '</div>';
     }
