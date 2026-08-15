@@ -7,6 +7,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
+use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -14,6 +15,7 @@ use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
@@ -59,6 +61,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             ExistingTagSelector::class,
             $container->get(ExistingTagSelector::class)
+        );
+        self::assertInstanceOf(
+            ExistingCatalogTagParser::class,
+            $container->get(ExistingCatalogTagParser::class)
         );
         self::assertInstanceOf(
             WordPressFunctionCaller::class,
@@ -107,6 +113,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             TranslatePressProductTranslator::class,
             $container->get(TranslatePressProductTranslator::class)
+        );
+        self::assertInstanceOf(
+            ProductManagerController::class,
+            $container->get(ProductManagerController::class)
         );
         self::assertSame(
             $container->get(ProductManagerPage::class),
