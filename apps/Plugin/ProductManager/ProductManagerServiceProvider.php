@@ -17,6 +17,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
@@ -66,6 +67,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $tagRepository = new WordPressCatalogTagRepository();
         $tagSelector = new ExistingTagSelector($tagRepository);
+        $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
         $draftGateway = new WordPressWooCommerceDraftGateway(
             $functionCaller(...)
@@ -112,9 +114,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $envatoClient,
             $tagSelector,
             $draftCreator,
-            $translator
+            $translator,
+            $tagParser
         );
-        $page = new ProductManagerPage();
+        $page = new ProductManagerPage(
+            $controller,
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
 
@@ -145,6 +151,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ExistingTagSelector::class,
             $tagSelector
+        );
+        $this->container->set(
+            ExistingCatalogTagParser::class,
+            $tagParser
         );
         $this->container->set(
             WordPressFunctionCaller::class,
