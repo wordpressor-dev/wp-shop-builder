@@ -191,7 +191,7 @@ final class EnvatoItemMapper
         }
 
         return $this->slugify(
-            (string) ($matches[1] ?? '')
+            (string) $matches[1]
         );
     }
 
