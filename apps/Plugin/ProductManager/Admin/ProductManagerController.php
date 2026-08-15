@@ -19,8 +19,8 @@ final class ProductManagerController
     public function __construct(
         private readonly EnvatoClientInterface $envato,
         private readonly ExistingTagSelector $tags,
-        private readonly ProductDraftCreator $draftCreator,
-        private readonly TranslatePressProductTranslator $translator
+        private readonly ?ProductDraftCreator $draftCreator = null,
+        private readonly ?TranslatePressProductTranslator $translator = null
     ) {
     }
 
@@ -86,6 +86,14 @@ final class ProductManagerController
     public function createDraft(
         ProductDraftData $data
     ): ProductDraftResult {
+        if ($this->draftCreator === null) {
+            return new ProductDraftResult(
+                false,
+                null,
+                ['DRAFT_CREATOR_UNAVAILABLE']
+            );
+        }
+
         return $this->draftCreator->create($data);
     }
 
@@ -95,6 +103,13 @@ final class ProductManagerController
         string $enLong,
         string $enMeta
     ): ProductTranslationResult {
+        if ($this->translator === null) {
+            return new ProductTranslationResult(
+                false,
+                ['TRANSLATOR_UNAVAILABLE']
+            );
+        }
+
         return $this->translator->translate(
             $productId,
             $enShort,
