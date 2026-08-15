@@ -7,6 +7,7 @@ namespace WPShop\App\Plugin\ProductManager;
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
+use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -65,6 +66,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $tagRepository = new WordPressCatalogTagRepository();
         $tagSelector = new ExistingTagSelector($tagRepository);
+        $controller = new ProductManagerController(
+            $envatoClient,
+            $tagSelector
+        );
         $functionCaller = new WordPressFunctionCaller();
         $draftGateway = new WordPressWooCommerceDraftGateway(
             $functionCaller(...)
@@ -138,6 +143,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ExistingTagSelector::class,
             $tagSelector
+        );
+        $this->container->set(
+            ProductManagerController::class,
+            $controller
         );
         $this->container->set(
             WordPressFunctionCaller::class,
