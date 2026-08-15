@@ -195,13 +195,14 @@ final class ProductMetadataWriter implements
         string $fieldKey,
         int $productId
     ): ?string {
-        if (! is_callable('get_field_object')) {
+        $getFieldObject = $this->optionalCallable(
+            'get_field_object'
+        );
+
+        if (! $getFieldObject instanceof Closure) {
             return null;
         }
 
-        $getFieldObject = Closure::fromCallable(
-            'get_field_object'
-        );
         $field = $getFieldObject(
             $fieldKey,
             $productId,
@@ -218,6 +219,16 @@ final class ProductMetadataWriter implements
         return is_string($name) && $name !== ''
             ? $name
             : null;
+    }
+
+    private function optionalCallable(
+        string $name
+    ): ?Closure {
+        if (! is_callable($name)) {
+            return null;
+        }
+
+        return Closure::fromCallable($name);
     }
 
     private function updateMeta(
