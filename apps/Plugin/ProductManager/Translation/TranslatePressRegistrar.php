@@ -78,7 +78,12 @@ final class TranslatePressRegistrar implements
     public function registerMissing(
         TranslationDictionaryStatus $status
     ): array {
-        if (! is_callable('trp_translate')) {
+        $available = (bool) ($this->call)(
+            'function_exists',
+            'trp_translate'
+        );
+
+        if (! $available) {
             return [
                 'TRP_TRANSLATE_FUNCTION = NOT_AVAILABLE',
             ];
