@@ -30,11 +30,12 @@ final class WordPressCatalogTagRepository implements
                 return false;
             }
 
-            /** @var callable-string $taxonomyExists */
-            $taxonomyExists = 'taxonomy_exists';
-
-            /** @var callable-string $getTermBy */
-            $getTermBy = 'get_term_by';
+            $taxonomyExists = Closure::fromCallable(
+                'taxonomy_exists'
+            );
+            $getTermBy = Closure::fromCallable(
+                'get_term_by'
+            );
 
             if (! $taxonomyExists($taxonomy)) {
                 return false;
