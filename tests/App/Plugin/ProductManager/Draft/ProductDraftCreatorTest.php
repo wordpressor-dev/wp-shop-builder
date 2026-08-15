@@ -7,6 +7,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager\Draft;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
+use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ExistingProduct;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
@@ -30,6 +31,77 @@ final class ProductDraftCreatorTest extends TestCase
         self::assertSame(1, $gateway->createCalls);
         self::assertContains(
             'DRAFT CREATED; ID 5028',
+            $result->logs
+        );
+        self::assertContains(
+            'FINALIZATION = READY',
+            $result->logs
+        );
+    }
+
+    public function testRunsPostCreateWritersInOrderAndAppendsLogs(): void
+    {
+        $gateway = new ProductDraftCreatorGateway();
+        $gateway->createdProductId = 5028;
+        $calls = [];
+        $creator = new ProductDraftCreator(
+            $gateway,
+            new ProductDraftValidator(),
+            [
+                new ProductDraftCreatorWriter(
+                    'TAXONOMY = READY',
+                    $calls,
+                    'taxonomy'
+                ),
+                new ProductDraftCreatorWriter(
+                    'META = READY',
+                    $calls,
+                    'meta'
+                ),
+            ]
+        );
+
+        $result = $creator->create($this->validData());
+
+        self::assertTrue($result->success);
+        self::assertSame(
+            ['taxonomy', 'meta'],
+            $calls
+        );
+        self::assertContains(
+            'TAXONOMY = READY',
+            $result->logs
+        );
+        self::assertContains(
+            'META = READY',
+            $result->logs
+        );
+    }
+
+    public function testKeepsCreatedDraftWhenFinalizationFails(): void
+    {
+        $gateway = new ProductDraftCreatorGateway();
+        $gateway->createdProductId = 5028;
+        $creator = new ProductDraftCreator(
+            $gateway,
+            new ProductDraftValidator(),
+            [new ProductDraftFailingWriter()]
+        );
+
+        $result = $creator->create($this->validData());
+
+        self::assertFalse($result->success);
+        self::assertSame(5028, $result->productId);
+        self::assertContains(
+            'DRAFT CREATED BUT FINALIZATION FAILED.',
+            $result->logs
+        );
+        self::assertContains(
+            'ERROR MESSAGE: Metadata write failed.',
+            $result->logs
+        );
+        self::assertContains(
+            'ACTION: keep Draft for repair; do not publish yet.',
             $result->logs
         );
     }
@@ -181,5 +253,41 @@ final class ProductDraftCreatorGateway implements
         }
 
         return $this->createdProductId;
+    }
+}
+
+final class ProductDraftCreatorWriter implements
+    ProductDraftWriterInterface
+{
+    /**
+     * @param list<string> $calls
+     */
+    public function __construct(
+        private readonly string $log,
+        private array &$calls,
+        private readonly string $name
+    ) {
+    }
+
+    public function write(
+        int $productId,
+        ProductDraftData $data
+    ): array {
+        $this->calls[] = $this->name;
+
+        return [$this->log];
+    }
+}
+
+final class ProductDraftFailingWriter implements
+    ProductDraftWriterInterface
+{
+    public function write(
+        int $productId,
+        ProductDraftData $data
+    ): array {
+        throw new RuntimeException(
+            'Metadata write failed.'
+        );
     }
 }
