@@ -18,17 +18,19 @@ final class WordPressEnvatoTransport
         string $url,
         array $headers
     ): array {
-        $this->assertWordPressHttpApi();
-
-        $remoteGet = Closure::fromCallable('wp_remote_get');
-        $isWpError = Closure::fromCallable('is_wp_error');
-        $responseCode = Closure::fromCallable(
+        $remoteGet = $this->wordpressCallable(
+            'wp_remote_get'
+        );
+        $isWpError = $this->wordpressCallable(
+            'is_wp_error'
+        );
+        $responseCode = $this->wordpressCallable(
             'wp_remote_retrieve_response_code'
         );
-        $responseBody = Closure::fromCallable(
+        $responseBody = $this->wordpressCallable(
             'wp_remote_retrieve_body'
         );
-        $responseHeader = Closure::fromCallable(
+        $responseHeader = $this->wordpressCallable(
             'wp_remote_retrieve_header'
         );
 
@@ -110,23 +112,16 @@ final class WordPressEnvatoTransport
         return $decoded;
     }
 
-    private function assertWordPressHttpApi(): void
-    {
-        foreach (
-            [
-                'wp_remote_get',
-                'is_wp_error',
-                'wp_remote_retrieve_response_code',
-                'wp_remote_retrieve_body',
-                'wp_remote_retrieve_header',
-            ] as $function
-        ) {
-            if (! function_exists($function)) {
-                throw new RuntimeException(
-                    'WordPress HTTP API is unavailable: ' . $function
-                );
-            }
+    private function wordpressCallable(
+        string $name
+    ): Closure {
+        if (! is_callable($name)) {
+            throw new RuntimeException(
+                'WordPress HTTP API is unavailable: ' . $name
+            );
         }
+
+        return Closure::fromCallable($name);
     }
 
     private function errorMessage(mixed $error): string
