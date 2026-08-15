@@ -49,4 +49,31 @@ final readonly class ProductDraftData
             && $this->enLongDescription !== ''
             && $this->enMetaDescription !== '';
     }
+
+    public function withSkuFilename(string $skuFilename): self
+    {
+        return new self(
+            $this->baseTitle,
+            $this->slug,
+            $this->itemId,
+            $this->version,
+            $this->sourceUpdateDate,
+            $this->developer,
+            $this->price,
+            $this->salesPage,
+            $skuFilename,
+            $this->downloadUrl,
+            $this->featuredImageId,
+            $this->tags,
+            $this->shortDescription,
+            $this->longDescription,
+            $this->metaDescription,
+            $this->enShortDescription,
+            $this->enLongDescription,
+            $this->enMetaDescription,
+            $this->notes,
+            $this->hit,
+            $this->new
+        );
+    }
 }
