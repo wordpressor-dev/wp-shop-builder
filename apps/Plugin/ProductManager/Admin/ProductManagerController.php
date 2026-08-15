@@ -38,13 +38,7 @@ final class ProductManagerController
             );
         }
 
-        $selectedTags = $this->tags->select(
-            [
-                'name' => $item->baseTitle,
-                'developer' => $item->developer,
-                'tags' => $item->tags,
-            ]
-        );
+        $selectedTags = $this->tags->select($item->source);
 
         $fields = [
             'base_title' => $item->baseTitle,
