@@ -6,6 +6,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -15,6 +16,12 @@ use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
+use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
+use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
+use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
 use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
@@ -29,7 +36,14 @@ final class ProductManagerServiceProviderTest extends TestCase
     {
         $container = new Container();
         $registry = new AdminPageRegistry();
+        $database = $this->createMock(
+            DatabaseConnectionInterface::class
+        );
         $container->set(AdminPageRegistry::class, $registry);
+        $container->set(
+            DatabaseConnectionInterface::class,
+            $database
+        );
 
         $provider = new ProductManagerServiceProvider($container);
         $provider->register();
@@ -77,6 +91,22 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             ProductDraftCreator::class,
             $container->get(ProductDraftCreator::class)
+        );
+        self::assertInstanceOf(
+            TranslationMapBuilder::class,
+            $container->get(TranslationMapBuilder::class)
+        );
+        self::assertInstanceOf(
+            TranslatePressDictionary::class,
+            $container->get(TranslationDictionaryInterface::class)
+        );
+        self::assertInstanceOf(
+            TranslatePressRegistrar::class,
+            $container->get(TranslationRegistrarInterface::class)
+        );
+        self::assertInstanceOf(
+            TranslatePressProductTranslator::class,
+            $container->get(TranslatePressProductTranslator::class)
         );
         self::assertSame(
             $container->get(ProductManagerPage::class),
