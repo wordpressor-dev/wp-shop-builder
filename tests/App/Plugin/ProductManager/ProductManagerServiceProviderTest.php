@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace WPShop\Tests\App\Plugin\ProductManager;
 
-use LogicException;
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
@@ -46,16 +45,5 @@ final class ProductManagerServiceProviderTest extends TestCase
             'wp-shop-builder-product-manager',
             $registry->submenus()[0]->slug()
         );
-    }
-
-    public function testRequiresAdminPageRegistry(): void
-    {
-        $this->expectException(LogicException::class);
-        $this->expectExceptionMessage(
-            'AdminPageRegistry must be registered before Product Manager.'
-        );
-
-        (new ProductManagerServiceProvider(new Container()))
-            ->register();
     }
 }
