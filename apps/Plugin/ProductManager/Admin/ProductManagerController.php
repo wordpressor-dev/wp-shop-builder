@@ -9,6 +9,7 @@ use Throwable;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
+use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -69,11 +70,13 @@ final class ProductManagerController
             [
                 'ENVATO AUTOFILL = READY',
                 'ITEM ID = ' . $item->itemId,
-                'VERSION = ' . (
+                'ENVATO VERSION = ' . (
                     $item->version !== ''
                         ? $item->version
                         : 'REVIEW_REQUIRED'
                 ),
+                'VERSION CHECK = MANUAL REQUIRED BEFORE DRAFT',
+                'MANUAL VERSION = SOURCE OF TRUTH AT DRAFT CREATE',
                 'DEVELOPER = ' . (
                     $item->developer !== ''
                         ? $item->developer
@@ -115,7 +118,50 @@ final class ProductManagerController
             );
         }
 
-        return $this->draftCreator->create($data);
+        try {
+            $canonicalSku = ProductSkuFilename::synchronize(
+                $data->skuFilename,
+                $data->itemId,
+                $data->salesPage,
+                $data->version
+            );
+        } catch (InvalidArgumentException $exception) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    'CREATE REQUEST = RECEIVED',
+                    'STOP: DRAFT NOT CREATED.',
+                    'VERSION / SKU SAFETY CHECK = FAILED',
+                    'ERROR MESSAGE: ' . $exception->getMessage(),
+                ]
+            );
+        }
+
+        $identityLogs = [
+            'MANUAL VERSION = SOURCE OF TRUTH: ' . $data->version,
+        ];
+
+        if ($canonicalSku !== $data->skuFilename) {
+            $identityLogs[] = 'SKU AUTO-SYNC: '
+                . ($data->skuFilename !== ''
+                    ? $data->skuFilename
+                    : '[empty]')
+                . ' -> '
+                . $canonicalSku;
+        } else {
+            $identityLogs[] = 'SKU / VERSION = MATCH';
+        }
+
+        $result = $this->draftCreator->create(
+            $data->withSkuFilename($canonicalSku)
+        );
+
+        return new ProductDraftResult(
+            $result->success,
+            $result->productId,
+            array_merge($identityLogs, $result->logs)
+        );
     }
 
     public function translate(
