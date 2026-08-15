@@ -18,6 +18,10 @@ use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterfac
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
+use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
+use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
+use WPShop\App\Plugin\ProductManager\Write\ProductTaxonomyWriter;
+use WPShop\App\Plugin\ProductManager\Write\SureRankWriter;
 use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
@@ -50,9 +54,27 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $functionCaller(...)
         );
         $draftValidator = new ProductDraftValidator();
+        $taxonomyWriter = new ProductTaxonomyWriter(
+            $functionCaller(...)
+        );
+        $metadataWriter = new ProductMetadataWriter(
+            $functionCaller(...)
+        );
+        $sureRankWriter = new SureRankWriter(
+            $functionCaller(...)
+        );
+        $labelWriter = new AdvancedLabelWriter(
+            $functionCaller(...)
+        );
         $draftCreator = new ProductDraftCreator(
             $draftGateway,
-            $draftValidator
+            $draftValidator,
+            [
+                $taxonomyWriter,
+                $metadataWriter,
+                $sureRankWriter,
+                $labelWriter,
+            ]
         );
         $page = new ProductManagerPage();
 
@@ -101,6 +123,22 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductDraftValidator::class,
             $draftValidator
+        );
+        $this->container->set(
+            ProductTaxonomyWriter::class,
+            $taxonomyWriter
+        );
+        $this->container->set(
+            ProductMetadataWriter::class,
+            $metadataWriter
+        );
+        $this->container->set(
+            SureRankWriter::class,
+            $sureRankWriter
+        );
+        $this->container->set(
+            AdvancedLabelWriter::class,
+            $labelWriter
         );
         $this->container->set(
             ProductDraftCreator::class,
