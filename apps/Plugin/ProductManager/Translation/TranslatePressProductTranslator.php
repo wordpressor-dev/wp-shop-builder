@@ -4,19 +4,22 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Translation;
 
+use Closure;
 use InvalidArgumentException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
-use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 
 final class TranslatePressProductTranslator
 {
+    /**
+     * @param Closure(string, mixed...): mixed $call
+     */
     public function __construct(
         private readonly TranslationMapBuilder $mapBuilder,
         private readonly TranslationDictionaryInterface $dictionary,
         private readonly TranslationRegistrarInterface $registrar,
-        private readonly WordPressFunctionCaller $wordpress
+        private readonly Closure $call
     ) {
     }
 
@@ -26,7 +29,7 @@ final class TranslatePressProductTranslator
         string $enLong,
         string $enMeta
     ): ProductTranslationResult {
-        $product = ($this->wordpress)(
+        $product = ($this->call)(
             'get_post',
             $productId
         );
@@ -60,7 +63,7 @@ final class TranslatePressProductTranslator
         $slug = (string) ($post['post_name'] ?? '');
         $ruShort = (string) ($post['post_excerpt'] ?? '');
         $ruLong = (string) ($post['post_content'] ?? '');
-        $sureRank = ($this->wordpress)(
+        $sureRank = ($this->call)(
             'get_post_meta',
             $productId,
             'surerank_settings_general',
@@ -191,15 +194,15 @@ final class TranslatePressProductTranslator
         string $enLong,
         string $enMeta
     ): void {
-        $safeShort = (string) ($this->wordpress)(
+        $safeShort = (string) ($this->call)(
             'wp_kses_post',
             $enShort
         );
-        $safeLong = (string) ($this->wordpress)(
+        $safeLong = (string) ($this->call)(
             'wp_kses_post',
             $enLong
         );
-        $safeMeta = (string) ($this->wordpress)(
+        $safeMeta = (string) ($this->call)(
             'sanitize_textarea_field',
             $enMeta
         );
@@ -211,7 +214,7 @@ final class TranslatePressProductTranslator
                 '_wp_shop_en_meta_description' => $safeMeta,
             ] as $key => $value
         ) {
-            ($this->wordpress)(
+            ($this->call)(
                 'update_post_meta',
                 $productId,
                 $key,
