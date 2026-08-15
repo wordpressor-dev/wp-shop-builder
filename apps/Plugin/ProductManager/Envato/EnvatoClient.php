@@ -83,7 +83,7 @@ final class EnvatoClient implements EnvatoClientInterface
             );
         }
 
-        $itemId = (int) ($matches[1] ?? 0);
+        $itemId = (int) $matches[1];
 
         if ($itemId <= 0) {
             throw new InvalidArgumentException(
