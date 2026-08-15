@@ -7,13 +7,17 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 use LogicException;
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
+use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\Core\Container\Container;
 use WPShop\WordPress\Admin\AdminPageRegistry;
 
 final class ProductManagerServiceProviderTest extends TestCase
 {
-    public function testRegistersProductManagerSubmenuPage(): void
+    public function testRegistersProductManagerServicesAndSubmenuPage(): void
     {
         $container = new Container();
         $registry = new AdminPageRegistry();
@@ -22,6 +26,18 @@ final class ProductManagerServiceProviderTest extends TestCase
         $provider = new ProductManagerServiceProvider($container);
         $provider->register();
 
+        self::assertInstanceOf(
+            EnvatoItemMapper::class,
+            $container->get(EnvatoItemMapper::class)
+        );
+        self::assertInstanceOf(
+            WordPressCatalogTagRepository::class,
+            $container->get(CatalogTagRepositoryInterface::class)
+        );
+        self::assertInstanceOf(
+            ExistingTagSelector::class,
+            $container->get(ExistingTagSelector::class)
+        );
         self::assertSame(
             $container->get(ProductManagerPage::class),
             $registry->submenus()[0]
