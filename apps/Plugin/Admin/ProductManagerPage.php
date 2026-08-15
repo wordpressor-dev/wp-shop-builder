@@ -332,6 +332,7 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">2. Review & Create Draft</h2>';
         echo '<p><strong>Safety:</strong> RU Short + Long + SureRank Meta are required. Tags must already exist in both <code>product_tag</code> and <code>pa_tags</code>. Hit/New are editorial only.</p>';
+        echo '<p><strong>Version check:</strong> before creating the Draft, compare the Version field with the ThemeForest changelog. Envato machine-readable version metadata can lag behind the author changelog.</p>';
         echo '<form method="post">';
         $this->nonceField('wp_shop_pm_create_draft');
         $this->hiddenAction('create_draft');
