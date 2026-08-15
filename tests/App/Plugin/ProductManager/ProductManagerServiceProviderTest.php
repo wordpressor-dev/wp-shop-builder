@@ -16,6 +16,10 @@ use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterfac
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
+use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
+use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
+use WPShop\App\Plugin\ProductManager\Write\ProductTaxonomyWriter;
+use WPShop\App\Plugin\ProductManager\Write\SureRankWriter;
 use WPShop\Core\Container\Container;
 use WPShop\WordPress\Admin\AdminPageRegistry;
 
@@ -53,6 +57,22 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             ProductDraftValidator::class,
             $container->get(ProductDraftValidator::class)
+        );
+        self::assertInstanceOf(
+            ProductTaxonomyWriter::class,
+            $container->get(ProductTaxonomyWriter::class)
+        );
+        self::assertInstanceOf(
+            ProductMetadataWriter::class,
+            $container->get(ProductMetadataWriter::class)
+        );
+        self::assertInstanceOf(
+            SureRankWriter::class,
+            $container->get(SureRankWriter::class)
+        );
+        self::assertInstanceOf(
+            AdvancedLabelWriter::class,
+            $container->get(AdvancedLabelWriter::class)
         );
         self::assertInstanceOf(
             ProductDraftCreator::class,
