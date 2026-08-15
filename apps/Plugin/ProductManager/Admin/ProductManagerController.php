@@ -107,6 +107,36 @@ final class ProductManagerController
         return $this->tagParser->parse($value);
     }
 
+    public function preflightDraft(
+        ProductDraftData $data
+    ): ProductDraftResult {
+        if ($this->draftCreator === null) {
+            return new ProductDraftResult(
+                false,
+                null,
+                ['DRAFT_CREATOR_UNAVAILABLE']
+            );
+        }
+
+        $prepared = $this->prepareIdentity(
+            $data,
+            'PREFLIGHT REQUEST = RECEIVED'
+        );
+
+        if ($prepared instanceof ProductDraftResult) {
+            return $prepared;
+        }
+
+        [$preparedData, $identityLogs] = $prepared;
+        $result = $this->draftCreator->preflight($preparedData);
+
+        return new ProductDraftResult(
+            $result->success,
+            null,
+            array_merge($identityLogs, $result->logs)
+        );
+    }
+
     public function createDraft(
         ProductDraftData $data
     ): ProductDraftResult {
@@ -118,44 +148,17 @@ final class ProductManagerController
             );
         }
 
-        try {
-            $canonicalSku = ProductSkuFilename::synchronize(
-                $data->skuFilename,
-                $data->itemId,
-                $data->salesPage,
-                $data->version
-            );
-        } catch (InvalidArgumentException $exception) {
-            return new ProductDraftResult(
-                false,
-                null,
-                [
-                    'CREATE REQUEST = RECEIVED',
-                    'STOP: DRAFT NOT CREATED.',
-                    'VERSION / SKU SAFETY CHECK = FAILED',
-                    'ERROR MESSAGE: ' . $exception->getMessage(),
-                ]
-            );
-        }
-
-        $identityLogs = [
-            'MANUAL VERSION = SOURCE OF TRUTH: ' . $data->version,
-        ];
-
-        if ($canonicalSku !== $data->skuFilename) {
-            $identityLogs[] = 'SKU AUTO-SYNC: '
-                . ($data->skuFilename !== ''
-                    ? $data->skuFilename
-                    : '[empty]')
-                . ' -> '
-                . $canonicalSku;
-        } else {
-            $identityLogs[] = 'SKU / VERSION = MATCH';
-        }
-
-        $result = $this->draftCreator->create(
-            $data->withSkuFilename($canonicalSku)
+        $prepared = $this->prepareIdentity(
+            $data,
+            'CREATE REQUEST = RECEIVED'
         );
+
+        if ($prepared instanceof ProductDraftResult) {
+            return $prepared;
+        }
+
+        [$preparedData, $identityLogs] = $prepared;
+        $result = $this->draftCreator->create($preparedData);
 
         return new ProductDraftResult(
             $result->success,
@@ -183,6 +186,55 @@ final class ProductManagerController
             $enLong,
             $enMeta
         );
+    }
+
+    /**
+     * @return array{ProductDraftData, list<string>}|ProductDraftResult
+     */
+    private function prepareIdentity(
+        ProductDraftData $data,
+        string $requestLog
+    ): array|ProductDraftResult {
+        try {
+            $canonicalSku = ProductSkuFilename::synchronize(
+                $data->skuFilename,
+                $data->itemId,
+                $data->salesPage,
+                $data->version
+            );
+        } catch (InvalidArgumentException $exception) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    $requestLog,
+                    'STOP: DRAFT NOT CREATED.',
+                    'VERSION / SKU SAFETY CHECK = FAILED',
+                    'ERROR MESSAGE: ' . $exception->getMessage(),
+                ]
+            );
+        }
+
+        $logs = [
+            $requestLog,
+            'MANUAL VERSION = SOURCE OF TRUTH: ' . $data->version,
+        ];
+
+        if ($canonicalSku !== $data->skuFilename) {
+            $logs[] = 'SKU AUTO-SYNC: '
+                . ($data->skuFilename !== ''
+                    ? $data->skuFilename
+                    : '[empty]')
+                . ' -> '
+                . $canonicalSku;
+        } else {
+            $logs[] = 'SKU / VERSION = MATCH';
+        }
+
+        return [
+            $data->withSkuFilename($canonicalSku),
+            $logs,
+        ];
     }
 
     /**
