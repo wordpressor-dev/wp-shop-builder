@@ -23,7 +23,7 @@ final class TranslationMapBuilderTest extends TestCase
 
         self::assertSame('Theme', $map['Тема']);
         self::assertSame(
-            ' for a store.',
+            'for a store.',
             $map['для магазина.'] ?? null
         );
         self::assertSame('Features', $map['Возможности']);
