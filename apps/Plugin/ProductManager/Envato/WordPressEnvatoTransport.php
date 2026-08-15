@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Envato;
 
+use Closure;
 use JsonException;
 use RuntimeException;
 
@@ -19,20 +20,17 @@ final class WordPressEnvatoTransport
     ): array {
         $this->assertWordPressHttpApi();
 
-        /** @var callable-string $remoteGet */
-        $remoteGet = 'wp_remote_get';
-
-        /** @var callable-string $isWpError */
-        $isWpError = 'is_wp_error';
-
-        /** @var callable-string $responseCode */
-        $responseCode = 'wp_remote_retrieve_response_code';
-
-        /** @var callable-string $responseBody */
-        $responseBody = 'wp_remote_retrieve_body';
-
-        /** @var callable-string $responseHeader */
-        $responseHeader = 'wp_remote_retrieve_header';
+        $remoteGet = Closure::fromCallable('wp_remote_get');
+        $isWpError = Closure::fromCallable('is_wp_error');
+        $responseCode = Closure::fromCallable(
+            'wp_remote_retrieve_response_code'
+        );
+        $responseBody = Closure::fromCallable(
+            'wp_remote_retrieve_body'
+        );
+        $responseHeader = Closure::fromCallable(
+            'wp_remote_retrieve_header'
+        );
 
         $response = $remoteGet(
             $url,
