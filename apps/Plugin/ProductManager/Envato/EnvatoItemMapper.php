@@ -95,7 +95,8 @@ final class EnvatoItemMapper
             $this->integer($item['number_of_sales'] ?? 0),
             $this->nullableString($item['published_at'] ?? null),
             $this->tags($item['tags'] ?? []),
-            $skuFilename
+            $skuFilename,
+            $item
         );
     }
 
