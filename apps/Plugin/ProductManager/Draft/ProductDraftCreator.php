@@ -20,68 +20,35 @@ final class ProductDraftCreator
     ) {
     }
 
+    public function preflight(
+        ProductDraftData $data
+    ): ProductDraftResult {
+        $check = $this->checkBeforeCreate($data);
+
+        if (! $check->success) {
+            return $check;
+        }
+
+        return new ProductDraftResult(
+            true,
+            null,
+            [
+                'PREFLIGHT = READY',
+                'NO PRODUCT WRITTEN = YES',
+                'TITLE = ' . $data->title(),
+                'SLUG = AVAILABLE: ' . $data->slug,
+                'SKU = AVAILABLE: ' . $data->skuFilename,
+            ]
+        );
+    }
+
     public function create(
         ProductDraftData $data
     ): ProductDraftResult {
-        $errors = $this->validator->validate($data);
+        $check = $this->checkBeforeCreate($data);
 
-        if ($errors !== []) {
-            return new ProductDraftResult(
-                false,
-                null,
-                array_merge(
-                    ['STOP: DRAFT NOT CREATED.'],
-                    $errors
-                )
-            );
-        }
-
-        try {
-            $slugOwner = $this->gateway->findBySlug(
-                $data->slug
-            );
-            $skuOwner = $this->gateway->findBySku(
-                $data->skuFilename
-            );
-        } catch (Throwable $exception) {
-            return new ProductDraftResult(
-                false,
-                null,
-                [
-                    'STOP: DUPLICATE CHECK FAILED.',
-                    'ERROR TYPE: ' . $exception::class,
-                    'ERROR MESSAGE: ' . $exception->getMessage(),
-                ]
-            );
-        }
-
-        if ($slugOwner instanceof ExistingProduct) {
-            return new ProductDraftResult(
-                false,
-                null,
-                [
-                    'STOP: DRAFT NOT CREATED.',
-                    'PRODUCT SLUG ALREADY EXISTS: ' . $data->slug,
-                    'EXISTING PRODUCT ID: ' . $slugOwner->id,
-                    'EXISTING STATUS: ' . $slugOwner->status,
-                ]
-            );
-        }
-
-        if ($skuOwner instanceof ExistingProduct) {
-            return new ProductDraftResult(
-                false,
-                null,
-                [
-                    'STOP: DRAFT NOT CREATED.',
-                    'SKU ALREADY EXISTS: ' . $data->skuFilename,
-                    'EXISTING PRODUCT ID: ' . $skuOwner->id,
-                    'EXISTING STATUS: ' . $skuOwner->status,
-                    $skuOwner->status === 'trash'
-                        ? 'ACTION: permanently delete the old test product from Trash or clear its SKU.'
-                        : 'ACTION: review the existing product before creating a duplicate.',
-                ]
-            );
+        if (! $check->success) {
+            return $check;
         }
 
         try {
@@ -148,6 +115,77 @@ final class ProductDraftCreator
             true,
             $productId,
             $logs
+        );
+    }
+
+    private function checkBeforeCreate(
+        ProductDraftData $data
+    ): ProductDraftResult {
+        $errors = $this->validator->validate($data);
+
+        if ($errors !== []) {
+            return new ProductDraftResult(
+                false,
+                null,
+                array_merge(
+                    ['STOP: DRAFT NOT CREATED.'],
+                    $errors
+                )
+            );
+        }
+
+        try {
+            $slugOwner = $this->gateway->findBySlug(
+                $data->slug
+            );
+            $skuOwner = $this->gateway->findBySku(
+                $data->skuFilename
+            );
+        } catch (Throwable $exception) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    'STOP: DUPLICATE CHECK FAILED.',
+                    'ERROR TYPE: ' . $exception::class,
+                    'ERROR MESSAGE: ' . $exception->getMessage(),
+                ]
+            );
+        }
+
+        if ($slugOwner instanceof ExistingProduct) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    'STOP: DRAFT NOT CREATED.',
+                    'PRODUCT SLUG ALREADY EXISTS: ' . $data->slug,
+                    'EXISTING PRODUCT ID: ' . $slugOwner->id,
+                    'EXISTING STATUS: ' . $slugOwner->status,
+                ]
+            );
+        }
+
+        if ($skuOwner instanceof ExistingProduct) {
+            return new ProductDraftResult(
+                false,
+                null,
+                [
+                    'STOP: DRAFT NOT CREATED.',
+                    'SKU ALREADY EXISTS: ' . $data->skuFilename,
+                    'EXISTING PRODUCT ID: ' . $skuOwner->id,
+                    'EXISTING STATUS: ' . $skuOwner->status,
+                    $skuOwner->status === 'trash'
+                        ? 'ACTION: permanently delete the old test product from Trash or clear its SKU.'
+                        : 'ACTION: review the existing product before creating a duplicate.',
+                ]
+            );
+        }
+
+        return new ProductDraftResult(
+            true,
+            null,
+            ['PRE-CREATE CHECKS = READY']
         );
     }
 }
