@@ -157,12 +157,8 @@ final class ProductTaxonomyWriterTest extends TestCase
 
                 if ($name === 'get_term_by') {
                     $taxonomy = (string) $arguments[2];
-                    $value = (string) $arguments[1];
 
-                    if (
-                        $taxonomy === 'pa_developer'
-                        && $value === 'quomodotheme'
-                    ) {
+                    if ($taxonomy === 'pa_developer') {
                         return false;
                     }
 
