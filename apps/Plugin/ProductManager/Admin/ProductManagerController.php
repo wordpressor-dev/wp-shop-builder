@@ -5,15 +5,22 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Admin;
 
 use Throwable;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
+use WPShop\App\Plugin\ProductManager\Translation\ProductTranslationResult;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 
 final class ProductManagerController
 {
     public function __construct(
         private readonly EnvatoClientInterface $envato,
-        private readonly ExistingTagSelector $tags
+        private readonly ExistingTagSelector $tags,
+        private readonly ProductDraftCreator $draftCreator,
+        private readonly TranslatePressProductTranslator $translator
     ) {
     }
 
@@ -73,6 +80,26 @@ final class ProductManagerController
                     . count($selectedTags),
                 'EDITORIAL CONTENT = MANUAL',
             ]
+        );
+    }
+
+    public function createDraft(
+        ProductDraftData $data
+    ): ProductDraftResult {
+        return $this->draftCreator->create($data);
+    }
+
+    public function translate(
+        int $productId,
+        string $enShort,
+        string $enLong,
+        string $enMeta
+    ): ProductTranslationResult {
+        return $this->translator->translate(
+            $productId,
+            $enShort,
+            $enLong,
+            $enMeta
         );
     }
 
