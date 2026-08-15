@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -17,6 +18,12 @@ use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
+use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
+use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
+use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
+use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
 use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
@@ -34,10 +41,19 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry = $this->container->get(
             AdminPageRegistry::class
         );
+        $database = $this->container->get(
+            DatabaseConnectionInterface::class
+        );
 
         if (! $registry instanceof AdminPageRegistry) {
             throw new LogicException(
                 'AdminPageRegistry must be registered before Product Manager.'
+            );
+        }
+
+        if (! $database instanceof DatabaseConnectionInterface) {
+            throw new LogicException(
+                'DatabaseConnection must be registered before Product Manager.'
             );
         }
 
@@ -75,6 +91,21 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
                 $sureRankWriter,
                 $labelWriter,
             ]
+        );
+        $translationMapBuilder = new TranslationMapBuilder();
+        $translationDictionary = new TranslatePressDictionary(
+            $database,
+            $functionCaller,
+            $translationMapBuilder
+        );
+        $translationRegistrar = new TranslatePressRegistrar(
+            $functionCaller
+        );
+        $translator = new TranslatePressProductTranslator(
+            $translationMapBuilder,
+            $translationDictionary,
+            $translationRegistrar,
+            $functionCaller
         );
         $page = new ProductManagerPage();
 
@@ -143,6 +174,30 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductDraftCreator::class,
             $draftCreator
+        );
+        $this->container->set(
+            TranslationMapBuilder::class,
+            $translationMapBuilder
+        );
+        $this->container->set(
+            TranslationDictionaryInterface::class,
+            $translationDictionary
+        );
+        $this->container->set(
+            TranslatePressDictionary::class,
+            $translationDictionary
+        );
+        $this->container->set(
+            TranslationRegistrarInterface::class,
+            $translationRegistrar
+        );
+        $this->container->set(
+            TranslatePressRegistrar::class,
+            $translationRegistrar
+        );
+        $this->container->set(
+            TranslatePressProductTranslator::class,
+            $translator
         );
         $this->container->set(
             ProductManagerPage::class,
