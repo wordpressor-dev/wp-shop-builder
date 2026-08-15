@@ -4,30 +4,33 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Translation;
 
+use Closure;
 use RuntimeException;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
-use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 
 final class TranslatePressRegistrar implements
     TranslationRegistrarInterface
 {
+    /**
+     * @param Closure(string, mixed...): mixed $call
+     */
     public function __construct(
-        private readonly WordPressFunctionCaller $wordpress
+        private readonly Closure $call
     ) {
     }
 
     public function registerPage(string $slug): string
     {
-        $enUrl = (string) ($this->wordpress)(
+        $enUrl = (string) ($this->call)(
             'home_url',
             '/en/product/' . $slug . '/'
         );
-        $requestUrl = (string) ($this->wordpress)(
+        $requestUrl = (string) ($this->call)(
             'add_query_arg',
             [
                 'wp_shop_pm_v14_register' =>
                     time() . '-'
-                    . (int) ($this->wordpress)(
+                    . (int) ($this->call)(
                         'wp_rand',
                         1000,
                         9999
@@ -35,7 +38,7 @@ final class TranslatePressRegistrar implements
             ],
             $enUrl
         );
-        $response = ($this->wordpress)(
+        $response = ($this->call)(
             'wp_remote_get',
             $requestUrl,
             [
@@ -51,14 +54,14 @@ final class TranslatePressRegistrar implements
             ]
         );
 
-        if (($this->wordpress)('is_wp_error', $response)) {
+        if (($this->call)('is_wp_error', $response)) {
             throw new RuntimeException(
                 'EN_REQUEST_ERROR: '
                 . $this->errorMessage($response)
             );
         }
 
-        $code = (int) ($this->wordpress)(
+        $code = (int) ($this->call)(
             'wp_remote_retrieve_response_code',
             $response
         );
@@ -94,7 +97,7 @@ final class TranslatePressRegistrar implements
                 continue;
             }
 
-            ($this->wordpress)(
+            ($this->call)(
                 'trp_translate',
                 $source,
                 'en_US',
