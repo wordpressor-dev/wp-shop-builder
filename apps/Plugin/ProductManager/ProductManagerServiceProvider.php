@@ -6,6 +6,10 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
+use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
@@ -13,6 +17,7 @@ use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
+use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
@@ -40,6 +45,15 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $tagRepository = new WordPressCatalogTagRepository();
         $tagSelector = new ExistingTagSelector($tagRepository);
+        $functionCaller = new WordPressFunctionCaller();
+        $draftGateway = new WordPressWooCommerceDraftGateway(
+            $functionCaller(...)
+        );
+        $draftValidator = new ProductDraftValidator();
+        $draftCreator = new ProductDraftCreator(
+            $draftGateway,
+            $draftValidator
+        );
         $page = new ProductManagerPage();
 
         $registry->addSubmenu($page);
@@ -71,6 +85,26 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ExistingTagSelector::class,
             $tagSelector
+        );
+        $this->container->set(
+            WordPressFunctionCaller::class,
+            $functionCaller
+        );
+        $this->container->set(
+            ProductDraftGatewayInterface::class,
+            $draftGateway
+        );
+        $this->container->set(
+            WordPressWooCommerceDraftGateway::class,
+            $draftGateway
+        );
+        $this->container->set(
+            ProductDraftValidator::class,
+            $draftValidator
+        );
+        $this->container->set(
+            ProductDraftCreator::class,
+            $draftCreator
         );
         $this->container->set(
             ProductManagerPage::class,
