@@ -44,6 +44,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     {
         $offset = max(0, (int) $this->posted('scan_offset', '0'));
         $limit = max(1, min(25, (int) $this->posted('scan_limit', '10')));
+        $filter = $this->normalizeFilter(
+            $this->posted('scan_filter', 'attention')
+        );
         $rows = [];
         $scanned = false;
         $action = $this->posted('wp_shop_pm_scan_action');
@@ -72,22 +75,32 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Update Scanner</h1>';
         echo '<p>Read-only batch comparison for ThemeForest products. Nothing is written to WooCommerce. Envato metadata is advisory only; verify the public changelog before any update.</p>';
-        $this->renderForm($offset, $limit);
+        $this->renderForm($offset, $limit, $filter);
 
         if ($scanned) {
-            $this->renderSummary($rows, $offset, $limit);
-            $this->renderTable($rows);
-            $this->renderNavigation($rows, $offset, $limit);
+            $visibleRows = $this->filterRows($rows, $filter);
+            $this->renderSummary(
+                $rows,
+                $visibleRows,
+                $offset,
+                $limit,
+                $filter
+            );
+            $this->renderTable($visibleRows);
+            $this->renderNavigation($rows, $offset, $limit, $filter);
         }
 
         echo '</div>';
     }
 
-    private function renderForm(int $offset, int $limit): void
-    {
+    private function renderForm(
+        int $offset,
+        int $limit,
+        string $filter
+    ): void {
         echo '<div class="postbox" style="max-width:1250px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">Scan ThemeForest Products</h2>';
-        echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25.</p>';
+        echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25. By default only products that need attention are shown.</p>';
         echo '<form method="post">';
         ($this->call)(
             'wp_nonce_field',
@@ -99,6 +112,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '<input type="hidden" name="wp_shop_pm_scan_action" value="scan">';
         $this->input('Offset', 'scan_offset', (string) $offset, 'number');
         $this->input('Batch size', 'scan_limit', (string) $limit, 'number');
+        $this->renderFilterSelect($filter);
         ($this->call)(
             'submit_button',
             'Проверить пакет обновлений',
@@ -110,13 +124,43 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '</div>';
     }
 
+    private function renderFilterSelect(string $filter): void
+    {
+        $options = [
+            'attention' => 'Требуют внимания (UPDATE_AVAILABLE + MANUAL_REVIEW)',
+            'all' => 'Все статусы',
+            'update_available' => 'Только UPDATE_AVAILABLE',
+            'manual_review' => 'Только MANUAL_REVIEW',
+            'same' => 'Только SAME',
+            'errors' => 'Ошибки (LOAD_FAILED + TOKEN_MISSING)',
+        ];
+
+        echo '<p><label><strong>Показывать</strong><br>';
+        echo '<select name="scan_filter" style="width:360px;max-width:100%;">';
+
+        foreach ($options as $value => $label) {
+            echo '<option value="'
+                . $this->escapeAttr($value)
+                . '"'
+                . ($value === $filter ? ' selected' : '')
+                . '>'
+                . $this->escape($label)
+                . '</option>';
+        }
+
+        echo '</select></label></p>';
+    }
+
     /**
      * @param list<ProductUpdateScanRow> $rows
+     * @param list<ProductUpdateScanRow> $visibleRows
      */
     private function renderSummary(
         array $rows,
+        array $visibleRows,
         int $offset,
-        int $limit
+        int $limit,
+        string $filter
     ): void {
         $counts = [
             'UPDATE_AVAILABLE' => 0,
@@ -142,6 +186,8 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             . ' &nbsp; ROWS = ' . $this->escape((string) count($rows))
             . ' &nbsp; RANGE = ' . $this->escape((string) $first)
             . '–' . $this->escape((string) $last)
+            . ' &nbsp; FILTER = ' . $this->escape($this->filterLabel($filter))
+            . ' &nbsp; SHOWN = ' . $this->escape((string) count($visibleRows))
             . ' &nbsp; UPDATE_AVAILABLE = '
             . $this->escape((string) $counts['UPDATE_AVAILABLE'])
             . ' &nbsp; SAME = '
@@ -176,7 +222,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '</tr></thead><tbody>';
 
         if ($rows === []) {
-            echo '<tr><td colspan="8">No ThemeForest products found in this batch.</td></tr>';
+            echo '<tr><td colspan="8">No rows match the current filter in this batch.</td></tr>';
         }
 
         foreach ($rows as $row) {
@@ -223,7 +269,8 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     private function renderNavigation(
         array $rows,
         int $offset,
-        int $limit
+        int $limit,
+        string $filter
     ): void {
         $hasPrevious = $offset > 0;
         $hasNext = count($rows) === $limit;
@@ -241,10 +288,13 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             true
         );
         echo '<input type="hidden" name="scan_offset" value="'
-            . $this->escape((string) $offset)
+            . $this->escapeAttr((string) $offset)
             . '">';
         echo '<input type="hidden" name="scan_limit" value="'
-            . $this->escape((string) $limit)
+            . $this->escapeAttr((string) $limit)
+            . '">';
+        echo '<input type="hidden" name="scan_filter" value="'
+            . $this->escapeAttr($filter)
             . '">';
 
         if ($hasPrevious) {
@@ -291,11 +341,77 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '<input type="hidden" name="wp_shop_pm_update_action" '
             . 'value="load_product">';
         echo '<input type="hidden" name="update_product_id" value="'
-            . $this->escape((string) $row->productId)
+            . $this->escapeAttr((string) $row->productId)
             . '">';
         echo '<button type="submit" class="button button-secondary">'
             . 'Открыть Update Product</button>';
         echo '</form>';
+    }
+
+    /**
+     * @param list<ProductUpdateScanRow> $rows
+     * @return list<ProductUpdateScanRow>
+     */
+    private function filterRows(array $rows, string $filter): array
+    {
+        if ($filter === 'all') {
+            return $rows;
+        }
+
+        $visibleRows = [];
+
+        foreach ($rows as $row) {
+            $matches = match ($filter) {
+                'attention' => in_array(
+                    $row->status,
+                    ['UPDATE_AVAILABLE', 'MANUAL_REVIEW'],
+                    true
+                ),
+                'update_available' => $row->status === 'UPDATE_AVAILABLE',
+                'manual_review' => $row->status === 'MANUAL_REVIEW',
+                'same' => $row->status === 'SAME',
+                'errors' => in_array(
+                    $row->status,
+                    ['LOAD_FAILED', 'TOKEN_MISSING'],
+                    true
+                ),
+                default => true,
+            };
+
+            if ($matches) {
+                $visibleRows[] = $row;
+            }
+        }
+
+        return $visibleRows;
+    }
+
+    private function normalizeFilter(string $filter): string
+    {
+        $allowed = [
+            'attention',
+            'all',
+            'update_available',
+            'manual_review',
+            'same',
+            'errors',
+        ];
+
+        return in_array($filter, $allowed, true)
+            ? $filter
+            : 'attention';
+    }
+
+    private function filterLabel(string $filter): string
+    {
+        return match ($filter) {
+            'all' => 'ALL',
+            'update_available' => 'UPDATE_AVAILABLE',
+            'manual_review' => 'MANUAL_REVIEW',
+            'same' => 'SAME',
+            'errors' => 'ERRORS',
+            default => 'NEEDS_ATTENTION',
+        };
     }
 
     private function input(
@@ -307,11 +423,11 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '<p><label><strong>'
             . $this->escape($label)
             . '</strong><br><input style="width:260px;max-width:100%;" type="'
-            . $this->escape($type)
+            . $this->escapeAttr($type)
             . '" name="'
-            . $this->escape($name)
+            . $this->escapeAttr($name)
             . '" value="'
-            . $this->escape($value)
+            . $this->escapeAttr($value)
             . '"></label></p>';
     }
 
@@ -348,6 +464,11 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     private function escape(string $value): string
     {
         return (string) ($this->call)('esc_html', $value);
+    }
+
+    private function escapeAttr(string $value): string
+    {
+        return (string) ($this->call)('esc_attr', $value);
     }
 
     private function escapeUrl(string $value): string
