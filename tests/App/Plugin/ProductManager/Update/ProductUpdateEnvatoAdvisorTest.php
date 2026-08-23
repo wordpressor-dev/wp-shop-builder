@@ -30,16 +30,16 @@ final class ProductUpdateEnvatoAdvisorTest extends TestCase
             'token'
         );
 
+        $expectedSku = 'themeforest-22380037-'
+            . 'veera-multipurpose-woocommerce-theme-2.0.0.zip';
+        $expectedUrl = 'https://wp-shop.org/wp-content/uploads/'
+            . 'woocommerce_uploads/THEMES/Themeforest/22380037/'
+            . $expectedSku;
+
         self::assertSame('2.0.0', $suggestion->version);
         self::assertSame('2026-08-20', $suggestion->updateDate);
-        self::assertSame(
-            'themeforest-22380037-veera-multipurpose-woocommerce-theme-2.0.0.zip',
-            $suggestion->skuFilename
-        );
-        self::assertSame(
-            'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/THEMES/Themeforest/22380037/themeforest-22380037-veera-multipurpose-woocommerce-theme-2.0.0.zip',
-            $suggestion->downloadUrl
-        );
+        self::assertSame($expectedSku, $suggestion->skuFilename);
+        self::assertSame($expectedUrl, $suggestion->downloadUrl);
     }
 
     public function testRejectsEnvatoItemMismatch(): void
@@ -74,6 +74,12 @@ final class ProductUpdateEnvatoAdvisorTest extends TestCase
 
     private function snapshot(): ProductUpdateSnapshot
     {
+        $currentSku = 'themeforest-22380037-'
+            . 'veera-multipurpose-woocommerce-theme-1.9.0.zip';
+        $currentUrl = 'https://wp-shop.org/wp-content/uploads/'
+            . 'woocommerce_uploads/THEMES/Themeforest/22380037/'
+            . $currentSku;
+
         return new ProductUpdateSnapshot(
             5034,
             'publish',
@@ -83,8 +89,8 @@ final class ProductUpdateEnvatoAdvisorTest extends TestCase
             '1.9.0',
             '2026-05-13',
             'https://themeforest.net/item/veera-multipurpose-woocommerce-theme/22380037',
-            'themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip',
-            'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/THEMES/Themeforest/22380037/themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip'
+            $currentSku,
+            $currentUrl
         );
     }
 
