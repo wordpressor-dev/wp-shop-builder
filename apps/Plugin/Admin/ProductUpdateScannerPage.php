@@ -47,6 +47,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         $filter = $this->normalizeFilter(
             $this->posted('scan_filter', 'attention')
         );
+        $sort = $this->normalizeSort(
+            $this->posted('scan_sort', 'envato_date_desc')
+        );
         $rows = [];
         $scanned = false;
         $action = $this->posted('wp_shop_pm_scan_action');
@@ -75,19 +78,27 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Update Scanner</h1>';
         echo '<p>Read-only batch comparison for ThemeForest products. Nothing is written to WooCommerce. Envato metadata is advisory only; verify the public changelog before any update.</p>';
-        $this->renderForm($offset, $limit, $filter);
+        $this->renderForm($offset, $limit, $filter, $sort);
 
         if ($scanned) {
             $visibleRows = $this->filterRows($rows, $filter);
+            $visibleRows = $this->sortRows($visibleRows, $sort);
             $this->renderSummary(
                 $rows,
                 $visibleRows,
                 $offset,
                 $limit,
-                $filter
+                $filter,
+                $sort
             );
             $this->renderTable($visibleRows);
-            $this->renderNavigation($rows, $offset, $limit, $filter);
+            $this->renderNavigation(
+                $rows,
+                $offset,
+                $limit,
+                $filter,
+                $sort
+            );
         }
 
         echo '</div>';
@@ -96,11 +107,12 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     private function renderForm(
         int $offset,
         int $limit,
-        string $filter
+        string $filter,
+        string $sort
     ): void {
         echo '<div class="postbox" style="max-width:1250px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">Scan ThemeForest Products</h2>';
-        echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25. By default only products that need attention are shown.</p>';
+        echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25. By default only products that need attention are shown, newest Envato dates first.</p>';
         echo '<form method="post">';
         ($this->call)(
             'wp_nonce_field',
@@ -113,6 +125,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         $this->input('Offset', 'scan_offset', (string) $offset, 'number');
         $this->input('Batch size', 'scan_limit', (string) $limit, 'number');
         $this->renderFilterSelect($filter);
+        $this->renderSortSelect($sort);
         ($this->call)(
             'submit_button',
             'Проверить пакет обновлений',
@@ -151,6 +164,34 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '</select></label></p>';
     }
 
+    private function renderSortSelect(string $sort): void
+    {
+        $options = [
+            'envato_date_desc' => 'Envato Date — новые сверху',
+            'envato_date_asc' => 'Envato Date — старые сверху',
+            'product_asc' => 'Product — A → Z',
+            'product_desc' => 'Product — Z → A',
+            'status' => 'Status — требуют внимания первыми',
+            'id_asc' => 'Product ID — по возрастанию',
+            'id_desc' => 'Product ID — по убыванию',
+        ];
+
+        echo '<p><label><strong>Сортировать</strong><br>';
+        echo '<select name="scan_sort" style="width:360px;max-width:100%;">';
+
+        foreach ($options as $value => $label) {
+            echo '<option value="'
+                . $this->escapeAttr($value)
+                . '"'
+                . ($value === $sort ? ' selected' : '')
+                . '>'
+                . $this->escape($label)
+                . '</option>';
+        }
+
+        echo '</select></label></p>';
+    }
+
     /**
      * @param list<ProductUpdateScanRow> $rows
      * @param list<ProductUpdateScanRow> $visibleRows
@@ -160,7 +201,8 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         array $visibleRows,
         int $offset,
         int $limit,
-        string $filter
+        string $filter,
+        string $sort
     ): void {
         $counts = [
             'UPDATE_AVAILABLE' => 0,
@@ -187,6 +229,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             . ' &nbsp; RANGE = ' . $this->escape((string) $first)
             . '–' . $this->escape((string) $last)
             . ' &nbsp; FILTER = ' . $this->escape($this->filterLabel($filter))
+            . ' &nbsp; SORT = ' . $this->escape($this->sortLabel($sort))
             . ' &nbsp; SHOWN = ' . $this->escape((string) count($visibleRows))
             . ' &nbsp; UPDATE_AVAILABLE = '
             . $this->escape((string) $counts['UPDATE_AVAILABLE'])
@@ -270,7 +313,8 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         array $rows,
         int $offset,
         int $limit,
-        string $filter
+        string $filter,
+        string $sort
     ): void {
         $hasPrevious = $offset > 0;
         $hasNext = count($rows) === $limit;
@@ -295,6 +339,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             . '">';
         echo '<input type="hidden" name="scan_filter" value="'
             . $this->escapeAttr($filter)
+            . '">';
+        echo '<input type="hidden" name="scan_sort" value="'
+            . $this->escapeAttr($sort)
             . '">';
 
         if ($hasPrevious) {
@@ -386,6 +433,92 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         return $visibleRows;
     }
 
+    /**
+     * @param list<ProductUpdateScanRow> $rows
+     * @return list<ProductUpdateScanRow>
+     */
+    private function sortRows(array $rows, string $sort): array
+    {
+        usort(
+            $rows,
+            function (ProductUpdateScanRow $left, ProductUpdateScanRow $right) use ($sort): int {
+                return match ($sort) {
+                    'envato_date_asc' => $this->compareDates(
+                        $left->envatoUpdateDate,
+                        $right->envatoUpdateDate,
+                        false
+                    ),
+                    'product_asc' => strcasecmp($left->title, $right->title),
+                    'product_desc' => strcasecmp($right->title, $left->title),
+                    'status' => $this->compareStatuses($left, $right),
+                    'id_asc' => $left->productId <=> $right->productId,
+                    'id_desc' => $right->productId <=> $left->productId,
+                    default => $this->compareDates(
+                        $left->envatoUpdateDate,
+                        $right->envatoUpdateDate,
+                        true
+                    ),
+                };
+            }
+        );
+
+        return $rows;
+    }
+
+    private function compareDates(
+        string $left,
+        string $right,
+        bool $descending
+    ): int {
+        if ($left === '' && $right === '') {
+            return 0;
+        }
+
+        if ($left === '') {
+            return 1;
+        }
+
+        if ($right === '') {
+            return -1;
+        }
+
+        return $descending
+            ? strcmp($right, $left)
+            : strcmp($left, $right);
+    }
+
+    private function compareStatuses(
+        ProductUpdateScanRow $left,
+        ProductUpdateScanRow $right
+    ): int {
+        $priority = [
+            'UPDATE_AVAILABLE' => 0,
+            'MANUAL_REVIEW' => 1,
+            'LOAD_FAILED' => 2,
+            'TOKEN_MISSING' => 3,
+            'SAME' => 4,
+        ];
+        $leftPriority = $priority[$left->status] ?? 99;
+        $rightPriority = $priority[$right->status] ?? 99;
+        $statusOrder = $leftPriority <=> $rightPriority;
+
+        if ($statusOrder !== 0) {
+            return $statusOrder;
+        }
+
+        $dateOrder = $this->compareDates(
+            $left->envatoUpdateDate,
+            $right->envatoUpdateDate,
+            true
+        );
+
+        if ($dateOrder !== 0) {
+            return $dateOrder;
+        }
+
+        return strcasecmp($left->title, $right->title);
+    }
+
     private function normalizeFilter(string $filter): string
     {
         $allowed = [
@@ -411,6 +544,36 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             'same' => 'SAME',
             'errors' => 'ERRORS',
             default => 'NEEDS_ATTENTION',
+        };
+    }
+
+    private function normalizeSort(string $sort): string
+    {
+        $allowed = [
+            'envato_date_desc',
+            'envato_date_asc',
+            'product_asc',
+            'product_desc',
+            'status',
+            'id_asc',
+            'id_desc',
+        ];
+
+        return in_array($sort, $allowed, true)
+            ? $sort
+            : 'envato_date_desc';
+    }
+
+    private function sortLabel(string $sort): string
+    {
+        return match ($sort) {
+            'envato_date_asc' => 'ENVATO_DATE_ASC',
+            'product_asc' => 'PRODUCT_ASC',
+            'product_desc' => 'PRODUCT_DESC',
+            'status' => 'STATUS_PRIORITY',
+            'id_asc' => 'ID_ASC',
+            'id_desc' => 'ID_DESC',
+            default => 'ENVATO_DATE_DESC',
         };
     }
 
