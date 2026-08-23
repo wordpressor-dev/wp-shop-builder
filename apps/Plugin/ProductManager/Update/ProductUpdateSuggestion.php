@@ -10,8 +10,7 @@ final readonly class ProductUpdateSuggestion
         public string $version,
         public string $updateDate,
         public string $skuFilename,
-        public string $downloadUrl,
-        public bool $isOlderThanCurrent = false
+        public string $downloadUrl
     ) {
     }
 }
