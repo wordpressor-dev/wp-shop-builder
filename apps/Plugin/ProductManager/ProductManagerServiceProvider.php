@@ -27,6 +27,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
+use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
@@ -126,8 +127,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $versionUpdater = new ProductVersionUpdater(
             $functionCaller(...)
         );
+        $updateAdvisor = new ProductUpdateEnvatoAdvisor(
+            $envatoClient
+        );
         $updatePage = new ProductUpdatePage(
             $versionUpdater,
+            $updateAdvisor,
             $functionCaller(...)
         );
 
@@ -237,6 +242,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductVersionUpdater::class,
             $versionUpdater
+        );
+        $this->container->set(
+            ProductUpdateEnvatoAdvisor::class,
+            $updateAdvisor
         );
         $this->container->set(
             ProductUpdatePage::class,
