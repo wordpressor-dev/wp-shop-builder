@@ -43,6 +43,13 @@ final class ProductUpdateEnvatoAdvisor
         $updateDate = trim($item->updatedDate);
         $skuFilename = '';
         $downloadUrl = '';
+        $isOlderThanCurrent = $version !== ''
+            && trim($snapshot->version) !== ''
+            && version_compare(
+                $version,
+                trim($snapshot->version),
+                '<'
+            );
 
         if ($version !== '') {
             $skuFilename = ProductSkuFilename::build(
@@ -60,7 +67,8 @@ final class ProductUpdateEnvatoAdvisor
             $version,
             $updateDate,
             $skuFilename,
-            $downloadUrl
+            $downloadUrl,
+            $isOlderThanCurrent
         );
     }
 
