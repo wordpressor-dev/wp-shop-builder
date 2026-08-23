@@ -40,16 +40,25 @@ final class ProductUpdateEnvatoAdvisor
         }
 
         $version = trim($item->version);
+        $currentVersion = trim($snapshot->version);
+
+        if (
+            $version !== ''
+            && $currentVersion !== ''
+            && version_compare($version, $currentVersion, '<')
+        ) {
+            throw new RuntimeException(
+                'Envato version '
+                . $version
+                . ' is older than current version '
+                . $currentVersion
+                . '; downgrade suggestion blocked.'
+            );
+        }
+
         $updateDate = trim($item->updatedDate);
         $skuFilename = '';
         $downloadUrl = '';
-        $isOlderThanCurrent = $version !== ''
-            && trim($snapshot->version) !== ''
-            && version_compare(
-                $version,
-                trim($snapshot->version),
-                '<'
-            );
 
         if ($version !== '') {
             $skuFilename = ProductSkuFilename::build(
@@ -67,8 +76,7 @@ final class ProductUpdateEnvatoAdvisor
             $version,
             $updateDate,
             $skuFilename,
-            $downloadUrl,
-            $isOlderThanCurrent
+            $downloadUrl
         );
     }
 
