@@ -26,6 +26,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
+use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
@@ -124,6 +125,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             ProductUpdateEnvatoAdvisor::class,
             $container->get(ProductUpdateEnvatoAdvisor::class)
+        );
+        self::assertInstanceOf(
+            ProductUpdateManualCandidateBuilder::class,
+            $container->get(ProductUpdateManualCandidateBuilder::class)
         );
         self::assertInstanceOf(
             ProductManagerController::class,
