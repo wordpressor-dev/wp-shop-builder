@@ -21,7 +21,10 @@ final class ProductUpdateScannerTest extends TestCase
             30 => $this->product('Theme C 2.0.0', '2.0.0', 303, 'theme-c'),
         ];
         $writes = [];
-        $call = function (string $function, mixed ...$args) use (
+        $call = function (
+            string $function,
+            mixed ...$args
+        ) use (
             $products,
             &$writes
         ): mixed {
@@ -70,7 +73,10 @@ final class ProductUpdateScannerTest extends TestCase
                 };
             }
 
-            if (str_starts_with($function, 'update_') || $function === 'wp_update_post') {
+            if (
+                str_starts_with($function, 'update_')
+                || $function === 'wp_update_post'
+            ) {
                 $writes[] = $function;
             }
 
