@@ -3,6 +3,9 @@ name: Build installable plugin ZIP
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out pull request
+      - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up PHP
@@ -102,7 +105,7 @@ jobs:
       - name: Upload installable ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wp-shop-builder-installable-pr-${{ github.event.pull_request.number }}
+          name: ${{ github.event_name == 'pull_request' && format('wp-shop-builder-installable-pr-{0}', github.event.pull_request.number) || 'wp-shop-builder-installable-main' }}
           path: |
             dist/wp-shop-builder.zip
             dist/wp-shop-builder.zip.sha256
