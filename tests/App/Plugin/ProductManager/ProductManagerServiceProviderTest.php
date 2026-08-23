@@ -6,6 +6,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
@@ -24,6 +25,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
+use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
 use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
@@ -115,6 +117,10 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(TranslatePressProductTranslator::class)
         );
         self::assertInstanceOf(
+            ProductVersionUpdater::class,
+            $container->get(ProductVersionUpdater::class)
+        );
+        self::assertInstanceOf(
             ProductManagerController::class,
             $container->get(ProductManagerController::class)
         );
@@ -125,6 +131,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-product-manager',
             $registry->submenus()[0]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[1]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[1]->slug()
         );
     }
 }
