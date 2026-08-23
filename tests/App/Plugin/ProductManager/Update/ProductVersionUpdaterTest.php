@@ -37,7 +37,10 @@ final class ProductVersionUpdaterTest extends TestCase
             $result->logs
         );
         self::assertContains(
-            'SKU AUTO-SYNC: themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip -> themeforest-22380037-veera-multipurpose-woocommerce-theme-2.0.0.zip',
+            'SKU AUTO-SYNC: '
+                . 'themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip'
+                . ' -> '
+                . 'themeforest-22380037-veera-multipurpose-woocommerce-theme-2.0.0.zip',
             $result->logs
         );
         self::assertSame(
@@ -134,10 +137,12 @@ final class ProductVersionUpdaterTest extends TestCase
                 if ($name === 'get_post_meta') {
                     return match ($arguments[1]) {
                         'attr_version_value' => '1.9.0',
-                        'sales_page' => 'https://themeforest.net/item/veera-multipurpose-woocommerce-theme/22380037',
+                        'sales_page' => 'https://themeforest.net/item/'
+                            . 'veera-multipurpose-woocommerce-theme/22380037',
                         '_wp_shop_source_item_id' => '',
                         '_wp_shop_source_update_date' => '',
-                        '_sku' => 'themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip',
+                        '_sku' => 'themeforest-22380037-veera-'
+                            . 'multipurpose-woocommerce-theme-1.9.0.zip',
                         '_downloadable_files' => [
                             'x' => [
                                 'name' => 'old.zip',
@@ -211,8 +216,7 @@ final class ProductVersionUpdaterTest extends TestCase
         $meta = [];
 
         foreach (
-            $this->callsNamed($calls, 'update_post_meta')
-            as $arguments
+            $this->callsNamed($calls, 'update_post_meta') as $arguments
         ) {
             $meta[(string) $arguments[1]] = $arguments[2];
         }
@@ -222,6 +226,15 @@ final class ProductVersionUpdaterTest extends TestCase
 
     private function data(): ProductUpdateData
     {
+        $salesPage = 'https://themeforest.net/item/'
+            . 'veera-multipurpose-woocommerce-theme/22380037';
+        $currentSku = 'themeforest-22380037-veera-'
+            . 'multipurpose-woocommerce-theme-1.9.0.zip';
+        $downloadUrl = 'https://wp-shop.org/wp-content/uploads/'
+            . 'woocommerce_uploads/THEMES/Themeforest/22380037/'
+            . 'themeforest-22380037-veera-multipurpose-'
+            . 'woocommerce-theme-2.0.0.zip';
+
         return new ProductUpdateData(
             5034,
             'Veera – Multipurpose WooCommerce Theme',
@@ -229,10 +242,10 @@ final class ProductVersionUpdaterTest extends TestCase
             '1.9.0',
             '2.0.0',
             '2026-08-20',
-            'https://themeforest.net/item/veera-multipurpose-woocommerce-theme/22380037',
-            'themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip',
-            'themeforest-22380037-veera-multipurpose-woocommerce-theme-1.9.0.zip',
-            'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/THEMES/Themeforest/22380037/themeforest-22380037-veera-multipurpose-woocommerce-theme-2.0.0.zip'
+            $salesPage,
+            $currentSku,
+            $currentSku,
+            $downloadUrl
         );
     }
 }
