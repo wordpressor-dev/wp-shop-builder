@@ -46,13 +46,21 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         $limit = max(1, min(25, (int) $this->posted('scan_limit', '10')));
         $rows = [];
         $scanned = false;
+        $action = $this->posted('wp_shop_pm_scan_action');
 
-        if ($this->posted('wp_shop_pm_scan_action') === 'scan') {
+        if (in_array($action, ['scan', 'previous', 'next'], true)) {
             ($this->call)(
                 'check_admin_referer',
                 'wp_shop_pm_update_scan',
                 '_wpnonce'
             );
+
+            if ($action === 'previous') {
+                $offset = max(0, $offset - $limit);
+            } elseif ($action === 'next') {
+                $offset += $limit;
+            }
+
             $rows = $this->scanner->scan(
                 $offset,
                 $limit,
@@ -69,6 +77,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         if ($scanned) {
             $this->renderSummary($rows, $offset, $limit);
             $this->renderTable($rows);
+            $this->renderNavigation($rows, $offset, $limit);
         }
 
         echo '</div>';
@@ -123,14 +132,22 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             }
         }
 
+        $first = $rows === [] ? 0 : $offset + 1;
+        $last = $offset + count($rows);
+
         echo '<div class="notice notice-info" style="max-width:1210px;padding:10px 14px;">';
         echo '<p><strong>READ ONLY = YES</strong> &nbsp; '
             . 'OFFSET = ' . $this->escape((string) $offset)
             . ' &nbsp; BATCH = ' . $this->escape((string) $limit)
             . ' &nbsp; ROWS = ' . $this->escape((string) count($rows))
-            . ' &nbsp; UPDATE_AVAILABLE = ' . $this->escape((string) $counts['UPDATE_AVAILABLE'])
-            . ' &nbsp; SAME = ' . $this->escape((string) $counts['SAME'])
-            . ' &nbsp; MANUAL_REVIEW = ' . $this->escape((string) $counts['MANUAL_REVIEW'])
+            . ' &nbsp; RANGE = ' . $this->escape((string) $first)
+            . '–' . $this->escape((string) $last)
+            . ' &nbsp; UPDATE_AVAILABLE = '
+            . $this->escape((string) $counts['UPDATE_AVAILABLE'])
+            . ' &nbsp; SAME = '
+            . $this->escape((string) $counts['SAME'])
+            . ' &nbsp; MANUAL_REVIEW = '
+            . $this->escape((string) $counts['MANUAL_REVIEW'])
             . '</p>';
         echo '</div>';
     }
@@ -166,10 +183,30 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             echo '<tr>';
             echo '<td>' . $this->escape((string) $row->productId) . '</td>';
             echo '<td>' . $this->escape($row->title) . '</td>';
-            echo '<td>' . $this->escape($row->currentVersion !== '' ? $row->currentVersion : '[empty]') . '</td>';
-            echo '<td>' . $this->escape($row->envatoVersion !== '' ? $row->envatoVersion : '[empty]') . '</td>';
-            echo '<td>' . $this->escape($row->envatoUpdateDate !== '' ? $row->envatoUpdateDate : '[empty]') . '</td>';
-            echo '<td><strong>' . $this->escape($row->status) . '</strong></td>';
+            echo '<td>'
+                . $this->escape(
+                    $row->currentVersion !== ''
+                        ? $row->currentVersion
+                        : '[empty]'
+                )
+                . '</td>';
+            echo '<td>'
+                . $this->escape(
+                    $row->envatoVersion !== ''
+                        ? $row->envatoVersion
+                        : '[empty]'
+                )
+                . '</td>';
+            echo '<td>'
+                . $this->escape(
+                    $row->envatoUpdateDate !== ''
+                        ? $row->envatoUpdateDate
+                        : '[empty]'
+                )
+                . '</td>';
+            echo '<td><strong>'
+                . $this->escape($row->status)
+                . '</strong></td>';
             echo '<td>' . $this->escape($row->message) . '</td>';
             echo '<td>';
             $this->renderUpdateAction($row);
@@ -178,6 +215,51 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         echo '</tbody></table>';
+    }
+
+    /**
+     * @param list<ProductUpdateScanRow> $rows
+     */
+    private function renderNavigation(
+        array $rows,
+        int $offset,
+        int $limit
+    ): void {
+        $hasPrevious = $offset > 0;
+        $hasNext = count($rows) === $limit;
+
+        if (! $hasPrevious && ! $hasNext) {
+            return;
+        }
+
+        echo '<form method="post" style="max-width:1400px;margin:14px 0;display:flex;gap:10px;align-items:center;">';
+        ($this->call)(
+            'wp_nonce_field',
+            'wp_shop_pm_update_scan',
+            '_wpnonce',
+            true,
+            true
+        );
+        echo '<input type="hidden" name="scan_offset" value="'
+            . $this->escape((string) $offset)
+            . '">';
+        echo '<input type="hidden" name="scan_limit" value="'
+            . $this->escape((string) $limit)
+            . '">';
+
+        if ($hasPrevious) {
+            echo '<button type="submit" class="button button-secondary" '
+                . 'name="wp_shop_pm_scan_action" value="previous">'
+                . '← Предыдущий пакет</button>';
+        }
+
+        if ($hasNext) {
+            echo '<button type="submit" class="button button-primary" '
+                . 'name="wp_shop_pm_scan_action" value="next">'
+                . 'Следующий пакет →</button>';
+        }
+
+        echo '</form>';
     }
 
     private function renderUpdateAction(ProductUpdateScanRow $row): void
@@ -206,11 +288,13 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             true,
             true
         );
-        echo '<input type="hidden" name="wp_shop_pm_update_action" value="load_product">';
+        echo '<input type="hidden" name="wp_shop_pm_update_action" '
+            . 'value="load_product">';
         echo '<input type="hidden" name="update_product_id" value="'
             . $this->escape((string) $row->productId)
             . '">';
-        echo '<button type="submit" class="button button-secondary">Открыть Update Product</button>';
+        echo '<button type="submit" class="button button-secondary">'
+            . 'Открыть Update Product</button>';
         echo '</form>';
     }
 
