@@ -8,6 +8,7 @@ use Closure;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateData;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
+use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateSnapshot;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateSuggestion;
 use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
@@ -21,6 +22,7 @@ final class ProductUpdatePage implements SubmenuPageInterface
     public function __construct(
         private readonly ProductVersionUpdater $updater,
         private readonly ProductUpdateEnvatoAdvisor $advisor,
+        private readonly ProductUpdateManualCandidateBuilder $manualCandidateBuilder,
         private readonly Closure $call
     ) {
     }
@@ -76,6 +78,12 @@ final class ProductUpdatePage implements SubmenuPageInterface
                 ];
                 $success = false;
             }
+        } elseif ($action === 'prepare_manual_candidate') {
+            $this->verifyNonce('wp_shop_pm_update_product');
+            $fields = $this->postedFields($fields);
+            [$fields, $logs, $success] = $this->prepareManualCandidate(
+                $fields
+            );
         } elseif (
             $action === 'preflight_update'
             || $action === 'apply_update'
@@ -252,6 +260,46 @@ final class ProductUpdatePage implements SubmenuPageInterface
 
     /**
      * @param array<string, string> $fields
+     * @return array{array<string, string>, list<string>, bool}
+     */
+    private function prepareManualCandidate(array $fields): array
+    {
+        $logs = [
+            'MANUAL CANDIDATE REQUEST = RECEIVED',
+            'NO PRODUCT WRITTEN = YES',
+        ];
+
+        try {
+            $suggestion = $this->manualCandidateBuilder->build(
+                (int) $fields['item_id'],
+                $fields['sales_page'],
+                $fields['version'],
+                $fields['current_download_url']
+            );
+        } catch (Throwable $exception) {
+            $logs[] = 'MANUAL CANDIDATE = FAILED';
+            $logs[] = 'ERROR MESSAGE: ' . $exception->getMessage();
+
+            return [$fields, $logs, false];
+        }
+
+        $fields['expected_sku'] = $suggestion->skuFilename;
+        $fields['download_url'] = $suggestion->downloadUrl;
+        $logs[] = 'NEW VERSION = SOURCE OF TRUTH: '
+            . $suggestion->version;
+        $logs[] = 'EXPECTED SKU = ' . $suggestion->skuFilename;
+        $logs[] = 'SUGGESTED DOWNLOAD URL = ' . (
+            $suggestion->downloadUrl !== ''
+                ? $suggestion->downloadUrl
+                : '[manual]'
+        );
+        $logs[] = 'MANUAL CANDIDATE = READY';
+
+        return [$fields, $logs, true];
+    }
+
+    /**
+     * @param array<string, string> $fields
      * @return array<string, string>
      */
     private function applySuggestion(
@@ -364,6 +412,7 @@ final class ProductUpdatePage implements SubmenuPageInterface
         echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">2. Review & Update Version</h2>';
         echo '<p><strong>Safety:</strong> Envato values are suggestions only. Verify the public ThemeForest changelog; the manually reviewed New Version remains the source of truth. Always run Preflight before Apply.</p>';
+        echo '<p><strong>Manual candidate:</strong> after entering a verified New Version, use the manual prepare button to rebuild the canonical SKU/ZIP name and suggested Download URL without writing the product.</p>';
         echo '<p><strong>Preserved:</strong> RU/EN descriptions, SureRank content, tags, taxonomies, attributes, featured image and Hit/New labels are not rewritten.</p>';
         echo '<form method="post">';
         $this->nonceField('wp_shop_pm_update_product');
@@ -396,7 +445,8 @@ final class ProductUpdatePage implements SubmenuPageInterface
             );
         }
 
-        echo '<p style="display:flex;gap:10px;align-items:center;">';
+        echo '<p style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
+        echo '<button type="submit" class="button button-secondary" onclick="this.form.elements[\'wp_shop_pm_update_action\'].value=\'prepare_manual_candidate\';">Подготовить SKU/ZIP по New Version</button>';
         echo '<button type="submit" class="button button-secondary" onclick="this.form.elements[\'wp_shop_pm_update_action\'].value=\'preflight_update\';">Проверить Update без записи</button>';
         echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Обновить существующий товар? Сначала убедитесь, что Preflight = READY.\');">Обновить товар</button>';
         echo '</p>';
