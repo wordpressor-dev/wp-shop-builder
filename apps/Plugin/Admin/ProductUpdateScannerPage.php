@@ -140,7 +140,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
      */
     private function renderTable(array $rows): void
     {
-        echo '<table class="widefat striped" style="max-width:1250px;">';
+        echo '<table class="widefat striped" style="max-width:1400px;">';
         echo '<thead><tr>';
         foreach (
             [
@@ -151,6 +151,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
                 'Envato Date',
                 'Status',
                 'Note',
+                'Action',
             ] as $heading
         ) {
             echo '<th>' . $this->escape($heading) . '</th>';
@@ -158,7 +159,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '</tr></thead><tbody>';
 
         if ($rows === []) {
-            echo '<tr><td colspan="7">No ThemeForest products found in this batch.</td></tr>';
+            echo '<tr><td colspan="8">No ThemeForest products found in this batch.</td></tr>';
         }
 
         foreach ($rows as $row) {
@@ -170,10 +171,47 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             echo '<td>' . $this->escape($row->envatoUpdateDate !== '' ? $row->envatoUpdateDate : '[empty]') . '</td>';
             echo '<td><strong>' . $this->escape($row->status) . '</strong></td>';
             echo '<td>' . $this->escape($row->message) . '</td>';
+            echo '<td>';
+            $this->renderUpdateAction($row);
+            echo '</td>';
             echo '</tr>';
         }
 
         echo '</tbody></table>';
+    }
+
+    private function renderUpdateAction(ProductUpdateScanRow $row): void
+    {
+        if (
+            $row->status !== 'UPDATE_AVAILABLE'
+            && $row->status !== 'MANUAL_REVIEW'
+        ) {
+            echo '—';
+
+            return;
+        }
+
+        $action = (string) ($this->call)(
+            'admin_url',
+            'admin.php?page=wp-shop-builder-product-update'
+        );
+
+        echo '<form method="post" action="'
+            . $this->escapeUrl($action)
+            . '" style="margin:0;white-space:nowrap;">';
+        ($this->call)(
+            'wp_nonce_field',
+            'wp_shop_pm_load_product',
+            '_wpnonce',
+            true,
+            true
+        );
+        echo '<input type="hidden" name="wp_shop_pm_update_action" value="load_product">';
+        echo '<input type="hidden" name="update_product_id" value="'
+            . $this->escape((string) $row->productId)
+            . '">';
+        echo '<button type="submit" class="button button-secondary">Открыть Update Product</button>';
+        echo '</form>';
     }
 
     private function input(
@@ -226,5 +264,10 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     private function escape(string $value): string
     {
         return (string) ($this->call)('esc_html', $value);
+    }
+
+    private function escapeUrl(string $value): string
+    {
+        return (string) ($this->call)('esc_url', $value);
     }
 }
