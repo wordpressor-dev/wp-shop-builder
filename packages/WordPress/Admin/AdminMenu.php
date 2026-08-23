@@ -6,6 +6,7 @@ namespace WPShop\WordPress\Admin;
 
 use WPShop\WordPress\Admin\Contracts\AdminApiInterface;
 use WPShop\WordPress\Admin\Contracts\AdminPageInterface;
+use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class AdminMenu
 {
@@ -24,6 +25,18 @@ final class AdminMenu
             $page->render(...),
             'dashicons-admin-tools',
             58
+        );
+    }
+
+    public function registerSubmenu(SubmenuPageInterface $page): void
+    {
+        $this->api->addSubmenuPage(
+            $page->parentSlug(),
+            $page->title(),
+            $page->title(),
+            $page->capability(),
+            $page->slug(),
+            $page->render(...)
         );
     }
 }

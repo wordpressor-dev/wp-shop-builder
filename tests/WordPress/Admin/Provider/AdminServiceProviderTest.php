@@ -10,6 +10,7 @@ use WPShop\Core\Kernel\Kernel;
 use WPShop\WordPress\Adapter\TestingHookAdapter;
 use WPShop\WordPress\Admin\AdminManager;
 use WPShop\WordPress\Admin\AdminMenu;
+use WPShop\WordPress\Admin\AdminPageRegistry;
 use WPShop\WordPress\Admin\Contracts\AdminApiInterface;
 use WPShop\WordPress\Admin\Contracts\AdminPageInterface;
 use WPShop\WordPress\Admin\DashboardPage;
@@ -52,14 +53,34 @@ final class AdminServiceProviderTest extends TestCase
             $container->get(AdminApiInterface::class),
             $container->get(WordPressAdminApi::class)
         );
-        self::assertInstanceOf(AdminMenu::class, $container->get(AdminMenu::class));
-        self::assertInstanceOf(AdminManager::class, $container->get(AdminManager::class));
-        self::assertInstanceOf(DashboardPage::class, $container->get(DashboardPage::class));
+        self::assertInstanceOf(
+            AdminMenu::class,
+            $container->get(AdminMenu::class)
+        );
+        self::assertInstanceOf(
+            AdminPageRegistry::class,
+            $container->get(AdminPageRegistry::class)
+        );
+        self::assertInstanceOf(
+            AdminManager::class,
+            $container->get(AdminManager::class)
+        );
+        self::assertInstanceOf(
+            DashboardPage::class,
+            $container->get(DashboardPage::class)
+        );
         self::assertSame(
             $container->get(DashboardPage::class),
             $container->get(AdminPageInterface::class)
         );
+        self::assertCount(
+            1,
+            $container->get(AdminPageRegistry::class)->pages()
+        );
         self::assertTrue($adapter->hasAction('admin_menu'));
-        self::assertSame(0, $adapter->actions('admin_menu')[0]['accepted_args']);
+        self::assertSame(
+            0,
+            $adapter->actions('admin_menu')[0]['accepted_args']
+        );
     }
 }

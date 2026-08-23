@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use WPShop\WordPress\Admin\AdminMenu;
 use WPShop\WordPress\Admin\Contracts\AdminApiInterface;
 use WPShop\WordPress\Admin\Contracts\AdminPageInterface;
+use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class AdminMenuTest extends TestCase
 {
@@ -48,5 +49,48 @@ final class AdminMenuTest extends TestCase
             );
 
         (new AdminMenu($api))->register($page);
+    }
+
+    public function testRegistersWordPressSubmenu(): void
+    {
+        $api = $this->createMock(AdminApiInterface::class);
+        $page = new class implements SubmenuPageInterface {
+            public function parentSlug(): string
+            {
+                return 'wp-shop-builder';
+            }
+
+            public function slug(): string
+            {
+                return 'wp-shop-builder-product-manager';
+            }
+
+            public function title(): string
+            {
+                return 'Product Manager';
+            }
+
+            public function capability(): string
+            {
+                return 'manage_woocommerce';
+            }
+
+            public function render(): void
+            {
+            }
+        };
+
+        $api->expects(self::once())
+            ->method('addSubmenuPage')
+            ->with(
+                'wp-shop-builder',
+                'Product Manager',
+                'Product Manager',
+                'manage_woocommerce',
+                'wp-shop-builder-product-manager',
+                self::isCallable()
+            );
+
+        (new AdminMenu($api))->registerSubmenu($page);
     }
 }

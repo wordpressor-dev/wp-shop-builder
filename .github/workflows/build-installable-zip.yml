@@ -1,0 +1,110 @@
+name: Build installable plugin ZIP
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  build-installable-zip:
+    name: Build wp-shop-builder.zip
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install production dependencies
+        run: >-
+          composer install
+          --no-dev
+          --no-interaction
+          --no-progress
+          --prefer-dist
+          --optimize-autoloader
+          --classmap-authoritative
+
+      - name: Assemble installable plugin directory
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf build dist
+          mkdir -p build/wp-shop-builder dist
+
+          cp wp-shop-builder.php build/wp-shop-builder/
+          cp composer.json composer.lock build/wp-shop-builder/
+          cp README.md CHANGELOG.md INSTALL.md UPGRADE.md build/wp-shop-builder/
+          cp -R apps packages vendor build/wp-shop-builder/
+
+      - name: Verify production package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f build/wp-shop-builder/wp-shop-builder.php
+          test -f build/wp-shop-builder/vendor/autoload.php
+          test -d build/wp-shop-builder/apps
+          test -d build/wp-shop-builder/packages
+
+          grep -q 'Plugin Name: WP Shop Builder' \
+            build/wp-shop-builder/wp-shop-builder.php
+
+          test ! -d build/wp-shop-builder/tests
+          test ! -d build/wp-shop-builder/vendor/phpunit
+          test ! -d build/wp-shop-builder/vendor/phpstan
+          test ! -d build/wp-shop-builder/vendor/rector
+          test ! -d build/wp-shop-builder/vendor/squizlabs
+
+      - name: Create WordPress-installable ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          (
+            cd build
+            zip -qr ../dist/wp-shop-builder.zip wp-shop-builder
+          )
+
+          sha256sum dist/wp-shop-builder.zip \
+            > dist/wp-shop-builder.zip.sha256
+
+      - name: Verify ZIP layout
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unzip -t dist/wp-shop-builder.zip
+
+          unzip -l dist/wp-shop-builder.zip \
+            | grep -q 'wp-shop-builder/wp-shop-builder.php'
+          unzip -l dist/wp-shop-builder.zip \
+            | grep -q 'wp-shop-builder/vendor/autoload.php'
+          unzip -l dist/wp-shop-builder.zip \
+            | grep -q 'wp-shop-builder/apps/Plugin/ProductManager/'
+
+          echo 'Installable package:'
+          ls -lh dist/wp-shop-builder.zip
+          cat dist/wp-shop-builder.zip.sha256
+
+      - name: Upload installable ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-shop-builder-installable-pr-${{ github.event.pull_request.number }}
+          path: |
+            dist/wp-shop-builder.zip
+            dist/wp-shop-builder.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

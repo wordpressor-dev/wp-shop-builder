@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin;
 
 use Closure;
 use LogicException;
+use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\ProviderRegistryInterface;
 use WPShop\Core\Contracts\ServiceProviderInterface;
@@ -49,5 +50,20 @@ final readonly class Plugin
         }
 
         $application->boot();
+
+        /*
+         * WordPressServiceProvider has now registered the admin registry,
+         * while the admin_menu hook has not fired yet. Register the
+         * application-specific Product Manager module into that registry.
+         */
+        $productManagerProvider =
+            new ProductManagerServiceProvider(
+                $application->container()
+            );
+
+        $productManagerProvider->register();
+        $productManagerProvider->boot(
+            $application->kernel()
+        );
     }
 }

@@ -15,4 +15,13 @@ interface AdminApiInterface
         string $iconUrl = '',
         ?int $position = null
     ): void;
+
+    public function addSubmenuPage(
+        string $parentSlug,
+        string $pageTitle,
+        string $menuTitle,
+        string $capability,
+        string $menuSlug,
+        callable $callback
+    ): void;
 }
