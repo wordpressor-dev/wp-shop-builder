@@ -7,6 +7,7 @@ namespace WPShop\App\Plugin\ProductManager;
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
+use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
@@ -29,6 +30,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
+use WPShop\App\Plugin\ProductManager\Update\ProductUpdateScanner;
 use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
 use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
@@ -138,9 +140,19 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $manualCandidateBuilder,
             $functionCaller(...)
         );
+        $updateScanner = new ProductUpdateScanner(
+            $versionUpdater,
+            $updateAdvisor,
+            $functionCaller(...)
+        );
+        $updateScannerPage = new ProductUpdateScannerPage(
+            $updateScanner,
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($updatePage);
+        $registry->addSubmenu($updateScannerPage);
 
         $this->container->set(
             EnvatoItemMapper::class,
@@ -257,6 +269,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductUpdatePage::class,
             $updatePage
+        );
+        $this->container->set(
+            ProductUpdateScanner::class,
+            $updateScanner
+        );
+        $this->container->set(
+            ProductUpdateScannerPage::class,
+            $updateScannerPage
         );
     }
 
