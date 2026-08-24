@@ -537,7 +537,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     }
 
     /**
-     * @param array<string, array<string, mixed>> $storedRows
+     * @param array<string, mixed> $storedRows
      * @return list<ProductUpdateScanRow>
      */
     private function reportRows(array $storedRows): array
