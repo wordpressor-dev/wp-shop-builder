@@ -23,6 +23,7 @@ final class ProductVersionUpdaterTest extends TestCase
                 return match ($name) {
                     'get_post_type' => 'product',
                     'get_post_status' => 'publish',
+                    'get_post_meta' => self::currentIdentityMeta($arguments),
                     'wc_get_product_id_by_sku' => 5034,
                     default => null,
                 };
@@ -66,6 +67,7 @@ final class ProductVersionUpdaterTest extends TestCase
                 return match ($name) {
                     'get_post_type' => 'product',
                     'get_post_status' => 'publish',
+                    'get_post_meta' => self::currentIdentityMeta($arguments),
                     'wc_get_product_id_by_sku' => 5034,
                     'get_gmt_from_date' => '2026-08-20 09:00:00',
                     'wp_update_post' => 5034,
@@ -147,6 +149,7 @@ final class ProductVersionUpdaterTest extends TestCase
                 return match ($name) {
                     'get_post_type' => 'product',
                     'get_post_status' => 'publish',
+                    'get_post_meta' => self::currentIdentityMeta($arguments),
                     'wc_get_product_id_by_sku' => 5034,
                     'get_gmt_from_date' => '2026-08-20 09:00:00',
                     'wp_update_post' => 5034,
@@ -173,6 +176,53 @@ final class ProductVersionUpdaterTest extends TestCase
         self::assertArrayNotHasKey(5034, $report['attention']);
         self::assertSame('DONE', $report['seen'][5034]);
         self::assertSame('2026-08-24 13:20:00', $report['updated_at']);
+    }
+
+    public function testStaleCurrentVersionStopsBeforeAnyWrite(): void
+    {
+        $calls = [];
+        $updater = new ProductVersionUpdater(
+            static function (
+                string $name,
+                mixed ...$arguments
+            ) use (&$calls): mixed {
+                $calls[] = [$name, $arguments];
+
+                if ($name === 'get_post_type') {
+                    return 'product';
+                }
+
+                if ($name === 'get_post_status') {
+                    return 'publish';
+                }
+
+                if ($name === 'get_post_meta') {
+                    return $arguments[1] === 'attr_version_value'
+                        ? '2.0.0'
+                        : self::currentIdentityMeta($arguments);
+                }
+
+                if ($name === 'wc_get_product_id_by_sku') {
+                    return 5034;
+                }
+
+                return null;
+            }
+        );
+
+        $result = $updater->update($this->data());
+
+        self::assertFalse($result->success);
+        self::assertContains(
+            'STOP: PRODUCT NOT UPDATED.',
+            $result->logs
+        );
+        self::assertContains(
+            'STALE FORM: Current Version changed from 1.9.0 to 2.0.0. Reload product before continuing.',
+            $result->logs
+        );
+        self::assertSame([], $this->callsNamed($calls, 'wp_update_post'));
+        self::assertSame([], $this->callsNamed($calls, 'update_post_meta'));
     }
 
     public function testLoadFallsBackToSalesPageItemIdAndPostDate(): void
@@ -231,6 +281,19 @@ final class ProductVersionUpdaterTest extends TestCase
             'https://wp-shop.org/old.zip',
             $snapshot->downloadUrl
         );
+    }
+
+    /**
+     * @param array<int, mixed> $arguments
+     */
+    private static function currentIdentityMeta(array $arguments): mixed
+    {
+        return match ($arguments[1] ?? '') {
+            'attr_version_value' => '1.9.0',
+            '_sku' => 'themeforest-22380037-veera-'
+                . 'multipurpose-woocommerce-theme-1.9.0.zip',
+            default => '',
+        };
     }
 
     /**
