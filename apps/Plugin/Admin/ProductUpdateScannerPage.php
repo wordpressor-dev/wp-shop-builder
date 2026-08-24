@@ -508,9 +508,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
     /**
      * @param array{
-     *   seen: array<string, string>,
-     *   attention: array<string, array<string, mixed>>,
-     *   errors: array<string, array<string, mixed>>,
+     *   seen: array<int|string, string>,
+     *   attention: array<int|string, array<string, mixed>>,
+     *   errors: array<int|string, array<string, mixed>>,
      *   started_at: string,
      *   updated_at: string
      * } $report
@@ -621,7 +621,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         foreach ($rows as $row) {
-            $id = (string) $row->productId;
+            $id = $row->productId;
             $report['seen'][$id] = $row->status;
 
             if (in_array($row->status, ['UPDATE_AVAILABLE', 'MANUAL_REVIEW'], true)) {
@@ -648,14 +648,16 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         $report = $this->loadReport();
-        $id = (string) $productId;
 
-        if (! isset($report['attention'][$id])) {
+        if (! isset($report['attention'][$productId])) {
             return false;
         }
 
-        unset($report['attention'][$id], $report['errors'][$id]);
-        $report['seen'][$id] = 'DONE';
+        unset(
+            $report['attention'][$productId],
+            $report['errors'][$productId]
+        );
+        $report['seen'][$productId] = 'DONE';
         $report['updated_at'] = $this->currentTime();
         $this->saveReport($report);
 
@@ -663,7 +665,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     }
 
     /**
-     * @param array<string, string> $seen
+     * @param array<int|string, string> $seen
      */
     private function doneCount(array $seen): int
     {
@@ -680,9 +682,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
     /**
      * @param array{
-     *   seen: array<string, string>,
-     *   attention: array<string, array<string, mixed>>,
-     *   errors: array<string, array<string, mixed>>,
+     *   seen: array<int|string, string>,
+     *   attention: array<int|string, array<string, mixed>>,
+     *   errors: array<int|string, array<string, mixed>>,
      *   started_at: string,
      *   updated_at: string
      * } $report
@@ -703,9 +705,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
     /**
      * @return array{
-     *   seen: array<string, string>,
-     *   attention: array<string, array<string, mixed>>,
-     *   errors: array<string, array<string, mixed>>,
+     *   seen: array<int|string, string>,
+     *   attention: array<int|string, array<string, mixed>>,
+     *   errors: array<int|string, array<string, mixed>>,
      *   started_at: string,
      *   updated_at: string
      * }
@@ -765,7 +767,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     }
 
     /**
-     * @param array<string, mixed> $storedRows
+     * @param array<int|string, mixed> $storedRows
      * @return list<ProductUpdateScanRow>
      */
     private function reportRows(array $storedRows): array
