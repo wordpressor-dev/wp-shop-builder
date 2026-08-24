@@ -11,6 +11,8 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class ProductUpdateScannerPage implements SubmenuPageInterface
 {
+    private const REPORT_META_KEY = 'wp_shop_pm_update_scan_report_v1';
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -52,14 +54,17 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         );
         $rows = [];
         $scanned = false;
+        $reportReset = false;
         $action = $this->posted('wp_shop_pm_scan_action');
 
+        if ($action === 'reset_report') {
+            $this->checkNonce();
+            $this->resetReport();
+            $reportReset = true;
+        }
+
         if (in_array($action, ['scan', 'previous', 'next'], true)) {
-            ($this->call)(
-                'check_admin_referer',
-                'wp_shop_pm_update_scan',
-                '_wpnonce'
-            );
+            $this->checkNonce();
 
             if ($action === 'previous') {
                 $offset = max(0, $offset - $limit);
@@ -72,12 +77,18 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
                 $limit,
                 $this->token()
             );
+            $this->saveReportRows($rows);
             $scanned = true;
         }
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Update Scanner</h1>';
-        echo '<p>Read-only batch comparison for ThemeForest products. Nothing is written to WooCommerce. Envato metadata is advisory only; verify the public changelog before any update.</p>';
+        echo '<p>Read-only batch comparison for ThemeForest products. Nothing is written to WooCommerce products. The cumulative admin report is stored only in the current user profile. Envato metadata is advisory only; verify the public changelog before any update.</p>';
+
+        if ($reportReset) {
+            echo '<div class="notice notice-success"><p><strong>CATALOG REPORT = RESET</strong></p></div>';
+        }
+
         $this->renderForm($offset, $limit, $filter, $sort);
 
         if ($scanned) {
@@ -101,7 +112,24 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             );
         }
 
+        $this->renderAccumulatedReport(
+            $this->loadReport(),
+            $offset,
+            $limit,
+            $filter,
+            $sort
+        );
+
         echo '</div>';
+    }
+
+    private function checkNonce(): void
+    {
+        ($this->call)(
+            'check_admin_referer',
+            'wp_shop_pm_update_scan',
+            '_wpnonce'
+        );
     }
 
     private function renderForm(
@@ -112,15 +140,9 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     ): void {
         echo '<div class="postbox" style="max-width:1250px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">Scan ThemeForest Products</h2>';
-        echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25. By default only products that need attention are shown, newest Envato dates first.</p>';
+        echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25. Each scanned package is automatically added to the cumulative report without duplicate Product IDs.</p>';
         echo '<form method="post">';
-        ($this->call)(
-            'wp_nonce_field',
-            'wp_shop_pm_update_scan',
-            '_wpnonce',
-            true,
-            true
-        );
+        $this->nonceField();
         echo '<input type="hidden" name="wp_shop_pm_scan_action" value="scan">';
         $this->input('Offset', 'scan_offset', (string) $offset, 'number');
         $this->input('Batch size', 'scan_limit', (string) $limit, 'number');
@@ -204,20 +226,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         string $filter,
         string $sort
     ): void {
-        $counts = [
-            'UPDATE_AVAILABLE' => 0,
-            'SAME' => 0,
-            'MANUAL_REVIEW' => 0,
-            'LOAD_FAILED' => 0,
-            'TOKEN_MISSING' => 0,
-        ];
-
-        foreach ($rows as $row) {
-            if (isset($counts[$row->status])) {
-                ++$counts[$row->status];
-            }
-        }
-
+        $counts = $this->countStatuses($rows);
         $first = $rows === [] ? 0 : $offset + 1;
         $last = $offset + count($rows);
 
@@ -248,6 +257,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     {
         echo '<table class="widefat striped" style="max-width:1400px;">';
         echo '<thead><tr>';
+
         foreach (
             [
                 'ID',
@@ -262,6 +272,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         ) {
             echo '<th>' . $this->escape($heading) . '</th>';
         }
+
         echo '</tr></thead><tbody>';
 
         if ($rows === []) {
@@ -272,30 +283,10 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             echo '<tr>';
             echo '<td>' . $this->escape((string) $row->productId) . '</td>';
             echo '<td>' . $this->escape($row->title) . '</td>';
-            echo '<td>'
-                . $this->escape(
-                    $row->currentVersion !== ''
-                        ? $row->currentVersion
-                        : '[empty]'
-                )
-                . '</td>';
-            echo '<td>'
-                . $this->escape(
-                    $row->envatoVersion !== ''
-                        ? $row->envatoVersion
-                        : '[empty]'
-                )
-                . '</td>';
-            echo '<td>'
-                . $this->escape(
-                    $row->envatoUpdateDate !== ''
-                        ? $row->envatoUpdateDate
-                        : '[empty]'
-                )
-                . '</td>';
-            echo '<td><strong>'
-                . $this->escape($row->status)
-                . '</strong></td>';
+            echo '<td>' . $this->escape($row->currentVersion !== '' ? $row->currentVersion : '[empty]') . '</td>';
+            echo '<td>' . $this->escape($row->envatoVersion !== '' ? $row->envatoVersion : '[empty]') . '</td>';
+            echo '<td>' . $this->escape($row->envatoUpdateDate !== '' ? $row->envatoUpdateDate : '[empty]') . '</td>';
+            echo '<td><strong>' . $this->escape($row->status) . '</strong></td>';
             echo '<td>' . $this->escape($row->message) . '</td>';
             echo '<td>';
             $this->renderUpdateAction($row);
@@ -324,36 +315,15 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         echo '<form method="post" style="max-width:1400px;margin:14px 0;display:flex;gap:10px;align-items:center;">';
-        ($this->call)(
-            'wp_nonce_field',
-            'wp_shop_pm_update_scan',
-            '_wpnonce',
-            true,
-            true
-        );
-        echo '<input type="hidden" name="scan_offset" value="'
-            . $this->escapeAttr((string) $offset)
-            . '">';
-        echo '<input type="hidden" name="scan_limit" value="'
-            . $this->escapeAttr((string) $limit)
-            . '">';
-        echo '<input type="hidden" name="scan_filter" value="'
-            . $this->escapeAttr($filter)
-            . '">';
-        echo '<input type="hidden" name="scan_sort" value="'
-            . $this->escapeAttr($sort)
-            . '">';
+        $this->nonceField();
+        $this->hiddenState($offset, $limit, $filter, $sort);
 
         if ($hasPrevious) {
-            echo '<button type="submit" class="button button-secondary" '
-                . 'name="wp_shop_pm_scan_action" value="previous">'
-                . '← Предыдущий пакет</button>';
+            echo '<button type="submit" class="button button-secondary" name="wp_shop_pm_scan_action" value="previous">← Предыдущий пакет</button>';
         }
 
         if ($hasNext) {
-            echo '<button type="submit" class="button button-primary" '
-                . 'name="wp_shop_pm_scan_action" value="next">'
-                . 'Следующий пакет →</button>';
+            echo '<button type="submit" class="button button-primary" name="wp_shop_pm_scan_action" value="next">Следующий пакет →</button>';
         }
 
         echo '</form>';
@@ -385,14 +355,257 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             true,
             true
         );
-        echo '<input type="hidden" name="wp_shop_pm_update_action" '
-            . 'value="load_product">';
+        echo '<input type="hidden" name="wp_shop_pm_update_action" value="load_product">';
         echo '<input type="hidden" name="update_product_id" value="'
             . $this->escapeAttr((string) $row->productId)
             . '">';
-        echo '<button type="submit" class="button button-secondary">'
-            . 'Открыть Update Product</button>';
+        echo '<button type="submit" class="button button-secondary">Открыть Update Product</button>';
         echo '</form>';
+    }
+
+    /**
+     * @param array{
+     *   seen: array<string, string>,
+     *   attention: array<string, array<string, mixed>>,
+     *   errors: array<string, array<string, mixed>>,
+     *   started_at: string,
+     *   updated_at: string
+     * } $report
+     */
+    private function renderAccumulatedReport(
+        array $report,
+        int $offset,
+        int $limit,
+        string $filter,
+        string $sort
+    ): void {
+        $seenCount = count($report['seen']);
+        $attentionRows = $this->reportRows($report['attention']);
+        $errorRows = $this->reportRows($report['errors']);
+        $attentionRows = $this->sortRows($attentionRows, $sort);
+        $errorRows = $this->sortRows($errorRows, $sort);
+        $counts = $this->countStatuses($attentionRows);
+
+        echo '<div class="postbox" style="max-width:1400px;margin-top:22px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Накопительный отчёт каталога</h2>';
+        echo '<p>Каждый просканированный пакет автоматически обновляет этот отчёт. Повторное сканирование того же Product ID не создаёт дубль. Перед новым полным проходом очистите отчёт.</p>';
+
+        echo '<div class="notice notice-info" style="margin:12px 0;padding:10px 14px;">';
+        echo '<p><strong>REPORT STORAGE = USER META ONLY</strong> &nbsp; '
+            . 'SCANNED UNIQUE = ' . $this->escape((string) $seenCount)
+            . ' &nbsp; ATTENTION = ' . $this->escape((string) count($attentionRows))
+            . ' &nbsp; UPDATE_AVAILABLE = ' . $this->escape((string) $counts['UPDATE_AVAILABLE'])
+            . ' &nbsp; MANUAL_REVIEW = ' . $this->escape((string) $counts['MANUAL_REVIEW'])
+            . ' &nbsp; ERRORS = ' . $this->escape((string) count($errorRows));
+
+        if ($report['started_at'] !== '') {
+            echo ' &nbsp; STARTED = ' . $this->escape($report['started_at']);
+        }
+
+        if ($report['updated_at'] !== '') {
+            echo ' &nbsp; LAST SAVED = ' . $this->escape($report['updated_at']);
+        }
+
+        echo '</p></div>';
+
+        echo '<form method="post" style="margin:0 0 16px;">';
+        $this->nonceField();
+        $this->hiddenState($offset, $limit, $filter, $sort);
+        echo '<button type="submit" class="button button-secondary" name="wp_shop_pm_scan_action" value="reset_report">Очистить и начать новый отчёт</button>';
+        echo '</form>';
+
+        if ($seenCount === 0) {
+            echo '<p><em>Отчёт пока пуст. Запустите первый пакет сканирования.</em></p>';
+            echo '</div>';
+
+            return;
+        }
+
+        echo '<h3>Требуют внимания</h3>';
+        $this->renderTable($attentionRows);
+
+        if ($errorRows !== []) {
+            echo '<h3 style="margin-top:22px;">Ошибки сканирования</h3>';
+            $this->renderTable($errorRows);
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * @param list<ProductUpdateScanRow> $rows
+     */
+    private function saveReportRows(array $rows): void
+    {
+        $report = $this->loadReport();
+
+        if ($report['started_at'] === '') {
+            $report['started_at'] = $this->currentTime();
+        }
+
+        foreach ($rows as $row) {
+            $id = (string) $row->productId;
+            $report['seen'][$id] = $row->status;
+
+            if (in_array($row->status, ['UPDATE_AVAILABLE', 'MANUAL_REVIEW'], true)) {
+                $report['attention'][$id] = $this->rowToArray($row);
+            } else {
+                unset($report['attention'][$id]);
+            }
+
+            if (in_array($row->status, ['LOAD_FAILED', 'TOKEN_MISSING'], true)) {
+                $report['errors'][$id] = $this->rowToArray($row);
+            } else {
+                unset($report['errors'][$id]);
+            }
+        }
+
+        $report['updated_at'] = $this->currentTime();
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::REPORT_META_KEY,
+                $report
+            );
+        }
+    }
+
+    /**
+     * @return array{
+     *   seen: array<string, string>,
+     *   attention: array<string, array<string, mixed>>,
+     *   errors: array<string, array<string, mixed>>,
+     *   started_at: string,
+     *   updated_at: string
+     * }
+     */
+    private function loadReport(): array
+    {
+        $empty = [
+            'seen' => [],
+            'attention' => [],
+            'errors' => [],
+            'started_at' => '',
+            'updated_at' => '',
+        ];
+        $userId = $this->currentUserId();
+
+        if ($userId <= 0) {
+            return $empty;
+        }
+
+        $stored = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::REPORT_META_KEY,
+            true
+        );
+
+        if (! is_array($stored)) {
+            return $empty;
+        }
+
+        foreach (['seen', 'attention', 'errors'] as $key) {
+            if (isset($stored[$key]) && is_array($stored[$key])) {
+                $empty[$key] = $stored[$key];
+            }
+        }
+
+        foreach (['started_at', 'updated_at'] as $key) {
+            if (isset($stored[$key]) && is_string($stored[$key])) {
+                $empty[$key] = $stored[$key];
+            }
+        }
+
+        return $empty;
+    }
+
+    private function resetReport(): void
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'delete_user_meta',
+                $userId,
+                self::REPORT_META_KEY
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $storedRows
+     * @return list<ProductUpdateScanRow>
+     */
+    private function reportRows(array $storedRows): array
+    {
+        $rows = [];
+
+        foreach ($storedRows as $storedRow) {
+            if (! is_array($storedRow)) {
+                continue;
+            }
+
+            $rows[] = new ProductUpdateScanRow(
+                (int) ($storedRow['productId'] ?? 0),
+                (string) ($storedRow['title'] ?? ''),
+                (string) ($storedRow['currentVersion'] ?? ''),
+                (string) ($storedRow['envatoVersion'] ?? ''),
+                (string) ($storedRow['envatoUpdateDate'] ?? ''),
+                (string) ($storedRow['status'] ?? ''),
+                (string) ($storedRow['message'] ?? '')
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function rowToArray(ProductUpdateScanRow $row): array
+    {
+        return [
+            'productId' => $row->productId,
+            'title' => $row->title,
+            'currentVersion' => $row->currentVersion,
+            'envatoVersion' => $row->envatoVersion,
+            'envatoUpdateDate' => $row->envatoUpdateDate,
+            'status' => $row->status,
+            'message' => $row->message,
+        ];
+    }
+
+    /**
+     * @param list<ProductUpdateScanRow> $rows
+     * @return array{
+     *   UPDATE_AVAILABLE: int,
+     *   SAME: int,
+     *   MANUAL_REVIEW: int,
+     *   LOAD_FAILED: int,
+     *   TOKEN_MISSING: int
+     * }
+     */
+    private function countStatuses(array $rows): array
+    {
+        $counts = [
+            'UPDATE_AVAILABLE' => 0,
+            'SAME' => 0,
+            'MANUAL_REVIEW' => 0,
+            'LOAD_FAILED' => 0,
+            'TOKEN_MISSING' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            if (isset($counts[$row->status])) {
+                ++$counts[$row->status];
+            }
+        }
+
+        return $counts;
     }
 
     /**
@@ -441,7 +654,10 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     {
         usort(
             $rows,
-            function (ProductUpdateScanRow $left, ProductUpdateScanRow $right) use ($sort): int {
+            function (
+                ProductUpdateScanRow $left,
+                ProductUpdateScanRow $right
+            ) use ($sort): int {
                 return match ($sort) {
                     'envato_date_asc' => $this->compareDates(
                         $left->envatoUpdateDate,
@@ -577,6 +793,37 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         };
     }
 
+    private function nonceField(): void
+    {
+        ($this->call)(
+            'wp_nonce_field',
+            'wp_shop_pm_update_scan',
+            '_wpnonce',
+            true,
+            true
+        );
+    }
+
+    private function hiddenState(
+        int $offset,
+        int $limit,
+        string $filter,
+        string $sort
+    ): void {
+        echo '<input type="hidden" name="scan_offset" value="'
+            . $this->escapeAttr((string) $offset)
+            . '">';
+        echo '<input type="hidden" name="scan_limit" value="'
+            . $this->escapeAttr((string) $limit)
+            . '">';
+        echo '<input type="hidden" name="scan_filter" value="'
+            . $this->escapeAttr($filter)
+            . '">';
+        echo '<input type="hidden" name="scan_sort" value="'
+            . $this->escapeAttr($sort)
+            . '">';
+    }
+
     private function input(
         string $label,
         string $name,
@@ -592,6 +839,16 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             . '" value="'
             . $this->escapeAttr($value)
             . '"></label></p>';
+    }
+
+    private function currentUserId(): int
+    {
+        return (int) ($this->call)('get_current_user_id');
+    }
+
+    private function currentTime(): string
+    {
+        return (string) ($this->call)('current_time', 'mysql');
     }
 
     private function token(): string
