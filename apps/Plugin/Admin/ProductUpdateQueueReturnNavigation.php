@@ -18,10 +18,53 @@ final class ProductUpdateQueueReturnNavigation
 
     public function injectQueueReturnState(): void
     {
-        if (! $this->isPage('wp-shop-builder-product-update-queue')) {
+        if ($this->isPage('wp-shop-builder-product-update-queue')) {
+            $this->injectStateIntoUpdateForms();
+
             return;
         }
 
+        $this->scheduleAutomaticReturnAfterApply();
+    }
+
+    public function renderReturnNotice(): void
+    {
+        if (! $this->isPage('wp-shop-builder-product-update')) {
+            return;
+        }
+
+        if ($this->get('wp_shop_pm_return_queue') !== '1') {
+            return;
+        }
+
+        if (! (bool) ($this->call)('current_user_can', 'manage_woocommerce')) {
+            return;
+        }
+
+        $state = $this->stateFromGet();
+        $queueUrl = $this->queueUrl();
+
+        echo '<div id="wp-shop-return-queue-notice" class="notice notice-info" style="padding:10px 14px;">';
+        echo '<p><strong>RETURN QUEUE = READY</strong> &nbsp; '
+            . 'VIEW = ' . $this->escape($this->filterLabel($state['filter']))
+            . ' &nbsp; SEARCH = ' . $this->escape(
+                $state['search'] !== '' ? $state['search'] : '[empty]'
+            )
+            . ' &nbsp; PAGE = ' . $this->escape((string) $state['page'])
+            . ' &nbsp; PER PAGE = ' . $this->escape((string) $state['perPage'])
+            . '</p>';
+        $this->renderReturnForm(
+            $state,
+            $queueUrl,
+            'wp-shop-return-queue-manual',
+            '← Вернуться в Update Queue',
+            false
+        );
+        echo '</div>';
+    }
+
+    private function injectStateIntoUpdateForms(): void
+    {
         $state = $this->stateFromPost();
         $json = json_encode(
             $state,
@@ -55,7 +98,7 @@ final class ProductUpdateQueueReturnNavigation
         echo '</script>';
     }
 
-    public function renderReturnNotice(): void
+    private function scheduleAutomaticReturnAfterApply(): void
     {
         if (! $this->isPage('wp-shop-builder-product-update')) {
             return;
@@ -65,28 +108,59 @@ final class ProductUpdateQueueReturnNavigation
             return;
         }
 
+        if ($this->post('wp_shop_pm_update_action') !== 'apply_update') {
+            return;
+        }
+
         if (! (bool) ($this->call)('current_user_can', 'manage_woocommerce')) {
             return;
         }
 
         $state = $this->stateFromGet();
-        $queueUrl = (string) ($this->call)(
-            'admin_url',
-            'admin.php?page=wp-shop-builder-product-update-queue'
+        $queueUrl = $this->queueUrl();
+        $this->renderReturnForm(
+            $state,
+            $queueUrl,
+            'wp-shop-return-queue-auto',
+            '',
+            true
         );
 
-        echo '<div class="notice notice-info" style="padding:10px 14px;">';
-        echo '<p><strong>RETURN QUEUE = READY</strong> &nbsp; '
-            . 'VIEW = ' . $this->escape($this->filterLabel($state['filter']))
-            . ' &nbsp; SEARCH = ' . $this->escape(
-                $state['search'] !== '' ? $state['search'] : '[empty]'
-            )
-            . ' &nbsp; PAGE = ' . $this->escape((string) $state['page'])
-            . ' &nbsp; PER PAGE = ' . $this->escape((string) $state['perPage'])
-            . '</p>';
-        echo '<form method="post" action="'
+        echo '<script>';
+        echo '(function(){';
+        echo 'const logs=Array.from(document.querySelectorAll("pre")).map(function(node){return node.textContent||"";}).join("\n");';
+        echo 'if(logs.indexOf("UPDATE SCANNER REPORT = DONE")===-1){return;}';
+        echo 'if(logs.indexOf("FORM REFRESH = READY")===-1){return;}';
+        echo 'const form=document.getElementById("wp-shop-return-queue-auto");';
+        echo 'if(!form){return;}';
+        echo 'const notice=document.getElementById("wp-shop-return-queue-notice");';
+        echo 'if(notice){';
+        echo 'const p=document.createElement("p");';
+        echo 'p.innerHTML="<strong>AUTO RETURN = SCHEDULED</strong> &nbsp; QUEUE ITEM = DONE";';
+        echo 'notice.appendChild(p);';
+        echo '}';
+        echo 'window.setTimeout(function(){form.submit();},1200);';
+        echo '})();';
+        echo '</script>';
+    }
+
+    /**
+     * @param array{filter: string, search: string, perPage: int, page: int} $state
+     */
+    private function renderReturnForm(
+        array $state,
+        string $queueUrl,
+        string $id,
+        string $label,
+        bool $hidden
+    ): void {
+        echo '<form id="'
+            . $this->escapeAttr($id)
+            . '" method="post" action="'
             . $this->escapeUrl($queueUrl)
-            . '" style="margin:0 0 4px;">';
+            . '" style="'
+            . ($hidden ? 'display:none;' : 'margin:0 0 4px;')
+            . '">';
         echo '<input type="hidden" name="wp_shop_pm_update_queue_action" value="browse">';
         echo '<input type="hidden" name="queue_filter" value="'
             . $this->escapeAttr($state['filter'])
@@ -100,9 +174,22 @@ final class ProductUpdateQueueReturnNavigation
         echo '<input type="hidden" name="queue_page" value="'
             . $this->escapeAttr((string) $state['page'])
             . '">';
-        echo '<button type="submit" class="button button-secondary">← Вернуться в Update Queue</button>';
+
+        if (! $hidden) {
+            echo '<button type="submit" class="button button-secondary">'
+                . $this->escape($label)
+                . '</button>';
+        }
+
         echo '</form>';
-        echo '</div>';
+    }
+
+    private function queueUrl(): string
+    {
+        return (string) ($this->call)(
+            'admin_url',
+            'admin.php?page=wp-shop-builder-product-update-queue'
+        );
     }
 
     /**
