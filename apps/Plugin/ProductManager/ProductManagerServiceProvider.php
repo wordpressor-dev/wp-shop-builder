@@ -150,14 +150,6 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $functionCaller(...)
         );
 
-        if (is_callable('add_action')) {
-            $functionCaller(
-                'add_action',
-                'admin_post_wp_shop_pm_export_update_report',
-                [$updateScannerPage, 'exportCsv']
-            );
-        }
-
         $registry->addSubmenu($page);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
