@@ -96,6 +96,11 @@ final class ProductUpdatePage implements SubmenuPageInterface
                 : $this->updater->update($data);
             $logs = $result->logs;
             $success = $result->success;
+
+            if ($action === 'apply_update' && $result->success) {
+                [$fields, $refreshLogs] = $this->refreshAfterApply($fields);
+                $logs = array_merge($logs, $refreshLogs);
+            }
         }
 
         echo '<div class="wrap">';
@@ -296,6 +301,49 @@ final class ProductUpdatePage implements SubmenuPageInterface
         $logs[] = 'MANUAL CANDIDATE = READY';
 
         return [$fields, $logs, true];
+    }
+
+    /**
+     * @param array<string, string> $fields
+     * @return array{array<string, string>, list<string>}
+     */
+    private function refreshAfterApply(array $fields): array
+    {
+        try {
+            $snapshot = $this->updater->load((int) $fields['product_id']);
+        } catch (Throwable $exception) {
+            return [
+                $fields,
+                [
+                    'FORM REFRESH = FAILED',
+                    'FORM REFRESH ERROR = ' . $exception->getMessage(),
+                    'RELOAD PRODUCT BEFORE NEXT UPDATE',
+                ],
+            ];
+        }
+
+        return [
+            $this->fieldsFromSnapshot($snapshot),
+            [
+                'FORM REFRESH = READY',
+                'CURRENT VERSION REFRESHED = ' . (
+                    $snapshot->version !== ''
+                        ? $snapshot->version
+                        : '[empty]'
+                ),
+                'CURRENT UPDATE DATE REFRESHED = ' . (
+                    $snapshot->sourceUpdateDate !== ''
+                        ? $snapshot->sourceUpdateDate
+                        : '[empty]'
+                ),
+                'CURRENT SKU REFRESHED = ' . (
+                    $snapshot->skuFilename !== ''
+                        ? $snapshot->skuFilename
+                        : '[empty]'
+                ),
+                'NEXT UPDATE CANDIDATE = CLEARED',
+            ],
+        ];
     }
 
     /**
