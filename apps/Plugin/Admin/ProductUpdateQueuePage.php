@@ -309,8 +309,8 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         usort(
             $rows,
             static function (array $left, array $right): int {
-                $leftDate = (string) ($left['envatoUpdateDate'] ?? '');
-                $rightDate = (string) ($right['envatoUpdateDate'] ?? '');
+                $leftDate = (string) $left['envatoUpdateDate'];
+                $rightDate = (string) $right['envatoUpdateDate'];
 
                 if ($leftDate !== $rightDate) {
                     if ($leftDate === '') {
@@ -325,16 +325,16 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
                 }
 
                 $titleOrder = strcasecmp(
-                    (string) ($left['title'] ?? ''),
-                    (string) ($right['title'] ?? '')
+                    (string) $left['title'],
+                    (string) $right['title']
                 );
 
                 if ($titleOrder !== 0) {
                     return $titleOrder;
                 }
 
-                return (int) ($left['productId'] ?? 0)
-                    <=> (int) ($right['productId'] ?? 0);
+                return (int) $left['productId']
+                    <=> (int) $right['productId'];
             }
         );
 
