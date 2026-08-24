@@ -12,6 +12,8 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 
 final class ProductVersionUpdater
 {
+    private const UPDATE_SCANNER_REPORT_META_KEY = 'wp_shop_pm_update_scan_report_v1';
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -200,6 +202,9 @@ final class ProductVersionUpdater
         $logs[] = 'RU/EN CONTENT = PRESERVED';
         $logs[] = 'TAGS / ATTRIBUTES / LABELS = PRESERVED';
         $logs[] = 'attr_update_value = SKIPPED';
+        $logs[] = $this->markScannerReportDone($preparedData->productId)
+            ? 'UPDATE SCANNER REPORT = DONE'
+            : 'UPDATE SCANNER REPORT = NO MATCH';
 
         return new ProductUpdateResult(true, $logs);
     }
@@ -421,6 +426,62 @@ final class ProductVersionUpdater
             $key,
             $value
         );
+    }
+
+    private function markScannerReportDone(int $productId): bool
+    {
+        $userId = (int) ($this->call)('get_current_user_id');
+
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $report = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::UPDATE_SCANNER_REPORT_META_KEY,
+            true
+        );
+
+        if (! is_array($report)) {
+            return false;
+        }
+
+        $attention = $report['attention'] ?? null;
+
+        if (! is_array($attention) || ! isset($attention[$productId])) {
+            return false;
+        }
+
+        $seen = $report['seen'] ?? [];
+        $errors = $report['errors'] ?? [];
+
+        if (! is_array($seen)) {
+            $seen = [];
+        }
+
+        if (! is_array($errors)) {
+            $errors = [];
+        }
+
+        unset($attention[$productId], $errors[$productId]);
+        $seen[$productId] = 'DONE';
+        $report['attention'] = $attention;
+        $report['errors'] = $errors;
+        $report['seen'] = $seen;
+        $report['updated_at'] = (string) ($this->call)(
+            'current_time',
+            'mysql'
+        );
+
+        ($this->call)(
+            'update_user_meta',
+            $userId,
+            self::UPDATE_SCANNER_REPORT_META_KEY,
+            $report
+        );
+
+        return true;
     }
 
     private function errorMessage(mixed $error): string
