@@ -138,7 +138,10 @@ final class ProductVersionUpdaterTest extends TestCase
             static function (
                 string $name,
                 mixed ...$arguments
-            ) use (&$calls, &$report): mixed {
+            ) use (
+                &$calls,
+                &$report
+            ): mixed {
                 $calls[] = [$name, $arguments];
 
                 return match ($name) {
