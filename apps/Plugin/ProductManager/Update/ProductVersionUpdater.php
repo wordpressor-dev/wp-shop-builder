@@ -224,6 +224,10 @@ final class ProductVersionUpdater
             $errors[] = $exception->getMessage();
         }
 
+        if ($errors === []) {
+            $this->assertFreshForm($data, $errors);
+        }
+
         if (trim($data->baseTitle) === '') {
             $errors[] = 'Base title is required.';
         }
@@ -310,6 +314,41 @@ final class ProductVersionUpdater
             $data->withSkuFilename($canonicalSku),
             $logs,
         ];
+    }
+
+    /**
+     * @param list<string> $errors
+     */
+    private function assertFreshForm(
+        ProductUpdateData $data,
+        array &$errors
+    ): void {
+        $liveVersion = trim((string) ($this->call)(
+            'get_post_meta',
+            $data->productId,
+            'attr_version_value',
+            true
+        ));
+        $liveSku = trim((string) ($this->call)(
+            'get_post_meta',
+            $data->productId,
+            '_sku',
+            true
+        ));
+        $formVersion = trim($data->currentVersion);
+        $formSku = trim($data->currentSku);
+
+        if ($liveVersion !== $formVersion) {
+            $errors[] = 'STALE FORM: Current Version changed from '
+                . ($formVersion !== '' ? $formVersion : '[empty]')
+                . ' to '
+                . ($liveVersion !== '' ? $liveVersion : '[empty]')
+                . '. Reload product before continuing.';
+        }
+
+        if ($liveSku !== $formSku) {
+            $errors[] = 'STALE FORM: Current SKU changed. Reload product before continuing.';
+        }
     }
 
     private function assertProduct(int $productId): void
