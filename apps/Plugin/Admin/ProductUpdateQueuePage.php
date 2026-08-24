@@ -41,6 +41,14 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
 
     public function render(): void
     {
+        $filter = $this->normalizeFilter(
+            $this->posted('queue_filter', 'update_available')
+        );
+        $search = trim($this->posted('queue_search'));
+        $perPage = $this->normalizePerPage(
+            (int) $this->posted('queue_per_page', '25')
+        );
+        $page = max(1, (int) $this->posted('queue_page', '1'));
         $markedDone = false;
 
         if ($this->posted('wp_shop_pm_update_queue_action') === 'mark_done') {
@@ -60,6 +68,20 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             'MANUAL_REVIEW'
         );
         $doneCount = $this->doneCount($report['seen']);
+        $viewRows = $this->rowsForFilter(
+            $updateRows,
+            $manualRows,
+            $filter
+        );
+        $matchingRows = $this->searchRows($viewRows, $search);
+        $matchingCount = count($matchingRows);
+        $totalPages = max(1, (int) ceil($matchingCount / $perPage));
+        $page = min($page, $totalPages);
+        $pageRows = array_slice(
+            $matchingRows,
+            ($page - 1) * $perPage,
+            $perPage
+        );
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Update Queue</h1>';
@@ -74,7 +96,12 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             . 'ATTENTION = ' . $this->escape((string) (count($updateRows) + count($manualRows)))
             . ' &nbsp; UPDATE_AVAILABLE = ' . $this->escape((string) count($updateRows))
             . ' &nbsp; MANUAL_REVIEW = ' . $this->escape((string) count($manualRows))
-            . ' &nbsp; DONE = ' . $this->escape((string) $doneCount);
+            . ' &nbsp; DONE = ' . $this->escape((string) $doneCount)
+            . ' &nbsp; VIEW = ' . $this->escape($this->filterLabel($filter))
+            . ' &nbsp; MATCHES = ' . $this->escape((string) $matchingCount)
+            . ' &nbsp; PAGE = ' . $this->escape((string) $page)
+            . '/' . $this->escape((string) $totalPages)
+            . ' &nbsp; PER PAGE = ' . $this->escape((string) $perPage);
 
         if ($report['updated_at'] !== '') {
             echo ' &nbsp; LAST SAVED = ' . $this->escape($report['updated_at']);
@@ -83,6 +110,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '</p></div>';
 
         $this->renderNavigationLinks();
+        $this->renderControls($filter, $search, $perPage);
 
         if ($updateRows === [] && $manualRows === []) {
             echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
@@ -94,21 +122,32 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         }
 
         echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
-        echo '<h2 style="margin-top:0;">UPDATE_AVAILABLE — '
-            . $this->escape((string) count($updateRows))
+        echo '<h2 style="margin-top:0;">Рабочая очередь — '
+            . $this->escape($this->filterLabel($filter))
             . '</h2>';
-        echo '<p>Приоритетная очередь. Новые Envato Date показаны сверху. Перед обновлением обязательно откройте ThemeForest и подтвердите версию по публичному changelog.</p>';
-        $this->renderTable($updateRows);
-        echo '</div>';
+        echo '<p>Новые Envato Date показаны сверху. Поиск работает по Product ID и названию товара. Перед обновлением обязательно откройте ThemeForest и подтвердите версию по публичному changelog.</p>';
 
-        echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;margin-top:22px;">';
-        echo '<h2 style="margin-top:0;">MANUAL_REVIEW — '
-            . $this->escape((string) count($manualRows))
-            . '</h2>';
-        echo '<p>Envato metadata недостаточно или выглядит устаревшей. Эти товары нельзя обновлять по Envato-кандидату без ручной проверки официального changelog.</p>';
-        $this->renderTable($manualRows);
-        echo '</div>';
+        if ($matchingRows === []) {
+            echo '<p><em>По текущему фильтру и поиску ничего не найдено.</em></p>';
+        } else {
+            $this->renderTable(
+                $pageRows,
+                $filter,
+                $search,
+                $perPage,
+                $page
+            );
+            $this->renderPagination(
+                $page,
+                $totalPages,
+                $matchingCount,
+                $filter,
+                $search,
+                $perPage
+            );
+        }
 
+        echo '</div>';
         echo '</div>';
     }
 
@@ -133,11 +172,72 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '</p>';
     }
 
+    private function renderControls(
+        string $filter,
+        string $search,
+        int $perPage
+    ): void {
+        echo '<div class="postbox" style="max-width:1400px;padding:14px 18px;">';
+        echo '<form method="post" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;">';
+        echo '<input type="hidden" name="wp_shop_pm_update_queue_action" value="browse">';
+        echo '<input type="hidden" name="queue_page" value="1">';
+
+        echo '<label><strong>Очередь</strong><br>';
+        echo '<select name="queue_filter" style="min-width:230px;">';
+
+        foreach (
+            [
+                'update_available' => 'UPDATE_AVAILABLE',
+                'manual_review' => 'MANUAL_REVIEW',
+                'all' => 'ALL ATTENTION',
+            ] as $value => $label
+        ) {
+            echo '<option value="'
+                . $this->escapeAttr($value)
+                . '"'
+                . ($filter === $value ? ' selected' : '')
+                . '>'
+                . $this->escape($label)
+                . '</option>';
+        }
+
+        echo '</select></label>';
+
+        echo '<label><strong>Поиск Product / ID</strong><br>';
+        echo '<input type="search" name="queue_search" value="'
+            . $this->escapeAttr($search)
+            . '" placeholder="Например: Cardioly или 4087" style="width:300px;max-width:100%;">';
+        echo '</label>';
+
+        echo '<label><strong>На странице</strong><br>';
+        echo '<select name="queue_per_page">';
+
+        foreach ([25, 50, 100] as $value) {
+            echo '<option value="'
+                . $this->escapeAttr((string) $value)
+                . '"'
+                . ($perPage === $value ? ' selected' : '')
+                . '>'
+                . $this->escape((string) $value)
+                . '</option>';
+        }
+
+        echo '</select></label>';
+        echo '<button type="submit" class="button button-primary">Применить</button>';
+        echo '</form>';
+        echo '</div>';
+    }
+
     /**
      * @param list<array<string, int|string>> $rows
      */
-    private function renderTable(array $rows): void
-    {
+    private function renderTable(
+        array $rows,
+        string $filter,
+        string $search,
+        int $perPage,
+        int $page
+    ): void {
         echo '<table class="widefat striped" style="max-width:1400px;">';
         echo '<thead><tr>';
 
@@ -148,6 +248,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
                 'Current Version',
                 'Envato Version',
                 'Envato Date',
+                'Status',
                 'Note',
                 'ThemeForest',
                 'Update Product',
@@ -160,18 +261,19 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '</tr></thead><tbody>';
 
         if ($rows === []) {
-            echo '<tr><td colspan="9">Нет товаров в этой очереди.</td></tr>';
+            echo '<tr><td colspan="10">Нет товаров в этой очереди.</td></tr>';
         }
 
         foreach ($rows as $row) {
-            $productId = (int) ($row['productId'] ?? 0);
+            $productId = (int) $row['productId'];
             echo '<tr>';
             echo '<td>' . $this->escape((string) $productId) . '</td>';
-            echo '<td>' . $this->escape((string) ($row['title'] ?? '')) . '</td>';
-            echo '<td>' . $this->escape($this->valueOrEmpty($row['currentVersion'] ?? '')) . '</td>';
-            echo '<td>' . $this->escape($this->valueOrEmpty($row['envatoVersion'] ?? '')) . '</td>';
-            echo '<td>' . $this->escape($this->valueOrEmpty($row['envatoUpdateDate'] ?? '')) . '</td>';
-            echo '<td>' . $this->escape((string) ($row['message'] ?? '')) . '</td>';
+            echo '<td>' . $this->escape((string) $row['title']) . '</td>';
+            echo '<td>' . $this->escape($this->valueOrEmpty($row['currentVersion'])) . '</td>';
+            echo '<td>' . $this->escape($this->valueOrEmpty($row['envatoVersion'])) . '</td>';
+            echo '<td>' . $this->escape($this->valueOrEmpty($row['envatoUpdateDate'])) . '</td>';
+            echo '<td><strong>' . $this->escape((string) $row['status']) . '</strong></td>';
+            echo '<td>' . $this->escape((string) $row['message']) . '</td>';
             echo '<td>';
             $this->renderThemeForestAction($productId);
             echo '</td>';
@@ -179,12 +281,79 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             $this->renderUpdateAction($productId);
             echo '</td>';
             echo '<td>';
-            $this->renderDoneAction($productId);
+            $this->renderDoneAction(
+                $productId,
+                $filter,
+                $search,
+                $perPage,
+                $page
+            );
             echo '</td>';
             echo '</tr>';
         }
 
         echo '</tbody></table>';
+    }
+
+    private function renderPagination(
+        int $page,
+        int $totalPages,
+        int $matchingCount,
+        string $filter,
+        string $search,
+        int $perPage
+    ): void {
+        if ($totalPages <= 1) {
+            return;
+        }
+
+        echo '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;">';
+
+        if ($page > 1) {
+            $this->renderPageButton(
+                '← Предыдущая',
+                $page - 1,
+                $filter,
+                $search,
+                $perPage
+            );
+        }
+
+        echo '<span><strong>Страница '
+            . $this->escape((string) $page)
+            . ' из '
+            . $this->escape((string) $totalPages)
+            . '</strong> &nbsp; Найдено: '
+            . $this->escape((string) $matchingCount)
+            . '</span>';
+
+        if ($page < $totalPages) {
+            $this->renderPageButton(
+                'Следующая →',
+                $page + 1,
+                $filter,
+                $search,
+                $perPage
+            );
+        }
+
+        echo '</div>';
+    }
+
+    private function renderPageButton(
+        string $label,
+        int $page,
+        string $filter,
+        string $search,
+        int $perPage
+    ): void {
+        echo '<form method="post" style="margin:0;">';
+        echo '<input type="hidden" name="wp_shop_pm_update_queue_action" value="browse">';
+        $this->hiddenQueueState($filter, $search, $perPage, $page);
+        echo '<button type="submit" class="button button-secondary">'
+            . $this->escape($label)
+            . '</button>';
+        echo '</form>';
     }
 
     private function renderThemeForestAction(int $productId): void
@@ -227,16 +396,42 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '</form>';
     }
 
-    private function renderDoneAction(int $productId): void
-    {
+    private function renderDoneAction(
+        int $productId,
+        string $filter,
+        string $search,
+        int $perPage,
+        int $page
+    ): void {
         echo '<form method="post" style="margin:0;white-space:nowrap;">';
         $this->nonceField();
         echo '<input type="hidden" name="wp_shop_pm_update_queue_action" value="mark_done">';
         echo '<input type="hidden" name="report_product_id" value="'
             . $this->escapeAttr((string) $productId)
             . '">';
+        $this->hiddenQueueState($filter, $search, $perPage, $page);
         echo '<button type="submit" class="button">Обработано</button>';
         echo '</form>';
+    }
+
+    private function hiddenQueueState(
+        string $filter,
+        string $search,
+        int $perPage,
+        int $page
+    ): void {
+        echo '<input type="hidden" name="queue_filter" value="'
+            . $this->escapeAttr($filter)
+            . '">';
+        echo '<input type="hidden" name="queue_search" value="'
+            . $this->escapeAttr($search)
+            . '">';
+        echo '<input type="hidden" name="queue_per_page" value="'
+            . $this->escapeAttr((string) $perPage)
+            . '">';
+        echo '<input type="hidden" name="queue_page" value="'
+            . $this->escapeAttr((string) $page)
+            . '">';
     }
 
     private function themeForestUrl(int $productId): string
@@ -306,6 +501,63 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             ];
         }
 
+        return $this->sortRows($rows);
+    }
+
+    /**
+     * @param list<array<string, int|string>> $updateRows
+     * @param list<array<string, int|string>> $manualRows
+     * @return list<array<string, int|string>>
+     */
+    private function rowsForFilter(
+        array $updateRows,
+        array $manualRows,
+        string $filter
+    ): array {
+        if ($filter === 'manual_review') {
+            return $manualRows;
+        }
+
+        if ($filter === 'all') {
+            return $this->sortRows(array_merge($updateRows, $manualRows));
+        }
+
+        return $updateRows;
+    }
+
+    /**
+     * @param list<array<string, int|string>> $rows
+     * @return list<array<string, int|string>>
+     */
+    private function searchRows(array $rows, string $search): array
+    {
+        if ($search === '') {
+            return $rows;
+        }
+
+        $matching = [];
+
+        foreach ($rows as $row) {
+            $productId = (string) $row['productId'];
+            $title = (string) $row['title'];
+
+            if (
+                stripos($productId, $search) !== false
+                || stripos($title, $search) !== false
+            ) {
+                $matching[] = $row;
+            }
+        }
+
+        return $matching;
+    }
+
+    /**
+     * @param list<array<string, int|string>> $rows
+     * @return list<array<string, int|string>>
+     */
+    private function sortRows(array $rows): array
+    {
         usort(
             $rows,
             static function (array $left, array $right): int {
@@ -339,6 +591,33 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         );
 
         return $rows;
+    }
+
+    private function normalizeFilter(string $filter): string
+    {
+        if (in_array($filter, ['update_available', 'manual_review', 'all'], true)) {
+            return $filter;
+        }
+
+        return 'update_available';
+    }
+
+    private function filterLabel(string $filter): string
+    {
+        return match ($filter) {
+            'manual_review' => 'MANUAL_REVIEW',
+            'all' => 'ALL_ATTENTION',
+            default => 'UPDATE_AVAILABLE',
+        };
+    }
+
+    private function normalizePerPage(int $perPage): int
+    {
+        if (in_array($perPage, [25, 50, 100], true)) {
+            return $perPage;
+        }
+
+        return 25;
     }
 
     private function markDone(int $productId): bool
