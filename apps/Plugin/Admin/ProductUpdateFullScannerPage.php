@@ -137,7 +137,20 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
      *   updated_at: string,
      *   error: string
      * } $state
-     * @return array{0: array<string, int|string>, 1: string, 2: string}
+     * @return array{
+     *   0: array{
+     *     status: string,
+     *     limit: int,
+     *     total: int,
+     *     processed: int,
+     *     next_offset: int,
+     *     started_at: string,
+     *     updated_at: string,
+     *     error: string
+     *   },
+     *   1: string,
+     *   2: string
+     * }
      */
     private function processNextBatch(array $state): array
     {
@@ -170,13 +183,13 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
         $state['updated_at'] = $this->currentTime();
         $state['error'] = '';
         $finished = count($rows) < $limit
-            || (int) $state['processed'] >= (int) $state['total'];
+            || $state['processed'] >= $state['total'];
 
         if ($finished) {
             $state['status'] = 'READY';
             $state['processed'] = min(
-                (int) $state['processed'],
-                (int) $state['total']
+                $state['processed'],
+                $state['total']
             );
             $message = 'FULL SCAN = READY';
         } else {
@@ -211,8 +224,8 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
      */
     private function renderProgress(array $state, array $summary): void
     {
-        $total = (int) $state['total'];
-        $processed = (int) $state['processed'];
+        $total = $state['total'];
+        $processed = $state['processed'];
         $percent = $total > 0
             ? min(100, (int) floor(($processed / $total) * 100))
             : ($state['status'] === 'READY' ? 100 : 0);
@@ -419,7 +432,7 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
             }
         }
 
-        $empty['limit'] = $this->limit((int) $empty['limit']);
+        $empty['limit'] = $this->limit($empty['limit']);
 
         return $empty;
     }
@@ -577,10 +590,6 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
         $done = 0;
 
         foreach ($report['attention'] as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-
             $status = (string) ($row['status'] ?? '');
 
             if ($status === 'UPDATE_AVAILABLE') {
