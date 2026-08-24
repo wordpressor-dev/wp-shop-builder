@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
@@ -149,10 +150,15 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $updateScanner,
             $functionCaller(...)
         );
+        $updateFullScannerPage = new ProductUpdateFullScannerPage(
+            $updateScanner,
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
+        $registry->addSubmenu($updateFullScannerPage);
 
         $this->container->set(
             EnvatoItemMapper::class,
@@ -277,6 +283,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductUpdateScannerPage::class,
             $updateScannerPage
+        );
+        $this->container->set(
+            ProductUpdateFullScannerPage::class,
+            $updateFullScannerPage
         );
     }
 
