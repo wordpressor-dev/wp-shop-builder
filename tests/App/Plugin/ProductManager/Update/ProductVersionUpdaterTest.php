@@ -113,6 +113,65 @@ final class ProductVersionUpdaterTest extends TestCase
         self::assertArrayNotHasKey('br_labels', $meta);
     }
 
+    public function testSuccessfulUpdateMarksMatchingScannerReportDone(): void
+    {
+        $calls = [];
+        $report = [
+            'seen' => [5034 => 'UPDATE_AVAILABLE'],
+            'attention' => [
+                5034 => [
+                    'productId' => 5034,
+                    'title' => 'Veera – Multipurpose WooCommerce Theme 1.9.0',
+                    'currentVersion' => '1.9.0',
+                    'envatoVersion' => '2.0.0',
+                    'envatoUpdateDate' => '2026-08-20',
+                    'status' => 'UPDATE_AVAILABLE',
+                    'message' => 'Newer Envato version found.',
+                ],
+            ],
+            'errors' => [],
+            'started_at' => '2026-08-24 12:50:48',
+            'updated_at' => '2026-08-24 12:50:48',
+        ];
+
+        $updater = new ProductVersionUpdater(
+            static function (
+                string $name,
+                mixed ...$arguments
+            ) use (&$calls, &$report): mixed {
+                $calls[] = [$name, $arguments];
+
+                return match ($name) {
+                    'get_post_type' => 'product',
+                    'get_post_status' => 'publish',
+                    'wc_get_product_id_by_sku' => 5034,
+                    'get_gmt_from_date' => '2026-08-20 09:00:00',
+                    'wp_update_post' => 5034,
+                    'is_wp_error' => false,
+                    'get_current_user_id' => 42,
+                    'get_user_meta' => $report,
+                    'current_time' => '2026-08-24 13:20:00',
+                    'update_user_meta' => self::replaceReport(
+                        $report,
+                        $arguments
+                    ),
+                    default => true,
+                };
+            }
+        );
+
+        $result = $updater->update($this->data());
+
+        self::assertTrue($result->success);
+        self::assertContains(
+            'UPDATE SCANNER REPORT = DONE',
+            $result->logs
+        );
+        self::assertArrayNotHasKey(5034, $report['attention']);
+        self::assertSame('DONE', $report['seen'][5034]);
+        self::assertSame('2026-08-24 13:20:00', $report['updated_at']);
+    }
+
     public function testLoadFallsBackToSalesPageItemIdAndPostDate(): void
     {
         $updater = new ProductVersionUpdater(
@@ -169,6 +228,23 @@ final class ProductVersionUpdaterTest extends TestCase
             'https://wp-shop.org/old.zip',
             $snapshot->downloadUrl
         );
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     * @param array<int, mixed> $arguments
+     */
+    private static function replaceReport(
+        array &$report,
+        array $arguments
+    ): bool {
+        $stored = $arguments[2] ?? null;
+
+        if (is_array($stored)) {
+            $report = $stored;
+        }
+
+        return true;
     }
 
     /**
