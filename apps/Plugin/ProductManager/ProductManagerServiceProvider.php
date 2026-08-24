@@ -9,6 +9,7 @@ use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
+use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
@@ -158,6 +159,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $updateQueuePage = new ProductUpdateQueuePage(
             $functionCaller(...)
         );
+        $updateQueueReturnNavigation = new ProductUpdateQueueReturnNavigation(
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($updatePage);
@@ -297,16 +301,29 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             ProductUpdateQueuePage::class,
             $updateQueuePage
         );
+        $this->container->set(
+            ProductUpdateQueueReturnNavigation::class,
+            $updateQueueReturnNavigation
+        );
     }
 
     public function boot(KernelInterface $kernel): void
     {
         $page = $this->container->get(ProductUpdateScannerPage::class);
+        $returnNavigation = $this->container->get(
+            ProductUpdateQueueReturnNavigation::class
+        );
         $functionCaller = $this->container->get(WordPressFunctionCaller::class);
 
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
                 'ProductUpdateScannerPage must be registered before boot.'
+            );
+        }
+
+        if (! $returnNavigation instanceof ProductUpdateQueueReturnNavigation) {
+            throw new LogicException(
+                'ProductUpdateQueueReturnNavigation must be registered before boot.'
             );
         }
 
@@ -320,6 +337,16 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_update_report',
             [$page, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_notices',
+            [$returnNavigation, 'renderReturnNotice']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_footer',
+            [$returnNavigation, 'injectQueueReturnState']
         );
     }
 }
