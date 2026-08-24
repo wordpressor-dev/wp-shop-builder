@@ -8,6 +8,7 @@ use LogicException;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
+use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
@@ -154,11 +155,15 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $updateScanner,
             $functionCaller(...)
         );
+        $updateQueuePage = new ProductUpdateQueuePage(
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
+        $registry->addSubmenu($updateQueuePage);
 
         $this->container->set(
             EnvatoItemMapper::class,
@@ -287,6 +292,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductUpdateFullScannerPage::class,
             $updateFullScannerPage
+        );
+        $this->container->set(
+            ProductUpdateQueuePage::class,
+            $updateQueuePage
         );
     }
 
