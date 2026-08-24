@@ -123,6 +123,86 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '</div>';
     }
 
+    public function exportCsv(): void
+    {
+        if (! (bool) ($this->call)('current_user_can', $this->capability())) {
+            ($this->call)('wp_die', 'You are not allowed to export this report.');
+
+            return;
+        }
+
+        ($this->call)(
+            'check_admin_referer',
+            'wp_shop_pm_update_scan_export',
+            '_wpnonce'
+        );
+
+        $report = $this->loadReport();
+        $rows = array_merge(
+            $this->reportRows($report['attention']),
+            $this->reportRows($report['errors'])
+        );
+        $rows = $this->sortRows($rows, 'envato_date_desc');
+        $filename = 'wp-shop-update-report-'
+            . (string) ($this->call)('current_time', 'Y-m-d-His')
+            . '.csv';
+
+        ($this->call)('nocache_headers');
+        header('Content-Type: text/csv; charset=UTF-8');
+        header(
+            'Content-Disposition: attachment; filename="'
+            . $filename
+            . '"'
+        );
+        header('X-Content-Type-Options: nosniff');
+
+        $stream = fopen('php://output', 'wb');
+
+        if ($stream === false) {
+            ($this->call)('wp_die', 'Unable to open CSV output stream.');
+
+            return;
+        }
+
+        fwrite($stream, "\xEF\xBB\xBF");
+        fputcsv(
+            $stream,
+            [
+                'Product ID',
+                'Product',
+                'Current Version',
+                'Envato Version',
+                'Envato Date',
+                'Status',
+                'Note',
+            ],
+            ';',
+            '"',
+            ''
+        );
+
+        foreach ($rows as $row) {
+            fputcsv(
+                $stream,
+                [
+                    (string) $row->productId,
+                    $this->csvCell($row->title),
+                    $this->csvCell($row->currentVersion),
+                    $this->csvCell($row->envatoVersion),
+                    $this->csvCell($row->envatoUpdateDate),
+                    $this->csvCell($row->status),
+                    $this->csvCell($row->message),
+                ],
+                ';',
+                '"',
+                ''
+            );
+        }
+
+        fclose($stream);
+        exit;
+    }
+
     private function checkNonce(): void
     {
         ($this->call)(
@@ -408,11 +488,18 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
         echo '</p></div>';
 
-        echo '<form method="post" style="margin:0 0 16px;">';
+        echo '<div style="margin:0 0 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
+        echo '<form method="post" style="margin:0;">';
         $this->nonceField();
         $this->hiddenState($offset, $limit, $filter, $sort);
         echo '<button type="submit" class="button button-secondary" name="wp_shop_pm_scan_action" value="reset_report">Очистить и начать новый отчёт</button>';
         echo '</form>';
+
+        if ($seenCount > 0) {
+            $this->renderExportLink();
+        }
+
+        echo '</div>';
 
         if ($seenCount === 0) {
             echo '<p><em>Отчёт пока пуст. Запустите первый пакет сканирования.</em></p>';
@@ -430,6 +517,24 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         echo '</div>';
+    }
+
+    private function renderExportLink(): void
+    {
+        $url = (string) ($this->call)(
+            'admin_url',
+            'admin-post.php?action=wp_shop_pm_export_update_report'
+        );
+        $url = (string) ($this->call)(
+            'wp_nonce_url',
+            $url,
+            'wp_shop_pm_update_scan_export',
+            '_wpnonce'
+        );
+
+        echo '<a class="button button-primary" href="'
+            . $this->escapeUrl($url)
+            . '">Экспорт CSV</a>';
     }
 
     /**
@@ -577,6 +682,19 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             'status' => $row->status,
             'message' => $row->message,
         ];
+    }
+
+    private function csvCell(string $value): string
+    {
+        if ($value === '') {
+            return $value;
+        }
+
+        if (in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 
     /**
