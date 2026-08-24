@@ -282,5 +282,25 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
 
     public function boot(KernelInterface $kernel): void
     {
+        $page = $this->container->get(ProductUpdateScannerPage::class);
+        $functionCaller = $this->container->get(WordPressFunctionCaller::class);
+
+        if (! $page instanceof ProductUpdateScannerPage) {
+            throw new LogicException(
+                'ProductUpdateScannerPage must be registered before boot.'
+            );
+        }
+
+        if (! $functionCaller instanceof WordPressFunctionCaller) {
+            throw new LogicException(
+                'WordPressFunctionCaller must be registered before boot.'
+            );
+        }
+
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_update_report',
+            [$page, 'exportCsv']
+        );
     }
 }
