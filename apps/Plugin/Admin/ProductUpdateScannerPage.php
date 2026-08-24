@@ -55,12 +55,20 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         $rows = [];
         $scanned = false;
         $reportReset = false;
+        $reportMarkedDone = false;
         $action = $this->posted('wp_shop_pm_scan_action');
 
         if ($action === 'reset_report') {
             $this->checkNonce();
             $this->resetReport();
             $reportReset = true;
+        }
+
+        if ($action === 'mark_done') {
+            $this->checkNonce();
+            $reportMarkedDone = $this->markReportDone(
+                (int) $this->posted('report_product_id')
+            );
         }
 
         if (in_array($action, ['scan', 'previous', 'next'], true)) {
@@ -87,6 +95,10 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
         if ($reportReset) {
             echo '<div class="notice notice-success"><p><strong>CATALOG REPORT = RESET</strong></p></div>';
+        }
+
+        if ($reportMarkedDone) {
+            echo '<div class="notice notice-success"><p><strong>REPORT ITEM = DONE</strong></p></div>';
         }
 
         $this->renderForm($offset, $limit, $filter, $sort);
@@ -333,30 +345,42 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
     /**
      * @param list<ProductUpdateScanRow> $rows
      */
-    private function renderTable(array $rows): void
-    {
+    private function renderTable(
+        array $rows,
+        bool $reportActions = false,
+        int $offset = 0,
+        int $limit = 10,
+        string $filter = 'attention',
+        string $sort = 'envato_date_desc'
+    ): void {
         echo '<table class="widefat striped" style="max-width:1400px;">';
         echo '<thead><tr>';
 
-        foreach (
-            [
-                'ID',
-                'Product',
-                'Current Version',
-                'Envato Version',
-                'Envato Date',
-                'Status',
-                'Note',
-                'Action',
-            ] as $heading
-        ) {
+        $headings = [
+            'ID',
+            'Product',
+            'Current Version',
+            'Envato Version',
+            'Envato Date',
+            'Status',
+            'Note',
+            'Action',
+        ];
+
+        if ($reportActions) {
+            $headings[] = 'Report';
+        }
+
+        foreach ($headings as $heading) {
             echo '<th>' . $this->escape($heading) . '</th>';
         }
 
         echo '</tr></thead><tbody>';
 
         if ($rows === []) {
-            echo '<tr><td colspan="8">No rows match the current filter in this batch.</td></tr>';
+            echo '<tr><td colspan="'
+                . ($reportActions ? '9' : '8')
+                . '">No rows match the current filter in this batch.</td></tr>';
         }
 
         foreach ($rows as $row) {
@@ -371,6 +395,19 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             echo '<td>';
             $this->renderUpdateAction($row);
             echo '</td>';
+
+            if ($reportActions) {
+                echo '<td>';
+                $this->renderMarkDoneAction(
+                    $row,
+                    $offset,
+                    $limit,
+                    $filter,
+                    $sort
+                );
+                echo '</td>';
+            }
+
             echo '</tr>';
         }
 
@@ -443,6 +480,32 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         echo '</form>';
     }
 
+    private function renderMarkDoneAction(
+        ProductUpdateScanRow $row,
+        int $offset,
+        int $limit,
+        string $filter,
+        string $sort
+    ): void {
+        if (
+            $row->status !== 'UPDATE_AVAILABLE'
+            && $row->status !== 'MANUAL_REVIEW'
+        ) {
+            echo '—';
+
+            return;
+        }
+
+        echo '<form method="post" style="margin:0;white-space:nowrap;">';
+        $this->nonceField();
+        $this->hiddenState($offset, $limit, $filter, $sort);
+        echo '<input type="hidden" name="report_product_id" value="'
+            . $this->escapeAttr((string) $row->productId)
+            . '">';
+        echo '<button type="submit" class="button" name="wp_shop_pm_scan_action" value="mark_done">Обработано</button>';
+        echo '</form>';
+    }
+
     /**
      * @param array{
      *   seen: array<string, string>,
@@ -460,6 +523,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         string $sort
     ): void {
         $seenCount = count($report['seen']);
+        $doneCount = $this->doneCount($report['seen']);
         $attentionRows = $this->reportRows($report['attention']);
         $errorRows = $this->reportRows($report['errors']);
         $attentionRows = $this->sortRows($attentionRows, $sort);
@@ -468,7 +532,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
         echo '<div class="postbox" style="max-width:1400px;margin-top:22px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">Накопительный отчёт каталога</h2>';
-        echo '<p>Каждый просканированный пакет автоматически обновляет этот отчёт. Повторное сканирование того же Product ID не создаёт дубль. Перед новым полным проходом очистите отчёт.</p>';
+        echo '<p>Каждый просканированный пакет автоматически обновляет этот отчёт. Повторное сканирование того же Product ID не создаёт дубль. Кнопка «Обработано» убирает товар из рабочего списка и CSV; повторное сканирование вернёт его, если обновление всё ещё требуется.</p>';
 
         echo '<div class="notice notice-info" style="margin:12px 0;padding:10px 14px;">';
         echo '<p><strong>REPORT STORAGE = USER META ONLY</strong> &nbsp; '
@@ -476,6 +540,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
             . ' &nbsp; ATTENTION = ' . $this->escape((string) count($attentionRows))
             . ' &nbsp; UPDATE_AVAILABLE = ' . $this->escape((string) $counts['UPDATE_AVAILABLE'])
             . ' &nbsp; MANUAL_REVIEW = ' . $this->escape((string) $counts['MANUAL_REVIEW'])
+            . ' &nbsp; DONE = ' . $this->escape((string) $doneCount)
             . ' &nbsp; ERRORS = ' . $this->escape((string) count($errorRows));
 
         if ($report['started_at'] !== '') {
@@ -509,7 +574,14 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         echo '<h3>Требуют внимания</h3>';
-        $this->renderTable($attentionRows);
+        $this->renderTable(
+            $attentionRows,
+            true,
+            $offset,
+            $limit,
+            $filter,
+            $sort
+        );
 
         if ($errorRows !== []) {
             echo '<h3 style="margin-top:22px;">Ошибки сканирования</h3>';
@@ -566,6 +638,57 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         }
 
         $report['updated_at'] = $this->currentTime();
+        $this->saveReport($report);
+    }
+
+    private function markReportDone(int $productId): bool
+    {
+        if ($productId <= 0) {
+            return false;
+        }
+
+        $report = $this->loadReport();
+        $id = (string) $productId;
+
+        if (! isset($report['attention'][$id])) {
+            return false;
+        }
+
+        unset($report['attention'][$id], $report['errors'][$id]);
+        $report['seen'][$id] = 'DONE';
+        $report['updated_at'] = $this->currentTime();
+        $this->saveReport($report);
+
+        return true;
+    }
+
+    /**
+     * @param array<string, string> $seen
+     */
+    private function doneCount(array $seen): int
+    {
+        $count = 0;
+
+        foreach ($seen as $status) {
+            if ($status === 'DONE') {
+                ++$count;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param array{
+     *   seen: array<string, string>,
+     *   attention: array<string, array<string, mixed>>,
+     *   errors: array<string, array<string, mixed>>,
+     *   started_at: string,
+     *   updated_at: string
+     * } $report
+     */
+    private function saveReport(array $report): void
+    {
         $userId = $this->currentUserId();
 
         if ($userId > 0) {
