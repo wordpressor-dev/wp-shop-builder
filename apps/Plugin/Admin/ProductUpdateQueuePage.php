@@ -67,10 +67,12 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             $report['attention'],
             'MANUAL_REVIEW'
         );
-        $doneCount = $this->doneCount($report['seen']);
+        $doneRows = $this->doneRows($report['seen']);
+        $doneCount = count($doneRows);
         $viewRows = $this->rowsForFilter(
             $updateRows,
             $manualRows,
+            $doneRows,
             $filter
         );
         $matchingRows = $this->searchRows($viewRows, $search);
@@ -112,7 +114,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         $this->renderNavigationLinks();
         $this->renderControls($filter, $search, $perPage);
 
-        if ($updateRows === [] && $manualRows === []) {
+        if ($updateRows === [] && $manualRows === [] && $doneRows === []) {
             echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
             echo '<p><em>Рабочая очередь пуста. Запустите Full Update Scan или проверьте накопительный отчёт в Update Scanner.</em></p>';
             echo '</div>';
@@ -189,6 +191,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             [
                 'update_available' => 'UPDATE_AVAILABLE',
                 'manual_review' => 'MANUAL_REVIEW',
+                'done' => 'DONE',
                 'all' => 'ALL ATTENTION',
             ] as $value => $label
         ) {
@@ -281,13 +284,19 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             $this->renderUpdateAction($productId);
             echo '</td>';
             echo '<td>';
-            $this->renderDoneAction(
-                $productId,
-                $filter,
-                $search,
-                $perPage,
-                $page
-            );
+
+            if ($filter === 'done') {
+                echo '<strong>DONE</strong>';
+            } else {
+                $this->renderDoneAction(
+                    $productId,
+                    $filter,
+                    $search,
+                    $perPage,
+                    $page
+                );
+            }
+
             echo '</td>';
             echo '</tr>';
         }
@@ -507,15 +516,21 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
     /**
      * @param list<array<string, int|string>> $updateRows
      * @param list<array<string, int|string>> $manualRows
+     * @param list<array<string, int|string>> $doneRows
      * @return list<array<string, int|string>>
      */
     private function rowsForFilter(
         array $updateRows,
         array $manualRows,
+        array $doneRows,
         string $filter
     ): array {
         if ($filter === 'manual_review') {
             return $manualRows;
+        }
+
+        if ($filter === 'done') {
+            return $doneRows;
         }
 
         if ($filter === 'all') {
@@ -523,6 +538,57 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         }
 
         return $updateRows;
+    }
+
+    /**
+     * @param array<int|string, string> $seen
+     * @return list<array<string, int|string>>
+     */
+    private function doneRows(array $seen): array
+    {
+        $rows = [];
+
+        foreach ($seen as $storedProductId => $status) {
+            if ($status !== 'DONE') {
+                continue;
+            }
+
+            $productId = (int) $storedProductId;
+
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $title = trim((string) ($this->call)(
+                'get_post_field',
+                'post_title',
+                $productId
+            ));
+            $version = trim((string) ($this->call)(
+                'get_post_meta',
+                $productId,
+                'attr_version_value',
+                true
+            ));
+            $sourceUpdateDate = trim((string) ($this->call)(
+                'get_post_meta',
+                $productId,
+                '_wp_shop_source_update_date',
+                true
+            ));
+
+            $rows[] = [
+                'productId' => $productId,
+                'title' => $title !== '' ? $title : 'Product #' . $productId,
+                'currentVersion' => $version,
+                'envatoVersion' => $version,
+                'envatoUpdateDate' => $sourceUpdateDate,
+                'status' => 'DONE',
+                'message' => 'Processed / updated.',
+            ];
+        }
+
+        return $this->sortRows($rows);
     }
 
     /**
@@ -595,7 +661,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
 
     private function normalizeFilter(string $filter): string
     {
-        if (in_array($filter, ['update_available', 'manual_review', 'all'], true)) {
+        if (in_array($filter, ['update_available', 'manual_review', 'done', 'all'], true)) {
             return $filter;
         }
 
@@ -606,6 +672,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
     {
         return match ($filter) {
             'manual_review' => 'MANUAL_REVIEW',
+            'done' => 'DONE',
             'all' => 'ALL_ATTENTION',
             default => 'UPDATE_AVAILABLE',
         };
