@@ -25,23 +25,27 @@ final class ProductSkuFilename
             return $expected;
         }
 
-        $prefix = self::prefix($itemId, $salesPage);
+        /*
+         * ThemeForest authors can rename an item. Envato then changes the
+         * slug used in newly downloaded ZIP filenames while the numeric Item
+         * ID remains stable. Treat the Item ID as the product identity and
+         * always rebuild the output filename from the current Sales Page.
+         */
+        $identityPrefix = self::itemIdentityPrefix($itemId);
 
         if (
-            ! str_starts_with($current, $prefix)
+            ! str_starts_with($current, $identityPrefix)
             || ! str_ends_with($current, '.zip')
         ) {
             throw new InvalidArgumentException(
-                'SKU / ZIP filename does not match the ThemeForest Item ID and Sales Page. '
-                . 'Expected canonical prefix: ' . $prefix
+                'SKU / ZIP filename does not match the ThemeForest Item ID. '
+                . 'Expected item identity prefix: ' . $identityPrefix
             );
         }
 
         /*
-         * A canonical filename with an older version is safe to rebuild.
-         * This is the normal case when Envato API version metadata lags
-         * behind the public ThemeForest changelog and the editor corrects
-         * Version manually before creating the Draft.
+         * A filename for the same ThemeForest Item ID is safe to rebuild.
+         * This covers both an older version and an official item/slug rename.
          */
         return $expected;
     }
@@ -87,13 +91,21 @@ final class ProductSkuFilename
 
         if (
             preg_match(
-                '~/(?:item)/([^/]+)/\d+/?$~',
+                '~/(?:item)/([^/]+)/(\d+)/?$~',
                 $path,
                 $matches
             ) !== 1
         ) {
             throw new InvalidArgumentException(
                 'Cannot extract ThemeForest item slug from Sales Page.'
+            );
+        }
+
+        $salesPageItemId = (int) $matches[2];
+
+        if ($salesPageItemId !== $itemId) {
+            throw new InvalidArgumentException(
+                'ThemeForest Item ID does not match Sales Page Item ID.'
             );
         }
 
@@ -112,10 +124,13 @@ final class ProductSkuFilename
             );
         }
 
-        return sprintf(
-            'themeforest-%d-%s-',
-            $itemId,
-            trim($slug, '-')
-        );
+        return self::itemIdentityPrefix($itemId)
+            . trim($slug, '-')
+            . '-';
+    }
+
+    private static function itemIdentityPrefix(int $itemId): string
+    {
+        return sprintf('themeforest-%d-', $itemId);
     }
 }
