@@ -68,7 +68,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             'MANUAL_REVIEW'
         );
         $doneRows = $this->doneRows($report['seen']);
-        $doneCount = count($doneRows);
+        $doneCount = $this->doneCount($report['seen']);
         $viewRows = $this->rowsForFilter(
             $updateRows,
             $manualRows,
