@@ -15,13 +15,13 @@ final class ProductUpdateQueuePageDoneFilterTest extends TestCase
         $page = new ProductUpdateQueuePage(
             static function (string $name, mixed ...$arguments): mixed {
                 if ($name === 'get_post_field') {
-                    return $arguments[2] === 5024
+                    return ($arguments[1] ?? 0) === 5024
                         ? 'Eduma – Education WordPress Theme 5.9.5'
                         : '';
                 }
 
                 if ($name === 'get_post_meta') {
-                    return match ($arguments[1]) {
+                    return match ($arguments[1] ?? '') {
                         'attr_version_value' => '5.9.5',
                         '_wp_shop_source_update_date' => '2026-08-22',
                         default => '',
