@@ -95,6 +95,62 @@ final class ProductTaxonomyWriterTest extends TestCase
         );
     }
 
+    public function testRoutesTemplateKitToTemplatesCategoryAndAttribute(): void
+    {
+        $setTerms = [];
+        $terms = [
+            'product_cat:templates' => 21,
+            'product_brand:themeforest' => 2,
+            'pa_categori:templates' => 23,
+            'pa_company:themeforest' => 4,
+            'pa_developer:templateup-pro' => 25,
+        ];
+
+        $writer = new ProductTaxonomyWriter(
+            static function (
+                string $name,
+                mixed ...$arguments
+            ) use (&$setTerms, $terms): mixed {
+                if ($name === 'sanitize_title') {
+                    return strtolower(str_replace(' ', '-', (string) $arguments[0]));
+                }
+
+                if ($name === 'get_term_by') {
+                    $taxonomy = (string) $arguments[2];
+                    $value = (string) $arguments[1];
+                    $key = $taxonomy . ':' . strtolower($value);
+
+                    return isset($terms[$key])
+                        ? (object) ['term_id' => $terms[$key]]
+                        : false;
+                }
+
+                if ($name === 'wp_set_object_terms') {
+                    $setTerms[(string) $arguments[2]] = $arguments[1];
+
+                    return $arguments[1];
+                }
+
+                if ($name === 'update_post_meta') {
+                    return true;
+                }
+
+                if ($name === 'is_wp_error') {
+                    return false;
+                }
+
+                return null;
+            }
+        );
+
+        $logs = $writer->write(5154, $this->templateKitData());
+
+        self::assertSame([21], $setTerms['product_cat']);
+        self::assertSame([23], $setTerms['pa_categori']);
+        self::assertContains('product_cat = Шаблоны', $logs);
+        self::assertContains('pa_categori = Шаблоны', $logs);
+    }
+
     public function testNeverCreatesMissingCatalogTag(): void
     {
         $insertCalls = 0;
@@ -227,6 +283,33 @@ final class ProductTaxonomyWriterTest extends TestCase
             'EN short',
             'EN long',
             'EN meta',
+            'Pre-activated.',
+            false,
+            false
+        );
+    }
+
+    private function templateKitData(): ProductDraftData
+    {
+        return new ProductDraftData(
+            'EstateRoof – Roofing Services Elementor Pro Template Kit',
+            'estateroof',
+            43194184,
+            '',
+            '2025-12-09',
+            'TemplateUp-Pro',
+            '249',
+            'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
+            'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip',
+            '',
+            0,
+            [],
+            'RU short',
+            'RU long',
+            'RU meta',
+            '',
+            '',
+            '',
             'Pre-activated.',
             false,
             false
