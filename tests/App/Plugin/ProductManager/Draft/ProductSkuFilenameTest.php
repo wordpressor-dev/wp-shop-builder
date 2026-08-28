@@ -96,18 +96,16 @@ final class ProductSkuFilenameTest extends TestCase
         );
     }
 
-    public function testExplainsMissingTemplateKitVersion(): void
+    public function testBuildsUnversionedTemplateKitSku(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(
-            'Version is required before SKU / ZIP filename generation.'
-        );
-
-        ProductSkuFilename::synchronize(
-            '',
-            43194184,
-            'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
-            ''
+        self::assertSame(
+            'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip',
+            ProductSkuFilename::synchronize(
+                '',
+                43194184,
+                'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
+                ''
+            )
         );
     }
 }
