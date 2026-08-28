@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Update;
 
 use Closure;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 
 final class ProductUpdateScanner
 {
@@ -110,8 +111,13 @@ final class ProductUpdateScanner
             }
 
             $envatoVersion = trim($suggestion->version);
+            $envatoUpdateDate = trim($suggestion->updateDate);
             $status = 'MANUAL_REVIEW';
             $message = 'Envato version is empty; verify the public changelog.';
+            $productType = CatalogProductType::infer(
+                $snapshot->baseTitle,
+                $snapshot->salesPage
+            );
 
             if ($envatoVersion !== '') {
                 if ($snapshot->version === $envatoVersion) {
@@ -128,6 +134,27 @@ final class ProductUpdateScanner
                     $status = 'UPDATE_AVAILABLE';
                     $message = 'Verify the public changelog before updating.';
                 }
+            } elseif ($productType === CatalogProductType::TEMPLATE_KIT) {
+                $currentDate = trim($snapshot->sourceUpdateDate);
+
+                if (
+                    $envatoUpdateDate !== ''
+                    && $currentDate !== ''
+                    && $envatoUpdateDate <= $currentDate
+                ) {
+                    $status = 'SAME';
+                    $message = 'Template Kit has no published version; ThemeForest update date has not advanced.';
+                } elseif (
+                    $envatoUpdateDate !== ''
+                    && $currentDate !== ''
+                    && $envatoUpdateDate > $currentDate
+                ) {
+                    $status = 'MANUAL_REVIEW';
+                    $message = 'Template Kit has no published version; ThemeForest update date advanced. Verify the downloaded package manually.';
+                } else {
+                    $status = 'MANUAL_REVIEW';
+                    $message = 'Template Kit has no published version and update-date comparison is incomplete.';
+                }
             }
 
             $rows[] = new ProductUpdateScanRow(
@@ -135,7 +162,7 @@ final class ProductUpdateScanner
                 $snapshot->title,
                 $snapshot->version,
                 $envatoVersion,
-                trim($suggestion->updateDate),
+                $envatoUpdateDate,
                 $status,
                 $message
             );
