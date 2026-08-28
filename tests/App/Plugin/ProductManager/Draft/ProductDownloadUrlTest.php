@@ -50,6 +50,23 @@ final class ProductDownloadUrlTest extends TestCase
         );
     }
 
+    public function testRebuildsLegacyThemeUrlIntoThemeforestVendorFolder(): void
+    {
+        self::assertSame(
+            'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/'
+                . 'THEMES/Themeforest/24037792/'
+                . 'themeforest-24037792-edubin-education-lms-wordpress-theme-9.6.5.zip',
+            ProductDownloadUrl::rebuildFromCurrent(
+                'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/'
+                    . 'THEMES/24037792/'
+                    . 'themeforest-24037792-edubin-education-lms-wordpress-theme-9.6.4.zip',
+                CatalogProductType::THEME,
+                24037792,
+                'themeforest-24037792-edubin-education-lms-wordpress-theme-9.6.5.zip'
+            )
+        );
+    }
+
     public function testLeavesUnknownVendorWithoutExtraFolder(): void
     {
         self::assertStringContainsString(
