@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Write;
 
 use Closure;
 use RuntimeException;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
@@ -28,10 +29,17 @@ final class ProductTaxonomyWriter implements
         int $productId,
         ProductDraftData $data
     ): array {
+        $productType = CatalogProductType::infer(
+            $data->baseTitle,
+            $data->salesPage
+        );
+        $categoryLabel = CatalogProductType::categoryLabel($productType);
+        $categorySlug = CatalogProductType::categorySlug($productType);
+
         $categoryId = $this->termId(
             'product_cat',
-            'Темы',
-            'themes',
+            $categoryLabel,
+            $categorySlug,
             true
         );
         $brandId = $this->termId(
@@ -42,8 +50,8 @@ final class ProductTaxonomyWriter implements
         );
         $categoryAttributeId = $this->termId(
             'pa_categori',
-            'Темы',
-            'themes',
+            $categoryLabel,
+            $categorySlug,
             true
         );
         $companyAttributeId = $this->termId(
@@ -111,8 +119,9 @@ final class ProductTaxonomyWriter implements
         );
 
         return [
-            'product_cat = Темы',
+            'product_cat = ' . $categoryLabel,
             'product_brand = Themeforest',
+            'pa_categori = ' . $categoryLabel,
             'pa_developer = ' . $data->developer,
             'TAGS ASSIGNED = ' . count($productTagIds),
             'TAG POLICY = EXISTING_ONLY; NEW_TAGS_CREATED = 0',
