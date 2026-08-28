@@ -167,6 +167,69 @@ final class TranslatePressProductTranslatorTest extends TestCase
         );
     }
 
+    public function testAddsTemplateKitCategoryTranslation(): void
+    {
+        $dictionary = new ProductTranslatorDictionary([]);
+        $registrar = new ProductTranslatorRegistrar();
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_post') {
+                return (object) [
+                    'ID' => 5156,
+                    'post_type' => 'product',
+                    'post_status' => 'publish',
+                    'post_name' => 'estateroof',
+                    'post_excerpt' => '<p>Коротко</p>',
+                    'post_content' => '<p>Длинно</p>',
+                ];
+            }
+
+            if ($name === 'get_post_meta') {
+                $key = (string) ($arguments[1] ?? '');
+
+                return match ($key) {
+                    'surerank_settings_general' => [
+                        'page_description' => 'Мета',
+                    ],
+                    'attr_category_value' => 'Шаблоны',
+                    default => '',
+                };
+            }
+
+            return match ($name) {
+                'wp_kses_post' => $arguments[0],
+                'sanitize_textarea_field' => $arguments[0],
+                'update_post_meta' => true,
+                default => null,
+            };
+        };
+        $translator = new TranslatePressProductTranslator(
+            new TranslationMapBuilder(),
+            $dictionary,
+            $registrar,
+            $call(...)
+        );
+
+        $result = $translator->translate(
+            5156,
+            '<p>Short</p>',
+            '<p>Long</p>',
+            'Meta'
+        );
+
+        self::assertTrue($result->success);
+        self::assertSame(
+            'Templates',
+            $dictionary->lastMap['Шаблоны'] ?? null
+        );
+        self::assertContains(
+            'TRANSLATION SEGMENTS = 4',
+            $result->logs
+        );
+    }
+
     public function testStopsWithoutFillWhenSourcesRemainMissing(): void
     {
         $missing = new TranslationDictionaryStatus(
@@ -245,6 +308,9 @@ final class ProductTranslatorDictionary implements
     /** @var list<TranslationDictionaryStatus> */
     private array $statuses;
 
+    /** @var array<string, string> */
+    public array $lastMap = [];
+
     public int $backupCalls = 0;
     public int $fillCalls = 0;
 
@@ -258,6 +324,7 @@ final class ProductTranslatorDictionary implements
 
     public function status(array $map): TranslationDictionaryStatus
     {
+        $this->lastMap = $map;
         $status = array_shift($this->statuses);
 
         if (! $status instanceof TranslationDictionaryStatus) {
