@@ -33,7 +33,7 @@ final class ProductArchiveUploaderTest extends TestCase
         );
         self::assertSame(
             'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/'
-                . 'TEMPLATES/42018723/'
+                . 'TEMPLATES/Themeforest/42018723/'
                 . 'themeforest-42018723-zoya-minimal-blog-elementor-template-kit.zip',
             $result->downloadUrl
         );
@@ -43,7 +43,7 @@ final class ProductArchiveUploaderTest extends TestCase
 
     public function testUpdateBacksUpSameCanonicalFileAndCanRollback(): void
     {
-        $target = '/srv/uploads/woocommerce_uploads/TEMPLATES/42018723/'
+        $target = '/srv/uploads/woocommerce_uploads/TEMPLATES/Themeforest/42018723/'
             . 'themeforest-42018723-zoya-minimal-blog-elementor-template-kit.zip';
         $files = [$target => 'old'];
         $uploader = new ProductArchiveUploader(
