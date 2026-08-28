@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\Admin;
 
 use Closure;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\Update\ProductUpdateCandidateClassifier;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateData;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
@@ -228,8 +229,10 @@ final class ProductUpdatePage implements SubmenuPageInterface
             $fields,
             $suggestion
         );
-        $sameVersion = $suggestion->version !== ''
-            && $suggestion->version === $snapshot->version;
+        $candidateLabel = ProductUpdateCandidateClassifier::label(
+            $snapshot,
+            $suggestion
+        );
 
         return [
             $fields,
@@ -245,9 +248,7 @@ final class ProductUpdatePage implements SubmenuPageInterface
                         ? $suggestion->updateDate
                         : '[empty]'
                 ),
-                $sameVersion
-                    ? 'UPDATE CANDIDATE = SAME VERSION'
-                    : 'UPDATE CANDIDATE = REVIEW REQUIRED',
+                'UPDATE CANDIDATE = ' . $candidateLabel,
                 'ENVATO VERSION = SUGGESTION ONLY; VERIFY CHANGELOG',
                 'EXPECTED SKU = ' . (
                     $suggestion->skuFilename !== ''
