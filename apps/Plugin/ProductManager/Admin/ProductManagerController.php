@@ -481,8 +481,8 @@ final class ProductManagerController
             && $archiveResult->supplied
         ) {
             $archiveFinishLogs = $result->success
-                ? $this->archiveUploader?->finalize($archiveResult) ?? []
-                : $this->archiveUploader?->rollback($archiveResult) ?? [];
+                ? $this->archiveUploader->finalize($archiveResult)
+                : $this->archiveUploader->rollback($archiveResult);
         }
 
         return new ProductDraftResult(
