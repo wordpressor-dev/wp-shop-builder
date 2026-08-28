@@ -17,12 +17,7 @@ final class ProductUpdateCandidateClassifierTest extends TestCase
             'SAME SOURCE DATE',
             ProductUpdateCandidateClassifier::label(
                 $this->templateKitSnapshot('2025-12-09'),
-                new ProductUpdateSuggestion(
-                    '',
-                    '2025-12-09',
-                    'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip',
-                    'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/TEMPLATES/43194184/themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip'
-                )
+                new ProductUpdateSuggestion('', '2025-12-09', '', '')
             )
         );
     }
@@ -59,8 +54,8 @@ final class ProductUpdateCandidateClassifierTest extends TestCase
             22380037,
             '2.0.0',
             '2026-08-20',
-            'https://themeforest.net/item/veera-multipurpose-woocommerce-theme/22380037',
-            'themeforest-22380037-veera-multipurpose-woocommerce-theme-2.0.0.zip',
+            '',
+            '',
             ''
         );
 
@@ -83,9 +78,9 @@ final class ProductUpdateCandidateClassifierTest extends TestCase
             43194184,
             '',
             $date,
-            'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
-            'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip',
-            'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/TEMPLATES/43194184/themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip'
+            '',
+            '',
+            ''
         );
     }
 }
