@@ -66,6 +66,7 @@ final class ProductManagerController
             'price' => '249',
             'sales_page' => $item->salesPage,
             'sku_filename' => $item->skuFilename,
+            'featured_image_source_url' => $item->previewImageUrl,
             'tags' => $this->tagLines($selectedTags),
         ];
 
@@ -90,6 +91,11 @@ final class ProductManagerController
                         $item->developer !== ''
                             ? $item->developer
                             : 'REVIEW_REQUIRED'
+                    ),
+                    'FEATURED IMAGE SOURCE = ' . (
+                        $item->previewImageUrl !== ''
+                            ? 'ENVATO PREVIEW READY'
+                            : 'NOT PROVIDED'
                     ),
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
