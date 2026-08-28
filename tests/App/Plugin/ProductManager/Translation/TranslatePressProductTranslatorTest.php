@@ -167,7 +167,7 @@ final class TranslatePressProductTranslatorTest extends TestCase
         );
     }
 
-    public function testAddsTemplateKitCategoryTranslation(): void
+    public function testAddsTemplateKitCategoryTranslationFromProductType(): void
     {
         $dictionary = new ProductTranslatorDictionary([]);
         $registrar = new ProductTranslatorRegistrar();
@@ -193,7 +193,7 @@ final class TranslatePressProductTranslatorTest extends TestCase
                     'surerank_settings_general' => [
                         'page_description' => 'Мета',
                     ],
-                    'attr_category_value' => 'Шаблоны',
+                    '_wp_shop_product_type' => 'template_kit',
                     default => '',
                 };
             }
@@ -223,6 +223,10 @@ final class TranslatePressProductTranslatorTest extends TestCase
         self::assertSame(
             'Templates',
             $dictionary->lastMap['Шаблоны'] ?? null
+        );
+        self::assertContains(
+            'CATALOG DISPLAY TRANSLATION = Шаблоны -> Templates',
+            $result->logs
         );
         self::assertContains(
             'TRANSLATION SEGMENTS = 4',
