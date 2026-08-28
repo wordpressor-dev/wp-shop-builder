@@ -12,8 +12,13 @@ final class ProductDownloadUrlTest extends TestCase
 {
     public function testBuildsTemplateKitUrlUnderTemplatesStorage(): void
     {
+        $expected = 'https://wp-shop.org/wp-content/uploads/'
+            . 'woocommerce_uploads/TEMPLATES/42018723/'
+            . 'themeforest-42018723-zoya-minimal-blog-'
+            . 'elementor-template-kit.zip';
+
         self::assertSame(
-            'https://wp-shop.org/wp-content/uploads/woocommerce_uploads/TEMPLATES/42018723/themeforest-42018723-zoya-minimal-blog-elementor-template-kit.zip',
+            $expected,
             ProductDownloadUrl::build(
                 'https://wp-shop.org/wp-content/uploads/',
                 CatalogProductType::TEMPLATE_KIT,
