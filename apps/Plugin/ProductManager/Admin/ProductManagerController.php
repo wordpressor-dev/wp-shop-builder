@@ -146,7 +146,7 @@ final class ProductManagerController
 
             $this->ensureMediaSideloadFunctions();
 
-            if (! is_callable('media_sideload_image')) {
+            if (! $this->wpFunctionAvailable('media_sideload_image')) {
                 return [
                     0,
                     [
@@ -165,7 +165,7 @@ final class ProductManagerController
             );
 
             if (
-                is_callable('is_wp_error')
+                $this->wpFunctionAvailable('is_wp_error')
                 && (bool) $this->wpCall('is_wp_error', $attachmentId)
             ) {
                 $message = is_object($attachmentId)
@@ -216,7 +216,7 @@ final class ProductManagerController
 
     private function existingAttachmentForSource(string $sourceUrl): int
     {
-        if (! is_callable('get_posts')) {
+        if (! $this->wpFunctionAvailable('get_posts')) {
             return 0;
         }
 
@@ -242,7 +242,7 @@ final class ProductManagerController
 
     private function ensureMediaSideloadFunctions(): void
     {
-        if (is_callable('media_sideload_image')) {
+        if ($this->wpFunctionAvailable('media_sideload_image')) {
             return;
         }
 
@@ -253,6 +253,11 @@ final class ProductManagerController
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
+    }
+
+    private function wpFunctionAvailable(string $name): bool
+    {
+        return is_callable($name);
     }
 
     private function wpCall(string $name, mixed ...$arguments): mixed
