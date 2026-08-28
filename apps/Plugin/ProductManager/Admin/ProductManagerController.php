@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
@@ -62,6 +63,11 @@ final class ProductManagerController
                 $item->previewImageUrl,
                 $item->baseTitle
             );
+        [$downloadUrl, $downloadUrlLogs] = $this->suggestDownloadUrl(
+            $productType,
+            $item->itemId,
+            $item->skuFilename
+        );
 
         $fields = [
             'base_title' => $item->baseTitle,
@@ -73,6 +79,7 @@ final class ProductManagerController
             'price' => '249',
             'sales_page' => $item->salesPage,
             'sku_filename' => $item->skuFilename,
+            'download_url' => $downloadUrl,
             'featured_image_id' => $featuredImageId > 0
                 ? (string) $featuredImageId
                 : '',
@@ -109,6 +116,7 @@ final class ProductManagerController
                     ),
                 ],
                 $featuredImageLogs,
+                $downloadUrlLogs,
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
@@ -116,6 +124,83 @@ final class ProductManagerController
                 ]
             )
         );
+    }
+
+    /**
+     * @return array{string, list<string>}
+     */
+    private function suggestDownloadUrl(
+        string $productType,
+        int $itemId,
+        string $skuFilename
+    ): array {
+        if ($skuFilename === '') {
+            return [
+                '',
+                [
+                    'DOWNLOAD URL AUTO-FILL = NOT AVAILABLE',
+                    'ARCHIVE UPLOAD = MANUAL REQUIRED',
+                ],
+            ];
+        }
+
+        if (! $this->wpFunctionAvailable('wp_upload_dir')) {
+            return [
+                '',
+                [
+                    'DOWNLOAD URL AUTO-FILL = UNAVAILABLE',
+                    'ARCHIVE UPLOAD = MANUAL REQUIRED',
+                ],
+            ];
+        }
+
+        try {
+            $uploads = $this->wpCall('wp_upload_dir');
+
+            if (! is_array($uploads)) {
+                throw new RuntimeException(
+                    'WordPress uploads configuration is unavailable.'
+                );
+            }
+
+            $error = trim((string) ($uploads['error'] ?? ''));
+
+            if ($error !== '') {
+                throw new RuntimeException($error);
+            }
+
+            $downloadUrl = ProductDownloadUrl::build(
+                (string) ($uploads['baseurl'] ?? ''),
+                $productType,
+                $itemId,
+                $skuFilename
+            );
+
+            if ($downloadUrl === '') {
+                throw new RuntimeException(
+                    'Canonical download URL could not be built.'
+                );
+            }
+
+            return [
+                $downloadUrl,
+                [
+                    'DOWNLOAD URL AUTO-FILL = READY',
+                    'DOWNLOAD STORAGE = '
+                        . CatalogProductType::storageFolder($productType),
+                    'ARCHIVE UPLOAD = MANUAL REQUIRED',
+                ],
+            ];
+        } catch (Throwable $exception) {
+            return [
+                '',
+                [
+                    'DOWNLOAD URL AUTO-FILL = FAILED',
+                    'DOWNLOAD URL ERROR = ' . $exception->getMessage(),
+                    'ARCHIVE UPLOAD = MANUAL REQUIRED',
+                ],
+            ];
+        }
     }
 
     /**
