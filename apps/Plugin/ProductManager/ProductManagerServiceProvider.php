@@ -14,6 +14,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
+use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
@@ -86,9 +87,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $functionCaller(...)
         );
         $archiveVersionInspector = new ProductArchiveVersionInspector();
+        $archiveIdentityInspector = new ProductArchiveIdentityInspector();
         $batchIntakeScanner = new ProductBatchIntakeScanner(
             $functionCaller(...),
-            $archiveVersionInspector
+            $archiveVersionInspector,
+            $archiveIdentityInspector
         );
         $batchIntakePage = new ProductBatchIntakePage(
             $batchIntakeScanner,
@@ -235,6 +238,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductArchiveVersionInspector::class,
             $archiveVersionInspector
+        );
+        $this->container->set(
+            ProductArchiveIdentityInspector::class,
+            $archiveIdentityInspector
         );
         $this->container->set(
             ProductBatchIntakeScanner::class,
