@@ -31,6 +31,13 @@ final class EnvatoItemMapperTest extends TestCase
                     'digital marketplace',
                     'multi vendors',
                 ],
+                'thumbnail_url' => 'https://assets.market.envato.com/thumb.jpg',
+                'previews' => [
+                    'icon_with_landscape_preview' => [
+                        'icon_url' => 'https://assets.market.envato.com/icon.jpg',
+                        'landscape_url' => 'https://assets.market.envato.com/landscape.jpg',
+                    ],
+                ],
             ],
             [],
             'https://themeforest.net/item/aabbe-digital-marketplace-wordpress-theme/26350912'
@@ -46,6 +53,10 @@ final class EnvatoItemMapperTest extends TestCase
         self::assertSame('2025-04-20', $item->updatedDate);
         self::assertSame('QuomodoTheme', $item->developer);
         self::assertSame(205, $item->sales);
+        self::assertSame(
+            'https://assets.market.envato.com/landscape.jpg',
+            $item->previewImageUrl
+        );
         self::assertSame(
             'themeforest-26350912-aabbe-digital-marketplace-wordpress-theme-5.0.0.zip',
             $item->skuFilename
@@ -83,6 +94,25 @@ final class EnvatoItemMapperTest extends TestCase
         self::assertSame(
             'themeforest-14058034-education-wordpress-theme-education-wp-5.9.4.zip',
             $item->skuFilename
+        );
+    }
+
+    public function testPreviewImageFallsBackToThumbnail(): void
+    {
+        $item = (new EnvatoItemMapper())->map(
+            [
+                'id' => 43194184,
+                'name' => 'EstateRoof - Roofing Services Elementor Pro Template Kit',
+                'url' => 'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
+                'thumbnail_url' => 'https://assets.market.envato.com/estateroof-thumb.jpg',
+            ],
+            [],
+            'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184'
+        );
+
+        self::assertSame(
+            'https://assets.market.envato.com/estateroof-thumb.jpg',
+            $item->previewImageUrl
         );
     }
 
