@@ -8,6 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use RuntimeException;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 
 final class ProductVersionUpdater
@@ -193,7 +194,11 @@ final class ProductVersionUpdater
 
         $logs[] = 'PRODUCT UPDATE = READY';
         $logs[] = 'PRODUCT ID = ' . $preparedData->productId;
-        $logs[] = 'VERSION = ' . $preparedData->version;
+        $logs[] = 'VERSION = ' . (
+            $preparedData->version !== ''
+                ? $preparedData->version
+                : '[not published]'
+        );
         $logs[] = 'SOURCE UPDATE DATE = '
             . $preparedData->sourceUpdateDate;
         $logs[] = 'TITLE = ' . $preparedData->title();
@@ -217,6 +222,10 @@ final class ProductVersionUpdater
     ): array|ProductUpdateResult {
         $logs = ['UPDATE REQUEST = RECEIVED'];
         $errors = [];
+        $productType = CatalogProductType::infer(
+            $data->baseTitle,
+            $data->salesPage
+        );
 
         try {
             $this->assertProduct($data->productId);
@@ -236,8 +245,11 @@ final class ProductVersionUpdater
             $errors[] = 'ThemeForest Item ID is required.';
         }
 
-        if (trim($data->version) === '') {
-            $errors[] = 'New Version is required.';
+        if (
+            trim($data->version) === ''
+            && $productType !== CatalogProductType::TEMPLATE_KIT
+        ) {
+            $errors[] = 'New Version is required for themes and plugins.';
         }
 
         if (! $this->validDate($data->sourceUpdateDate)) {
@@ -296,8 +308,9 @@ final class ProductVersionUpdater
                 ? $data->currentVersion
                 : '[empty]'
         );
-        $logs[] = 'NEW VERSION = SOURCE OF TRUTH: '
-            . $data->version;
+        $logs[] = $data->version !== ''
+            ? 'NEW VERSION = SOURCE OF TRUTH: ' . $data->version
+            : 'NEW VERSION = NOT PUBLISHED; TEMPLATE KIT DATE/FILE MODE';
 
         if ($canonicalSku !== $data->currentSku) {
             $logs[] = 'SKU AUTO-SYNC: '
