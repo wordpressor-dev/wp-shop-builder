@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Admin;
 
 use InvalidArgumentException;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
@@ -50,6 +51,10 @@ final class ProductManagerController
         }
 
         $selectedTags = $this->tags->select($item->source);
+        $productType = CatalogProductType::infer(
+            $item->baseTitle,
+            $item->salesPage
+        );
 
         $fields = [
             'base_title' => $item->baseTitle,
@@ -64,28 +69,33 @@ final class ProductManagerController
             'tags' => $this->tagLines($selectedTags),
         ];
 
+        $versionLogs = $this->versionLogs(
+            $productType,
+            $item->version,
+            'ENVATO VERSION'
+        );
+
         return new ProductManagerAutofillResult(
             true,
             $fields,
-            [
-                'ENVATO AUTOFILL = READY',
-                'ITEM ID = ' . $item->itemId,
-                'ENVATO VERSION = ' . (
-                    $item->version !== ''
-                        ? $item->version
-                        : 'REVIEW_REQUIRED'
-                ),
-                'VERSION CHECK = MANUAL REQUIRED BEFORE DRAFT',
-                'MANUAL VERSION = SOURCE OF TRUTH AT DRAFT CREATE',
-                'DEVELOPER = ' . (
-                    $item->developer !== ''
-                        ? $item->developer
-                        : 'REVIEW_REQUIRED'
-                ),
-                'EXISTING TAGS SUGGESTED = '
-                    . count($selectedTags),
-                'EDITORIAL CONTENT = MANUAL',
-            ]
+            array_merge(
+                [
+                    'ENVATO AUTOFILL = READY',
+                    'ITEM ID = ' . $item->itemId,
+                    'PRODUCT TYPE = ' . $productType,
+                ],
+                $versionLogs,
+                [
+                    'DEVELOPER = ' . (
+                        $item->developer !== ''
+                            ? $item->developer
+                            : 'REVIEW_REQUIRED'
+                    ),
+                    'EXISTING TAGS SUGGESTED = '
+                        . count($selectedTags),
+                    'EDITORIAL CONTENT = MANUAL',
+                ]
+            )
         );
     }
 
@@ -215,10 +225,18 @@ final class ProductManagerController
             );
         }
 
-        $logs = [
-            $requestLog,
-            'MANUAL VERSION = SOURCE OF TRUTH: ' . $data->version,
-        ];
+        $productType = CatalogProductType::infer(
+            $data->baseTitle,
+            $data->salesPage
+        );
+        $logs = array_merge(
+            [$requestLog],
+            $this->versionLogs(
+                $productType,
+                $data->version,
+                'MANUAL VERSION'
+            )
+        );
 
         if ($canonicalSku !== $data->skuFilename) {
             $logs[] = 'SKU AUTO-SYNC: '
@@ -228,12 +246,47 @@ final class ProductManagerController
                 . ' -> '
                 . $canonicalSku;
         } else {
-            $logs[] = 'SKU / VERSION = MATCH';
+            $logs[] = $data->version !== ''
+                ? 'SKU / VERSION = MATCH'
+                : 'SKU / VERSIONLESS MODE = MATCH';
         }
 
         return [
             $data->withSkuFilename($canonicalSku),
             $logs,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function versionLogs(
+        string $productType,
+        string $version,
+        string $label
+    ): array {
+        $version = trim($version);
+
+        if (
+            $productType === CatalogProductType::TEMPLATE_KIT
+            && $version === ''
+        ) {
+            return [
+                'VERSION MODE = VERSIONLESS TEMPLATE KIT',
+                'PUBLISHED VERSION = NOT PROVIDED',
+                'VERSION FIELD = OPTIONAL',
+            ];
+        }
+
+        if ($version === '') {
+            return [
+                $label . ' = REVIEW_REQUIRED',
+                'VERSION CHECK = MANUAL REQUIRED BEFORE DRAFT',
+            ];
+        }
+
+        return [
+            $label . ' = SOURCE OF TRUTH: ' . $version,
         ];
     }
 
