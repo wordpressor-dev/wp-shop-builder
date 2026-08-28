@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Admin;
 
+use Closure;
 use InvalidArgumentException;
+use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
@@ -55,6 +57,11 @@ final class ProductManagerController
             $item->baseTitle,
             $item->salesPage
         );
+        [$featuredImageId, $featuredImageLogs] =
+            $this->importEnvatoPreview(
+                $item->previewImageUrl,
+                $item->baseTitle
+            );
 
         $fields = [
             'base_title' => $item->baseTitle,
@@ -66,6 +73,10 @@ final class ProductManagerController
             'price' => '249',
             'sales_page' => $item->salesPage,
             'sku_filename' => $item->skuFilename,
+            'featured_image_id' => $featuredImageId > 0
+                ? (string) $featuredImageId
+                : '',
+            'featured_image_source_url' => $item->previewImageUrl,
             'tags' => $this->tagLines($selectedTags),
         ];
 
@@ -91,12 +102,173 @@ final class ProductManagerController
                             ? $item->developer
                             : 'REVIEW_REQUIRED'
                     ),
+                    'FEATURED IMAGE SOURCE = ' . (
+                        $item->previewImageUrl !== ''
+                            ? 'ENVATO PREVIEW READY'
+                            : 'NOT PROVIDED'
+                    ),
+                ],
+                $featuredImageLogs,
+                [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
                     'EDITORIAL CONTENT = MANUAL',
                 ]
             )
         );
+    }
+
+    /**
+     * @return array{int, list<string>}
+     */
+    private function importEnvatoPreview(
+        string $sourceUrl,
+        string $title
+    ): array {
+        $sourceUrl = trim($sourceUrl);
+
+        if ($sourceUrl === '') {
+            return [0, ['FEATURED IMAGE AUTO-IMPORT = NOT AVAILABLE']];
+        }
+
+        try {
+            $existingId = $this->existingAttachmentForSource($sourceUrl);
+
+            if ($existingId > 0) {
+                return [
+                    $existingId,
+                    [
+                        'FEATURED IMAGE AUTO-IMPORT = REUSED',
+                        'FEATURED IMAGE ATTACHMENT ID = ' . $existingId,
+                    ],
+                ];
+            }
+
+            $this->ensureMediaSideloadFunctions();
+
+            if (! $this->wpFunctionAvailable('media_sideload_image')) {
+                return [
+                    0,
+                    [
+                        'FEATURED IMAGE AUTO-IMPORT = UNAVAILABLE',
+                        'FEATURED IMAGE FALLBACK = MANUAL PICKER',
+                    ],
+                ];
+            }
+
+            $attachmentId = $this->wpCall(
+                'media_sideload_image',
+                $sourceUrl,
+                0,
+                $title,
+                'id'
+            );
+
+            if (
+                $this->wpFunctionAvailable('is_wp_error')
+                && (bool) $this->wpCall('is_wp_error', $attachmentId)
+            ) {
+                $message = is_object($attachmentId)
+                    && method_exists($attachmentId, 'get_error_message')
+                        ? (string) $attachmentId->get_error_message()
+                        : 'Unknown WordPress media error.';
+
+                return [
+                    0,
+                    [
+                        'FEATURED IMAGE AUTO-IMPORT = FAILED',
+                        'FEATURED IMAGE ERROR = ' . $message,
+                        'FEATURED IMAGE FALLBACK = MANUAL PICKER',
+                    ],
+                ];
+            }
+
+            $attachmentId = (int) $attachmentId;
+
+            if ($attachmentId <= 0) {
+                return [
+                    0,
+                    [
+                        'FEATURED IMAGE AUTO-IMPORT = FAILED',
+                        'FEATURED IMAGE FALLBACK = MANUAL PICKER',
+                    ],
+                ];
+            }
+
+            return [
+                $attachmentId,
+                [
+                    'FEATURED IMAGE AUTO-IMPORT = READY',
+                    'FEATURED IMAGE ATTACHMENT ID = ' . $attachmentId,
+                ],
+            ];
+        } catch (Throwable $exception) {
+            return [
+                0,
+                [
+                    'FEATURED IMAGE AUTO-IMPORT = FAILED',
+                    'FEATURED IMAGE ERROR = ' . $exception->getMessage(),
+                    'FEATURED IMAGE FALLBACK = MANUAL PICKER',
+                ],
+            ];
+        }
+    }
+
+    private function existingAttachmentForSource(string $sourceUrl): int
+    {
+        if (! $this->wpFunctionAvailable('get_posts')) {
+            return 0;
+        }
+
+        $ids = $this->wpCall(
+            'get_posts',
+            [
+                'post_type' => 'attachment',
+                'post_status' => 'inherit',
+                'posts_per_page' => 1,
+                'fields' => 'ids',
+                'meta_key' => '_source_url',
+                'meta_value' => $sourceUrl,
+                'no_found_rows' => true,
+            ]
+        );
+
+        if (! is_array($ids) || $ids === []) {
+            return 0;
+        }
+
+        return max(0, (int) $ids[0]);
+    }
+
+    private function ensureMediaSideloadFunctions(): void
+    {
+        if ($this->wpFunctionAvailable('media_sideload_image')) {
+            return;
+        }
+
+        if (! defined('ABSPATH')) {
+            return;
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+    }
+
+    private function wpFunctionAvailable(string $name): bool
+    {
+        return is_callable($name);
+    }
+
+    private function wpCall(string $name, mixed ...$arguments): mixed
+    {
+        if (! is_callable($name)) {
+            throw new RuntimeException(
+                'WordPress function is unavailable: ' . $name
+            );
+        }
+
+        return Closure::fromCallable($name)(...$arguments);
     }
 
     /**

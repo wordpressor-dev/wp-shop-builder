@@ -22,7 +22,8 @@ final readonly class EnvatoItem
         public ?string $publishedAt,
         public array $tags,
         public string $skuFilename,
-        public array $source
+        public array $source,
+        public string $previewImageUrl = ''
     ) {
     }
 }

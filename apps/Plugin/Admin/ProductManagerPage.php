@@ -43,6 +43,8 @@ final class ProductManagerPage implements SubmenuPageInterface
 
     public function render(): void
     {
+        ($this->call)('wp_enqueue_media');
+
         $fields = $this->draftDefaults();
         $envatoUrl = $this->posted('envato_url');
         $logs = [];
@@ -359,7 +361,6 @@ final class ProductManagerPage implements SubmenuPageInterface
                 ['Sales Page', 'sales_page', 'url'],
                 ['SKU / ZIP filename', 'sku_filename', 'text'],
                 ['Download URL (optional)', 'download_url', 'url'],
-                ['Featured Image ID (optional)', 'featured_image_id', 'number'],
             ] as $field
         ) {
             $this->input(
@@ -369,6 +370,10 @@ final class ProductManagerPage implements SubmenuPageInterface
                 $field[2]
             );
         }
+
+        $this->renderFeaturedImagePicker(
+            $fields['featured_image_id']
+        );
 
         $this->textarea(
             'Existing Tags — Name|slug',
@@ -433,7 +438,136 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '<button type="submit" class="button button-primary" onclick="this.form.elements[\'wp_shop_pm_action\'].value=\'create_draft\';">Создать новый товар как Draft</button>';
         echo '</p>';
         echo '</form>';
+        $this->renderFeaturedImagePickerScript();
         echo '</div>';
+    }
+
+    private function renderFeaturedImagePicker(string $value): void
+    {
+        $attachmentId = max(0, (int) $value);
+        $previewUrl = '';
+
+        if ($attachmentId > 0) {
+            $preview = ($this->call)(
+                'wp_get_attachment_image_url',
+                $attachmentId,
+                'medium'
+            );
+            $previewUrl = is_string($preview) ? $preview : '';
+        }
+
+        echo '<div id="wp-shop-featured-image-picker" style="margin:14px 0 20px;">';
+        echo '<strong>Featured Image (optional)</strong>';
+        echo '<input type="hidden" id="wp-shop-featured-image-id" name="featured_image_id" value="'
+            . $this->escapeAttr((string) $attachmentId)
+            . '">';
+        echo '<div id="wp-shop-featured-image-preview" style="margin:10px 0;">';
+
+        if ($previewUrl !== '') {
+            echo '<img src="'
+                . $this->escapeUrl($previewUrl)
+                . '" alt="" style="display:block;max-width:240px;height:auto;border:1px solid #c3c4c7;padding:4px;background:#fff;">';
+        }
+
+        echo '</div>';
+        echo '<button type="button" class="button button-secondary" id="wp-shop-featured-image-select">'
+            . ($attachmentId > 0
+                ? 'Заменить изображение'
+                : 'Выбрать изображение')
+            . '</button> ';
+        echo '<button type="button" class="button-link-delete" id="wp-shop-featured-image-remove"'
+            . ($attachmentId > 0 ? '' : ' style="display:none;"')
+            . '>Удалить изображение</button>';
+        echo '<p class="description">Выберите изображение из Media Library. Attachment ID сохраняется автоматически.</p>';
+        echo '</div>';
+    }
+
+    private function renderFeaturedImagePickerScript(): void
+    {
+        echo <<<'HTML'
+<script>
+(function () {
+    'use strict';
+
+    var selectButton = document.getElementById('wp-shop-featured-image-select');
+    var removeButton = document.getElementById('wp-shop-featured-image-remove');
+    var idInput = document.getElementById('wp-shop-featured-image-id');
+    var preview = document.getElementById('wp-shop-featured-image-preview');
+    var frame = null;
+
+    if (!selectButton || !removeButton || !idInput || !preview) {
+        return;
+    }
+
+    selectButton.addEventListener('click', function () {
+        if (!window.wp || !window.wp.media) {
+            return;
+        }
+
+        if (frame) {
+            frame.open();
+            return;
+        }
+
+        frame = window.wp.media({
+            title: 'Выберите изображение товара',
+            button: {text: 'Использовать изображение'},
+            library: {type: 'image'},
+            multiple: false
+        });
+
+        frame.on('select', function () {
+            var selection = frame.state().get('selection').first();
+            var attachment = selection ? selection.toJSON() : null;
+            var url = '';
+            var image = null;
+
+            if (!attachment || !attachment.id) {
+                return;
+            }
+
+            if (
+                attachment.sizes
+                && attachment.sizes.medium
+                && attachment.sizes.medium.url
+            ) {
+                url = attachment.sizes.medium.url;
+            } else if (attachment.url) {
+                url = attachment.url;
+            }
+
+            idInput.value = String(attachment.id);
+            preview.replaceChildren();
+
+            if (url) {
+                image = document.createElement('img');
+                image.src = url;
+                image.alt = '';
+                image.style.display = 'block';
+                image.style.maxWidth = '240px';
+                image.style.height = 'auto';
+                image.style.border = '1px solid #c3c4c7';
+                image.style.padding = '4px';
+                image.style.background = '#fff';
+                preview.appendChild(image);
+            }
+
+            selectButton.textContent = 'Заменить изображение';
+            removeButton.style.display = '';
+        });
+
+        frame.open();
+    });
+
+    removeButton.addEventListener('click', function () {
+        idInput.value = '';
+        preview.replaceChildren();
+        selectButton.textContent = 'Выбрать изображение';
+        removeButton.style.display = 'none';
+    });
+}());
+</script>
+HTML;
     }
 
     /**
@@ -550,13 +684,13 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '<p><label><strong>'
             . $this->escape($label)
             . '</strong><br><input style="width:900px;max-width:100%;" type="'
-            . $this->escape($type)
+            . $this->escapeAttr($type)
             . '" name="'
-            . $this->escape($name)
+            . $this->escapeAttr($name)
             . '" value="'
-            . $this->escape($value)
+            . $this->escapeAttr($value)
             . '" placeholder="'
-            . $this->escape($placeholder)
+            . $this->escapeAttr($placeholder)
             . '"></label></p>';
     }
 
@@ -571,7 +705,7 @@ final class ProductManagerPage implements SubmenuPageInterface
             . '</strong><br><textarea style="width:1000px;max-width:100%;font-family:monospace;" rows="'
             . $rows
             . '" name="'
-            . $this->escape($name)
+            . $this->escapeAttr($name)
             . '">'
             . $this->escape($value)
             . '</textarea></label></p>';
@@ -583,7 +717,7 @@ final class ProductManagerPage implements SubmenuPageInterface
         bool $checked
     ): void {
         echo '<p><label><input type="checkbox" name="'
-            . $this->escape($name)
+            . $this->escapeAttr($name)
             . '" value="1" '
             . ($checked ? 'checked' : '')
             . '> '
@@ -607,7 +741,7 @@ final class ProductManagerPage implements SubmenuPageInterface
     private function hiddenAction(string $action): void
     {
         echo '<input type="hidden" name="wp_shop_pm_action" value="'
-            . $this->escape($action)
+            . $this->escapeAttr($action)
             . '">';
     }
 
@@ -678,6 +812,22 @@ final class ProductManagerPage implements SubmenuPageInterface
     {
         return (string) ($this->call)(
             'esc_html',
+            $value
+        );
+    }
+
+    private function escapeAttr(string $value): string
+    {
+        return (string) ($this->call)(
+            'esc_attr',
+            $value
+        );
+    }
+
+    private function escapeUrl(string $value): string
+    {
+        return (string) ($this->call)(
+            'esc_url',
             $value
         );
     }
