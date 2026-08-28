@@ -196,7 +196,7 @@ final class ProductBatchIntakeScanner
                 $productType
             );
 
-            if (! $inspection->ready) {
+            if (! $inspection->success) {
                 $status = 'REVIEW';
                 $note = $inspection->logs[0] ?? 'ZIP VERSION NOT DETECTED';
             } else {
@@ -334,7 +334,7 @@ final class ProductBatchIntakeScanner
             CatalogProductType::THEME
         );
 
-        return $themeInspection->ready
+        return $themeInspection->success
             ? CatalogProductType::THEME
             : CatalogProductType::TEMPLATE_KIT;
     }
