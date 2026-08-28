@@ -35,6 +35,14 @@ final class ProductMetadataWriter implements
         $storageFolder = CatalogProductType::storageFolder(
             $productType
         );
+        $displayVersion = $data->version;
+
+        if (
+            $productType === CatalogProductType::TEMPLATE_KIT
+            && trim($displayVersion) === ''
+        ) {
+            $displayVersion = '—';
+        }
 
         foreach ($this->displayFields() as $metaKey => $field) {
             $this->updateMeta(
@@ -53,7 +61,7 @@ final class ProductMetadataWriter implements
             $productId,
             'field_68d531d09ce86',
             'attr_version_value',
-            $data->version
+            $displayVersion
         );
         $this->writeAcfValue(
             $productId,
@@ -134,6 +142,9 @@ final class ProductMetadataWriter implements
             'STORAGE FOLDER = ' . $storageFolder,
             'SOURCE ITEM ID = ' . $data->itemId,
             'SOURCE UPDATE DATE = ' . $data->sourceUpdateDate,
+            $displayVersion === '—'
+                ? 'DISPLAY VERSION = VERSIONLESS PLACEHOLDER'
+                : 'DISPLAY VERSION = ' . $displayVersion,
             $data->hasCompleteEnglishContent()
                 ? 'EN DRAFT CONTENT = SAVED'
                 : 'EN DRAFT CONTENT = NOT COMPLETE',
