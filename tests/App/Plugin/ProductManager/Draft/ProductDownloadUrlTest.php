@@ -10,10 +10,10 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 
 final class ProductDownloadUrlTest extends TestCase
 {
-    public function testBuildsTemplateKitUrlUnderTemplatesStorage(): void
+    public function testBuildsTemplateKitUrlUnderThemeforestVendorStorage(): void
     {
         $expected = 'https://wp-shop.org/wp-content/uploads/'
-            . 'woocommerce_uploads/TEMPLATES/42018723/'
+            . 'woocommerce_uploads/TEMPLATES/Themeforest/42018723/'
             . 'themeforest-42018723-zoya-minimal-blog-'
             . 'elementor-template-kit.zip';
 
@@ -28,10 +28,10 @@ final class ProductDownloadUrlTest extends TestCase
         );
     }
 
-    public function testBuildsThemeAndPluginStorageUrls(): void
+    public function testBuildsThemeAndPluginVendorStorageUrls(): void
     {
         self::assertStringContainsString(
-            '/woocommerce_uploads/THEMES/14058034/',
+            '/woocommerce_uploads/THEMES/Themeforest/14058034/',
             ProductDownloadUrl::build(
                 'https://example.test/wp-content/uploads',
                 CatalogProductType::THEME,
@@ -40,12 +40,25 @@ final class ProductDownloadUrlTest extends TestCase
             )
         );
         self::assertStringContainsString(
-            '/woocommerce_uploads/PLUGINS/123/',
+            '/woocommerce_uploads/PLUGINS/Codecanyon/123/',
             ProductDownloadUrl::build(
                 'https://example.test/wp-content/uploads',
                 CatalogProductType::PLUGIN,
                 123,
                 'codecanyon-123-plugin-1.0.0.zip'
+            )
+        );
+    }
+
+    public function testLeavesUnknownVendorWithoutExtraFolder(): void
+    {
+        self::assertStringContainsString(
+            '/woocommerce_uploads/THEMES/123/',
+            ProductDownloadUrl::build(
+                'https://example.test/wp-content/uploads',
+                CatalogProductType::THEME,
+                123,
+                'vendor-theme.zip'
             )
         );
     }
