@@ -63,10 +63,14 @@ final class ProductSkuFilename
             );
         }
 
-        if (
-            $version === ''
-            || preg_match('/^[A-Za-z0-9._+-]+$/D', $version) !== 1
-        ) {
+        if ($version === '') {
+            throw new InvalidArgumentException(
+                'Version is required before SKU / ZIP filename generation. '
+                . 'For Template Kits, enter the verified release version manually when Envato does not provide one.'
+            );
+        }
+
+        if (preg_match('/^[A-Za-z0-9._+-]+$/D', $version) !== 1) {
             throw new InvalidArgumentException(
                 'Version contains unsupported characters for the SKU / ZIP filename.'
             );
