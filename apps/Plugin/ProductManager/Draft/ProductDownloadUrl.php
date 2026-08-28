@@ -27,12 +27,31 @@ final class ProductDownloadUrl
             return '';
         }
 
+        $storage = CatalogProductType::storageFolder($productType);
+        $vendor = self::vendorFolder($skuFilename);
+
         return $uploadsBaseUrl
             . '/woocommerce_uploads/'
-            . CatalogProductType::storageFolder($productType)
+            . $storage
+            . ($vendor !== '' ? '/' . $vendor : '')
             . '/'
             . $itemId
             . '/'
             . $skuFilename;
+    }
+
+    public static function vendorFolder(string $skuFilename): string
+    {
+        $skuFilename = strtolower(trim($skuFilename));
+
+        if (str_starts_with($skuFilename, 'themeforest-')) {
+            return 'Themeforest';
+        }
+
+        if (str_starts_with($skuFilename, 'codecanyon-')) {
+            return 'Codecanyon';
+        }
+
+        return '';
     }
 }
