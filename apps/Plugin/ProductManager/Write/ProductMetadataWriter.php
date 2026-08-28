@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Write;
 
 use Closure;
 use RuntimeException;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 
@@ -24,6 +25,25 @@ final class ProductMetadataWriter implements
         int $productId,
         ProductDraftData $data
     ): array {
+        $productType = CatalogProductType::infer(
+            $data->baseTitle,
+            $data->salesPage
+        );
+        $categoryLabel = CatalogProductType::categoryLabel(
+            $productType
+        );
+        $storageFolder = CatalogProductType::storageFolder(
+            $productType
+        );
+        $displayVersion = $data->version;
+
+        if (
+            $productType === CatalogProductType::TEMPLATE_KIT
+            && trim($displayVersion) === ''
+        ) {
+            $displayVersion = '—';
+        }
+
         foreach ($this->displayFields() as $metaKey => $field) {
             $this->updateMeta(
                 $productId,
@@ -41,13 +61,13 @@ final class ProductMetadataWriter implements
             $productId,
             'field_68d531d09ce86',
             'attr_version_value',
-            $data->version
+            $displayVersion
         );
         $this->writeAcfValue(
             $productId,
             'field_68d535d793208',
             'attr_category_value',
-            'Темы'
+            $categoryLabel
         );
         $this->writeAcfValue(
             $productId,
@@ -90,6 +110,16 @@ final class ProductMetadataWriter implements
         );
         $this->updateMeta(
             $productId,
+            '_wp_shop_product_type',
+            $productType
+        );
+        $this->updateMeta(
+            $productId,
+            '_wp_shop_storage_folder',
+            $storageFolder
+        );
+        $this->updateMeta(
+            $productId,
             '_wp_shop_en_short_description',
             $data->enShortDescription
         );
@@ -107,8 +137,14 @@ final class ProductMetadataWriter implements
         return [
             'DISPLAY ACF/META LABELS = UPDATED',
             'ACF PRODUCT VALUES = UPDATED',
+            'PRODUCT TYPE = ' . $productType,
+            'CATALOG CATEGORY = ' . $categoryLabel,
+            'STORAGE FOLDER = ' . $storageFolder,
             'SOURCE ITEM ID = ' . $data->itemId,
             'SOURCE UPDATE DATE = ' . $data->sourceUpdateDate,
+            $displayVersion === '—'
+                ? 'DISPLAY VERSION = VERSIONLESS PLACEHOLDER'
+                : 'DISPLAY VERSION = ' . $displayVersion,
             $data->hasCompleteEnglishContent()
                 ? 'EN DRAFT CONTENT = SAVED'
                 : 'EN DRAFT CONTENT = NOT COMPLETE',

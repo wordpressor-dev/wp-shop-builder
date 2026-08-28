@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Draft;
 
 use DateTimeImmutable;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 
 final class ProductDraftValidator
 {
@@ -14,12 +15,15 @@ final class ProductDraftValidator
     public function validate(ProductDraftData $data): array
     {
         $errors = [];
+        $productType = CatalogProductType::infer(
+            $data->baseTitle,
+            $data->salesPage
+        );
 
         foreach (
             [
                 'Base title' => $data->baseTitle,
                 'Slug' => $data->slug,
-                'Version' => $data->version,
                 'Official update date' => $data->sourceUpdateDate,
                 'Developer' => $data->developer,
                 'Price' => $data->price,
@@ -33,6 +37,13 @@ final class ProductDraftValidator
             if (trim($value) === '') {
                 $errors[] = $label . ' is required.';
             }
+        }
+
+        if (
+            trim($data->version) === ''
+            && $productType !== CatalogProductType::TEMPLATE_KIT
+        ) {
+            $errors[] = 'Version is required for themes and plugins.';
         }
 
         if ($data->itemId <= 0) {

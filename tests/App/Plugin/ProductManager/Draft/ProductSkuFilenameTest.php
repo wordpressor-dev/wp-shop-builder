@@ -40,11 +40,24 @@ final class ProductSkuFilenameTest extends TestCase
         );
     }
 
-    public function testRejectsSkuThatDoesNotBelongToItemAndSalesPage(): void
+    public function testCanonicalizesHistoricalSlugForSameItemId(): void
+    {
+        self::assertSame(
+            'themeforest-14058034-education-wordpress-theme-education-wp-5.9.4.zip',
+            ProductSkuFilename::synchronize(
+                'themeforest-14058034-eduma-education-wordpress-theme-5.9.4.zip',
+                14058034,
+                'https://themeforest.net/item/education-wordpress-theme-education-wp/14058034',
+                '5.9.4'
+            )
+        );
+    }
+
+    public function testRejectsSkuThatDoesNotBelongToItem(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'does not match the ThemeForest Item ID and Sales Page'
+            'does not match the ThemeForest Item ID'
         );
 
         ProductSkuFilename::synchronize(
@@ -52,6 +65,21 @@ final class ProductSkuFilenameTest extends TestCase
             26350912,
             'https://themeforest.net/item/aabbe-digital-marketplace-wordpress-theme/26350912',
             '6.2.0'
+        );
+    }
+
+    public function testRejectsSalesPageForDifferentItemId(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'ThemeForest Item ID does not match Sales Page Item ID.'
+        );
+
+        ProductSkuFilename::synchronize(
+            'themeforest-14058034-eduma-education-wordpress-theme-5.9.4.zip',
+            14058034,
+            'https://themeforest.net/item/education-wordpress-theme-education-wp/99999999',
+            '5.9.4'
         );
     }
 
@@ -64,6 +92,19 @@ final class ProductSkuFilenameTest extends TestCase
                 26350912,
                 'https://themeforest.net/item/aabbe-digital-marketplace-wordpress-theme/26350912',
                 '6.2.0'
+            )
+        );
+    }
+
+    public function testBuildsUnversionedTemplateKitSku(): void
+    {
+        self::assertSame(
+            'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip',
+            ProductSkuFilename::synchronize(
+                '',
+                43194184,
+                'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
+                ''
             )
         );
     }

@@ -7,6 +7,7 @@ namespace WPShop\App\Plugin\ProductManager\Translation;
 use Closure;
 use InvalidArgumentException;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
 
@@ -80,6 +81,8 @@ final class TranslatePressProductTranslator
             $enMeta
         );
 
+        $catalogPair = null;
+
         try {
             $map = $this->mapBuilder->build(
                 $ruShort,
@@ -89,6 +92,13 @@ final class TranslatePressProductTranslator
                 $enLong,
                 $enMeta
             );
+            $catalogPair = $this->catalogDisplayTranslation(
+                $productId
+            );
+
+            if ($catalogPair !== null) {
+                $map[$catalogPair['source']] = $catalogPair['target'];
+            }
         } catch (InvalidArgumentException $exception) {
             return new ProductTranslationResult(
                 false,
@@ -100,6 +110,12 @@ final class TranslatePressProductTranslator
 
         $logs = [
             'RU CONTENT = PRESERVED',
+            $catalogPair !== null
+                ? 'CATALOG DISPLAY TRANSLATION = '
+                    . $catalogPair['source']
+                    . ' -> '
+                    . $catalogPair['target']
+                : 'CATALOG DISPLAY TRANSLATION = NOT FOUND',
             'TRANSLATION SEGMENTS = ' . count($map),
         ];
 
@@ -186,6 +202,72 @@ final class TranslatePressProductTranslator
             $logs,
             $final
         );
+    }
+
+    /**
+     * @return array{source: string, target: string}|null
+     */
+    private function catalogDisplayTranslation(
+        int $productId
+    ): ?array {
+        $productType = ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_product_type',
+            true
+        );
+
+        if (is_string($productType)) {
+            $productType = trim($productType);
+
+            $pair = match ($productType) {
+                CatalogProductType::THEME => [
+                    'source' => 'Темы',
+                    'target' => 'Themes',
+                ],
+                CatalogProductType::PLUGIN => [
+                    'source' => 'Плагины',
+                    'target' => 'Plugins',
+                ],
+                CatalogProductType::TEMPLATE_KIT => [
+                    'source' => 'Шаблоны',
+                    'target' => 'Templates',
+                ],
+                default => null,
+            };
+
+            if ($pair !== null) {
+                return $pair;
+            }
+        }
+
+        $category = ($this->call)(
+            'get_post_meta',
+            $productId,
+            'attr_category_value',
+            true
+        );
+
+        if (! is_string($category)) {
+            return null;
+        }
+
+        $category = trim($category);
+        $english = match ($category) {
+            'Темы' => 'Themes',
+            'Плагины' => 'Plugins',
+            'Шаблоны' => 'Templates',
+            default => '',
+        };
+
+        if ($english === '') {
+            return null;
+        }
+
+        return [
+            'source' => $category,
+            'target' => $english,
+        ];
     }
 
     private function savePreparedEnglish(

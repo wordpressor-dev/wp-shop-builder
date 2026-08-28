@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Update;
 
 use RuntimeException;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 
@@ -59,8 +60,14 @@ final class ProductUpdateEnvatoAdvisor
         $updateDate = trim($item->updatedDate);
         $skuFilename = '';
         $downloadUrl = '';
+        $productType = CatalogProductType::infer(
+            $snapshot->baseTitle,
+            $snapshot->salesPage
+        );
+        $canBuildUnversioned = $version === ''
+            && $productType === CatalogProductType::TEMPLATE_KIT;
 
-        if ($version !== '') {
+        if ($version !== '' || $canBuildUnversioned) {
             $skuFilename = ProductSkuFilename::build(
                 $item->itemId,
                 $snapshot->salesPage,
