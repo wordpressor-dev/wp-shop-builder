@@ -14,6 +14,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 final class ProductVersionUpdater
 {
     private const UPDATE_SCANNER_REPORT_META_KEY = 'wp_shop_pm_update_scan_report_v1';
+    private const VERSIONLESS_DISPLAY_PLACEHOLDER = '—';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -36,12 +37,14 @@ final class ProductVersionUpdater
             'post_title',
             $productId
         );
-        $version = trim((string) ($this->call)(
-            'get_post_meta',
-            $productId,
-            'attr_version_value',
-            true
-        ));
+        $version = $this->normalizeStoredVersion(
+            (string) ($this->call)(
+                'get_post_meta',
+                $productId,
+                'attr_version_value',
+                true
+            )
+        );
         $salesPage = trim((string) ($this->call)(
             'get_post_meta',
             $productId,
@@ -124,6 +127,19 @@ final class ProductVersionUpdater
         }
 
         [$preparedData, $logs] = $prepared;
+        $productType = CatalogProductType::infer(
+            $preparedData->baseTitle,
+            $preparedData->salesPage
+        );
+        $displayVersion = $preparedData->version;
+
+        if (
+            $productType === CatalogProductType::TEMPLATE_KIT
+            && trim($displayVersion) === ''
+        ) {
+            $displayVersion = self::VERSIONLESS_DISPLAY_PLACEHOLDER;
+        }
+
         $localDate = $preparedData->sourceUpdateDate
             . ' 12:00:00';
         $gmtDate = (string) ($this->call)(
@@ -162,7 +178,7 @@ final class ProductVersionUpdater
         $this->updateMeta(
             $preparedData->productId,
             'attr_version_value',
-            $preparedData->version
+            $displayVersion
         );
         $this->updateMeta(
             $preparedData->productId,
@@ -302,10 +318,13 @@ final class ProductVersionUpdater
             );
         }
 
+        $currentVersion = $this->normalizeStoredVersion(
+            $data->currentVersion
+        );
         $logs[] = 'PRODUCT ID = ' . $data->productId;
         $logs[] = 'CURRENT VERSION = ' . (
-            $data->currentVersion !== ''
-                ? $data->currentVersion
+            $currentVersion !== ''
+                ? $currentVersion
                 : '[empty]'
         );
         $logs[] = $data->version !== ''
@@ -336,19 +355,23 @@ final class ProductVersionUpdater
         ProductUpdateData $data,
         array &$errors
     ): void {
-        $liveVersion = trim((string) ($this->call)(
-            'get_post_meta',
-            $data->productId,
-            'attr_version_value',
-            true
-        ));
+        $liveVersion = $this->normalizeStoredVersion(
+            (string) ($this->call)(
+                'get_post_meta',
+                $data->productId,
+                'attr_version_value',
+                true
+            )
+        );
         $liveSku = trim((string) ($this->call)(
             'get_post_meta',
             $data->productId,
             '_sku',
             true
         ));
-        $formVersion = trim($data->currentVersion);
+        $formVersion = $this->normalizeStoredVersion(
+            $data->currentVersion
+        );
         $formSku = trim($data->currentSku);
 
         if ($liveVersion !== $formVersion) {
@@ -362,6 +385,15 @@ final class ProductVersionUpdater
         if ($liveSku !== $formSku) {
             $errors[] = 'STALE FORM: Current SKU changed. Reload product before continuing.';
         }
+    }
+
+    private function normalizeStoredVersion(string $version): string
+    {
+        $version = trim($version);
+
+        return $version === self::VERSIONLESS_DISPLAY_PLACEHOLDER
+            ? ''
+            : $version;
     }
 
     private function assertProduct(int $productId): void
