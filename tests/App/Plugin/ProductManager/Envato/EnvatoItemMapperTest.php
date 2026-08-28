@@ -110,6 +110,11 @@ final class EnvatoItemMapperTest extends TestCase
             'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184'
         );
 
+        self::assertSame('', $item->version);
+        self::assertSame(
+            'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit.zip',
+            $item->skuFilename
+        );
         self::assertSame(
             'https://assets.market.envato.com/estateroof-thumb.jpg',
             $item->previewImageUrl

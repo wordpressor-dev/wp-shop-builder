@@ -9,6 +9,8 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
@@ -27,7 +29,8 @@ final class ProductManagerController
         private readonly ExistingTagSelector $tags,
         private readonly ?ProductDraftCreator $draftCreator = null,
         private readonly ?TranslatePressProductTranslator $translator = null,
-        private readonly ?ExistingCatalogTagParser $tagParser = null
+        private readonly ?ExistingCatalogTagParser $tagParser = null,
+        private readonly ?ProductArchiveUploader $archiveUploader = null
     ) {
     }
 
@@ -62,6 +65,11 @@ final class ProductManagerController
                 $item->previewImageUrl,
                 $item->baseTitle
             );
+        [$downloadUrl, $downloadUrlLogs] = $this->suggestDownloadUrl(
+            $productType,
+            $item->itemId,
+            $item->skuFilename
+        );
 
         $fields = [
             'base_title' => $item->baseTitle,
@@ -73,6 +81,7 @@ final class ProductManagerController
             'price' => '249',
             'sales_page' => $item->salesPage,
             'sku_filename' => $item->skuFilename,
+            'download_url' => $downloadUrl,
             'featured_image_id' => $featuredImageId > 0
                 ? (string) $featuredImageId
                 : '',
@@ -109,6 +118,7 @@ final class ProductManagerController
                     ),
                 ],
                 $featuredImageLogs,
+                $downloadUrlLogs,
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
@@ -116,6 +126,83 @@ final class ProductManagerController
                 ]
             )
         );
+    }
+
+    /**
+     * @return array{string, list<string>}
+     */
+    private function suggestDownloadUrl(
+        string $productType,
+        int $itemId,
+        string $skuFilename
+    ): array {
+        if ($skuFilename === '') {
+            return [
+                '',
+                [
+                    'DOWNLOAD URL AUTO-FILL = NOT AVAILABLE',
+                    'ARCHIVE UPLOAD = REQUIRED AT CREATE OR MANUAL URL',
+                ],
+            ];
+        }
+
+        if (! $this->wpFunctionAvailable('wp_upload_dir')) {
+            return [
+                '',
+                [
+                    'DOWNLOAD URL AUTO-FILL = UNAVAILABLE',
+                    'ARCHIVE UPLOAD = REQUIRED AT CREATE OR MANUAL URL',
+                ],
+            ];
+        }
+
+        try {
+            $uploads = $this->wpCall('wp_upload_dir');
+
+            if (! is_array($uploads)) {
+                throw new RuntimeException(
+                    'WordPress uploads configuration is unavailable.'
+                );
+            }
+
+            $error = trim((string) ($uploads['error'] ?? ''));
+
+            if ($error !== '') {
+                throw new RuntimeException($error);
+            }
+
+            $downloadUrl = ProductDownloadUrl::build(
+                (string) ($uploads['baseurl'] ?? ''),
+                $productType,
+                $itemId,
+                $skuFilename
+            );
+
+            if ($downloadUrl === '') {
+                throw new RuntimeException(
+                    'Canonical download URL could not be built.'
+                );
+            }
+
+            return [
+                $downloadUrl,
+                [
+                    'DOWNLOAD URL AUTO-FILL = READY',
+                    'DOWNLOAD STORAGE = '
+                        . CatalogProductType::storageFolder($productType),
+                    'ARCHIVE UPLOAD = SELECT ZIP BEFORE CREATE',
+                ],
+            ];
+        } catch (Throwable $exception) {
+            return [
+                '',
+                [
+                    'DOWNLOAD URL AUTO-FILL = FAILED',
+                    'DOWNLOAD URL ERROR = ' . $exception->getMessage(),
+                    'ARCHIVE UPLOAD = REQUIRED AT CREATE OR MANUAL URL',
+                ],
+            ];
+        }
     }
 
     /**
@@ -319,8 +406,12 @@ final class ProductManagerController
         );
     }
 
+    /**
+     * @param array<string, mixed> $archiveFile
+     */
     public function createDraft(
-        ProductDraftData $data
+        ProductDraftData $data,
+        array $archiveFile = []
     ): ProductDraftResult {
         if ($this->draftCreator === null) {
             return new ProductDraftResult(
@@ -340,12 +431,69 @@ final class ProductManagerController
         }
 
         [$preparedData, $identityLogs] = $prepared;
+        $archiveLogs = [];
+        $archiveResult = null;
+
+        if ($this->archiveUploader !== null) {
+            $archiveResult = $this->archiveUploader->storeForCreate(
+                $archiveFile,
+                $preparedData->baseTitle,
+                $preparedData->salesPage,
+                $preparedData->itemId,
+                $preparedData->version
+            );
+            $archiveLogs = $archiveResult->logs;
+
+            if (! $archiveResult->success) {
+                return new ProductDraftResult(
+                    false,
+                    null,
+                    array_merge($identityLogs, $archiveLogs)
+                );
+            }
+
+            if ($archiveResult->supplied) {
+                $preparedData = $preparedData->withArchive(
+                    $archiveResult->skuFilename,
+                    $archiveResult->downloadUrl
+                );
+            }
+        } elseif ($archiveFile !== []) {
+            return new ProductDraftResult(
+                false,
+                null,
+                array_merge(
+                    $identityLogs,
+                    [
+                        'ARCHIVE UPLOAD = FAILED',
+                        'ARCHIVE UPLOADER = UNAVAILABLE',
+                        'PRODUCT WRITE = BLOCKED',
+                    ]
+                )
+            );
+        }
+
         $result = $this->draftCreator->create($preparedData);
+        $archiveFinishLogs = [];
+
+        if (
+            $archiveResult !== null
+            && $archiveResult->supplied
+        ) {
+            $archiveFinishLogs = $result->success
+                ? $this->archiveUploader->finalize($archiveResult)
+                : $this->archiveUploader->rollback($archiveResult);
+        }
 
         return new ProductDraftResult(
             $result->success,
             $result->productId,
-            array_merge($identityLogs, $result->logs)
+            array_merge(
+                $identityLogs,
+                $archiveLogs,
+                $result->logs,
+                $archiveFinishLogs
+            )
         );
     }
 

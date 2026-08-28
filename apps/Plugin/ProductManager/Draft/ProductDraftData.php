@@ -52,6 +52,16 @@ final readonly class ProductDraftData
 
     public function withSkuFilename(string $skuFilename): self
     {
+        return $this->withArchive(
+            $skuFilename,
+            $this->downloadUrl
+        );
+    }
+
+    public function withArchive(
+        string $skuFilename,
+        string $downloadUrl
+    ): self {
         return new self(
             $this->baseTitle,
             $this->slug,
@@ -62,7 +72,7 @@ final readonly class ProductDraftData
             $this->price,
             $this->salesPage,
             $skuFilename,
-            $this->downloadUrl,
+            $downloadUrl,
             $this->featuredImageId,
             $this->tags,
             $this->shortDescription,

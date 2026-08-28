@@ -95,7 +95,10 @@ final class ProductManagerPage implements SubmenuPageInterface
                 $data = $this->draftData($fields, $tags);
                 $result = $action === 'preflight_draft'
                     ? $this->controller->preflightDraft($data)
-                    : $this->controller->createDraft($data);
+                    : $this->controller->createDraft(
+                        $data,
+                        $this->uploadedFile('product_archive_zip')
+                    );
                 $logs = $result->logs;
                 $success = $result->success;
 
@@ -344,8 +347,9 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">2. Review & Create Draft</h2>';
         echo '<p><strong>Safety:</strong> RU Short + Long + SureRank Meta are required. Tags must already exist in both <code>product_tag</code> and <code>pa_tags</code>. Hit/New are editorial only.</p>';
         echo '<p><strong>Version check:</strong> before creating the Draft, compare the Version field with the ThemeForest changelog. Envato machine-readable version metadata can lag behind the author changelog.</p>';
-        echo '<p><strong>Preflight:</strong> checks Version → SKU, required fields, slug, SKU conflicts, Item ID and existing tags without writing a WooCommerce product.</p>';
-        echo '<form method="post">';
+        echo '<p><strong>ZIP upload:</strong> choose the original ZIP before creating the Draft. Product Manager validates it, renames it to the canonical SKU, moves it to the correct storage folder and attaches the resulting URL to WooCommerce.</p>';
+        echo '<p><strong>Preflight:</strong> checks Version → SKU, required fields, slug, SKU conflicts, Item ID and existing tags without writing a WooCommerce product or moving the selected ZIP.</p>';
+        echo '<form method="post" enctype="multipart/form-data">';
         $this->nonceField('wp_shop_pm_create_draft');
         $this->hiddenAction('create_draft');
 
@@ -371,6 +375,10 @@ final class ProductManagerPage implements SubmenuPageInterface
             );
         }
 
+        $this->fileInput(
+            'Product ZIP (recommended for Create)',
+            'product_archive_zip'
+        );
         $this->renderFeaturedImagePicker(
             $fields['featured_image_id']
         );
@@ -694,6 +702,15 @@ HTML;
             . '"></label></p>';
     }
 
+    private function fileInput(string $label, string $name): void
+    {
+        echo '<p><label><strong>'
+            . $this->escape($label)
+            . '</strong><br><input type="file" accept=".zip,application/zip" name="'
+            . $this->escapeAttr($name)
+            . '"></label><br><span class="description">Можно выбрать ZIP с любым исходным именем. При Create он будет проверен, переименован по SKU и перемещён в правильную папку. После Preflight файл нужно выбрать заново.</span></p>';
+    }
+
     private function textarea(
         string $label,
         string $name,
@@ -806,6 +823,16 @@ HTML;
             'wp_unslash',
             $value
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function uploadedFile(string $key): array
+    {
+        $file = $_FILES[$key] ?? null;
+
+        return is_array($file) ? $file : [];
     }
 
     private function escape(string $value): string

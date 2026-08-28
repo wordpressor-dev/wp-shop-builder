@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Envato;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 
 final class EnvatoItemMapper
 {
@@ -74,13 +75,21 @@ final class EnvatoItemMapper
         $productSlug = $this->productSlug($baseTitle);
         $urlSlug = $this->itemUrlSlug($salesPage);
         $skuFilename = '';
+        $productType = CatalogProductType::infer(
+            $baseTitle,
+            $salesPage
+        );
+        $canBuildUnversioned = $version === ''
+            && $productType === CatalogProductType::TEMPLATE_KIT;
 
-        if ($urlSlug !== '' && $version !== '') {
+        if ($urlSlug !== '' && ($version !== '' || $canBuildUnversioned)) {
             $skuFilename = sprintf(
-                'themeforest-%d-%s-%s.zip',
+                $version !== ''
+                    ? 'themeforest-%d-%s-%s.zip'
+                    : 'themeforest-%d-%s.zip',
                 $itemId,
                 $urlSlug,
-                $version
+                ...($version !== '' ? [$version] : [])
             );
         }
 

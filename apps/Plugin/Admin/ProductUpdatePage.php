@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\Admin;
 
 use Closure;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\Update\ProductArchiveUpdateCoordinator;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateCandidateClassifier;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateData;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
@@ -24,7 +25,8 @@ final class ProductUpdatePage implements SubmenuPageInterface
         private readonly ProductVersionUpdater $updater,
         private readonly ProductUpdateEnvatoAdvisor $advisor,
         private readonly ProductUpdateManualCandidateBuilder $manualCandidateBuilder,
-        private readonly Closure $call
+        private readonly Closure $call,
+        private readonly ?ProductArchiveUpdateCoordinator $archiveCoordinator = null
     ) {
     }
 
@@ -92,9 +94,18 @@ final class ProductUpdatePage implements SubmenuPageInterface
             $this->verifyNonce('wp_shop_pm_update_product');
             $fields = $this->postedFields($fields);
             $data = $this->data($fields);
-            $result = $action === 'preflight_update'
-                ? $this->updater->preflight($data)
-                : $this->updater->update($data);
+
+            if ($action === 'preflight_update') {
+                $result = $this->updater->preflight($data);
+            } elseif ($this->archiveCoordinator !== null) {
+                $result = $this->archiveCoordinator->update(
+                    $data,
+                    $this->uploadedFile('update_archive_zip')
+                );
+            } else {
+                $result = $this->updater->update($data);
+            }
+
             $logs = $result->logs;
             $success = $result->success;
 
@@ -461,9 +472,10 @@ final class ProductUpdatePage implements SubmenuPageInterface
         echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">2. Review & Update Version</h2>';
         echo '<p><strong>Safety:</strong> Envato values are suggestions only. Verify the public ThemeForest changelog; the manually reviewed New Version remains the source of truth. Always run Preflight before Apply.</p>';
+        echo '<p><strong>ZIP update:</strong> before Apply, select the downloaded source ZIP. Product Manager validates it, builds the canonical new filename, routes it to the product storage folder and updates the WooCommerce download entry. If the same canonical file already exists, it is backed up until the product update succeeds.</p>';
         echo '<p><strong>Manual candidate:</strong> after entering a verified New Version, use the manual prepare button to rebuild the canonical SKU/ZIP name and suggested Download URL without writing the product.</p>';
         echo '<p><strong>Preserved:</strong> RU/EN descriptions, SureRank content, tags, taxonomies, attributes, featured image and Hit/New labels are not rewritten.</p>';
-        echo '<form method="post">';
+        echo '<form method="post" enctype="multipart/form-data">';
         $this->nonceField('wp_shop_pm_update_product');
         $this->hiddenAction('apply_update');
 
@@ -494,6 +506,10 @@ final class ProductUpdatePage implements SubmenuPageInterface
             );
         }
 
+        $this->fileInput(
+            'New Product ZIP (recommended for Apply)',
+            'update_archive_zip'
+        );
         echo '<p style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
         echo '<button type="submit" class="button button-secondary" onclick="this.form.elements[\'wp_shop_pm_update_action\'].value=\'prepare_manual_candidate\';">Подготовить SKU/ZIP по New Version</button>';
         echo '<button type="submit" class="button button-secondary" onclick="this.form.elements[\'wp_shop_pm_update_action\'].value=\'preflight_update\';">Проверить Update без записи</button>';
@@ -542,6 +558,15 @@ final class ProductUpdatePage implements SubmenuPageInterface
             . '" value="'
             . $this->escape($value)
             . '"></label></p>';
+    }
+
+    private function fileInput(string $label, string $name): void
+    {
+        echo '<p><label><strong>'
+            . $this->escape($label)
+            . '</strong><br><input type="file" accept=".zip,application/zip" name="'
+            . $this->escape($name)
+            . '"></label><br><span class="description">Исходное имя ZIP не важно. Файл переименовывается только при Apply. После Prepare/Preflight выберите ZIP заново.</span></p>';
     }
 
     private function submit(
@@ -615,6 +640,16 @@ final class ProductUpdatePage implements SubmenuPageInterface
             'wp_unslash',
             $value
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function uploadedFile(string $key): array
+    {
+        $file = $_FILES[$key] ?? null;
+
+        return is_array($file) ? $file : [];
     }
 
     private function escape(string $value): string

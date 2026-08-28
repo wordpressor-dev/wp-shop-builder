@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Update;
 
 use InvalidArgumentException;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 
 final class ProductUpdateManualCandidateBuilder
@@ -59,8 +60,10 @@ final class ProductUpdateManualCandidateBuilder
             $version,
             '',
             $skuFilename,
-            $this->replaceFilename(
+            ProductDownloadUrl::rebuildFromCurrent(
                 $currentDownloadUrl,
+                $productType,
+                $itemId,
                 $skuFilename
             )
         );
@@ -82,25 +85,5 @@ final class ProductUpdateManualCandidateBuilder
         }
 
         return (int) $matches[1];
-    }
-
-    private function replaceFilename(
-        string $currentUrl,
-        string $skuFilename
-    ): string {
-        $currentUrl = trim($currentUrl);
-
-        if ($currentUrl === '') {
-            return '';
-        }
-
-        $position = strrpos($currentUrl, '/');
-
-        if ($position === false) {
-            return '';
-        }
-
-        return substr($currentUrl, 0, $position + 1)
-            . $skuFilename;
     }
 }

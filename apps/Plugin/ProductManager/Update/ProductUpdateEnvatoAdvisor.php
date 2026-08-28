@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Update;
 
 use RuntimeException;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 
@@ -73,8 +74,10 @@ final class ProductUpdateEnvatoAdvisor
                 $snapshot->salesPage,
                 $version
             );
-            $downloadUrl = $this->replaceFilename(
+            $downloadUrl = ProductDownloadUrl::rebuildFromCurrent(
                 $snapshot->downloadUrl,
+                $productType,
+                $item->itemId,
                 $skuFilename
             );
         }
@@ -85,25 +88,5 @@ final class ProductUpdateEnvatoAdvisor
             $skuFilename,
             $downloadUrl
         );
-    }
-
-    private function replaceFilename(
-        string $currentUrl,
-        string $skuFilename
-    ): string {
-        $currentUrl = trim($currentUrl);
-
-        if ($currentUrl === '' || $skuFilename === '') {
-            return '';
-        }
-
-        $position = strrpos($currentUrl, '/');
-
-        if ($position === false) {
-            return '';
-        }
-
-        return substr($currentUrl, 0, $position + 1)
-            . $skuFilename;
     }
 }

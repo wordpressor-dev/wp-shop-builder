@@ -27,6 +27,16 @@ final readonly class ProductUpdateData
 
     public function withSkuFilename(string $skuFilename): self
     {
+        return $this->withArchive(
+            $skuFilename,
+            $this->downloadUrl
+        );
+    }
+
+    public function withArchive(
+        string $skuFilename,
+        string $downloadUrl
+    ): self {
         return new self(
             $this->productId,
             $this->baseTitle,
@@ -37,7 +47,7 @@ final readonly class ProductUpdateData
             $this->salesPage,
             $this->currentSku,
             $skuFilename,
-            $this->downloadUrl
+            $downloadUrl
         );
     }
 }
