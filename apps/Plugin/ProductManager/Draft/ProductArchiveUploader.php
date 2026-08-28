@@ -239,9 +239,12 @@ final class ProductArchiveUploader
             }
 
             $storage = CatalogProductType::storageFolder($productType);
+            $vendor = ProductDownloadUrl::vendorFolder($skuFilename);
+            $storagePath = $storage
+                . ($vendor !== '' ? '/' . $vendor : '');
             $directory = rtrim($baseDir, '/\\')
                 . '/woocommerce_uploads/'
-                . $storage
+                . $storagePath
                 . '/'
                 . $itemId;
 
@@ -346,7 +349,7 @@ final class ProductArchiveUploader
                     'ARCHIVE UPLOAD = READY',
                     'ARCHIVE ORIGINAL NAME = ' . $originalName,
                     'ARCHIVE CANONICAL NAME = ' . $skuFilename,
-                    'ARCHIVE STORAGE = ' . $storage,
+                    'ARCHIVE STORAGE = ' . $storagePath,
                     'ARCHIVE ITEM DIRECTORY = ' . $itemId,
                     'DOWNLOAD URL = ' . $downloadUrl,
                     $backupPath !== ''
