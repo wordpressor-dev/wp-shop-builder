@@ -40,6 +40,35 @@ final class ProductDownloadUrl
             . $skuFilename;
     }
 
+    public static function rebuildFromCurrent(
+        string $currentDownloadUrl,
+        string $productType,
+        int $itemId,
+        string $skuFilename
+    ): string {
+        $currentDownloadUrl = trim($currentDownloadUrl);
+
+        if ($currentDownloadUrl === '') {
+            return '';
+        }
+
+        $marker = '/woocommerce_uploads/';
+        $position = strpos($currentDownloadUrl, $marker);
+
+        if ($position === false) {
+            return '';
+        }
+
+        $uploadsBaseUrl = substr($currentDownloadUrl, 0, $position);
+
+        return self::build(
+            $uploadsBaseUrl,
+            $productType,
+            $itemId,
+            $skuFilename
+        );
+    }
+
     public static function vendorFolder(string $skuFilename): string
     {
         $skuFilename = strtolower(trim($skuFilename));
