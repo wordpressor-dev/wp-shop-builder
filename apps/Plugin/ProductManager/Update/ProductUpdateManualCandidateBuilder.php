@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Update;
 
 use InvalidArgumentException;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 
 final class ProductUpdateManualCandidateBuilder
@@ -17,6 +18,7 @@ final class ProductUpdateManualCandidateBuilder
     ): ProductUpdateSuggestion {
         $version = trim($version);
         $salesPage = trim($salesPage);
+        $productType = CatalogProductType::infer('', $salesPage);
 
         if ($itemId <= 0) {
             throw new InvalidArgumentException(
@@ -24,7 +26,10 @@ final class ProductUpdateManualCandidateBuilder
             );
         }
 
-        if ($version === '') {
+        if (
+            $version === ''
+            && $productType !== CatalogProductType::TEMPLATE_KIT
+        ) {
             throw new InvalidArgumentException(
                 'New Version is required before manual candidate preparation.'
             );
