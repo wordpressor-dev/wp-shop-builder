@@ -89,6 +89,10 @@ final class TranslatePressProductTranslator
                 $enLong,
                 $enMeta
             );
+            $map = $this->withCatalogDisplayTranslations(
+                $productId,
+                $map
+            );
         } catch (InvalidArgumentException $exception) {
             return new ProductTranslationResult(
                 false,
@@ -186,6 +190,40 @@ final class TranslatePressProductTranslator
             $logs,
             $final
         );
+    }
+
+    /**
+     * @param array<string, string> $map
+     * @return array<string, string>
+     */
+    private function withCatalogDisplayTranslations(
+        int $productId,
+        array $map
+    ): array {
+        $category = ($this->call)(
+            'get_post_meta',
+            $productId,
+            'attr_category_value',
+            true
+        );
+
+        if (! is_string($category)) {
+            return $map;
+        }
+
+        $category = trim($category);
+        $english = match ($category) {
+            'Темы' => 'Themes',
+            'Плагины' => 'Plugins',
+            'Шаблоны' => 'Templates',
+            default => '',
+        };
+
+        if ($english !== '') {
+            $map[$category] = $english;
+        }
+
+        return $map;
     }
 
     private function savePreparedEnglish(
