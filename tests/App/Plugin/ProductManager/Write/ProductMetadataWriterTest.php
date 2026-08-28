@@ -72,13 +72,14 @@ final class ProductMetadataWriterTest extends TestCase
         );
     }
 
-    public function testRoutesElementorTemplateKitToTemplates(): void
+    public function testRoutesVersionlessElementorTemplateKitToTemplates(): void
     {
         $meta = [];
         $writer = $this->writer($meta);
 
         $logs = $writer->write(6001, $this->templateKitData());
 
+        self::assertSame('—', $meta['attr_version_value']);
         self::assertSame('Шаблоны', $meta['attr_category_value']);
         self::assertSame(
             'template_kit',
@@ -96,6 +97,24 @@ final class ProductMetadataWriterTest extends TestCase
             'STORAGE FOLDER = TEMPLATES',
             $logs
         );
+        self::assertContains(
+            'DISPLAY VERSION = VERSIONLESS PLACEHOLDER',
+            $logs
+        );
+    }
+
+    public function testKeepsPublishedTemplateKitVersionForDisplay(): void
+    {
+        $meta = [];
+        $writer = $this->writer($meta);
+
+        $logs = $writer->write(
+            6002,
+            $this->templateKitData('1.0.4')
+        );
+
+        self::assertSame('1.0.4', $meta['attr_version_value']);
+        self::assertContains('DISPLAY VERSION = 1.0.4', $logs);
     }
 
     /**
@@ -146,18 +165,27 @@ final class ProductMetadataWriterTest extends TestCase
         );
     }
 
-    private function templateKitData(): ProductDraftData
-    {
+    private function templateKitData(
+        string $version = ''
+    ): ProductDraftData {
+        $sku = 'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit';
+
+        if ($version !== '') {
+            $sku .= '-' . $version;
+        }
+
+        $sku .= '.zip';
+
         return new ProductDraftData(
             'EstateRoof – Roofing Services Elementor Pro Template Kit',
             'estateroof',
             43194184,
-            '1.0.4',
-            '2026-08-28',
-            'Template Author',
+            $version,
+            '2025-12-09',
+            'TemplateUp-Pro',
             '249',
             'https://themeforest.net/item/estateroof-roofing-services-elementor-pro-template-kit/43194184',
-            'themeforest-43194184-estateroof-roofing-services-elementor-pro-template-kit-1.0.4.zip',
+            $sku,
             '',
             0,
             [],
