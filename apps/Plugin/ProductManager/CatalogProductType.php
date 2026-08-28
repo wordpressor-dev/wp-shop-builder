@@ -47,6 +47,15 @@ final class CatalogProductType
         };
     }
 
+    public static function categorySlug(string $type): string
+    {
+        return match ($type) {
+            self::PLUGIN => 'plugins',
+            self::TEMPLATE_KIT => 'templates',
+            default => 'themes',
+        };
+    }
+
     public static function storageFolder(string $type): string
     {
         return match ($type) {
