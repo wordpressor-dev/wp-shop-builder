@@ -16,7 +16,8 @@ final class ProductBatchIntakeScanner
      */
     public function __construct(
         private readonly Closure $call,
-        private readonly ProductArchiveVersionInspector $versionInspector
+        private readonly ProductArchiveVersionInspector $versionInspector,
+        private readonly ProductArchiveIdentityInspector $identityInspector
     ) {
     }
 
@@ -162,14 +163,29 @@ final class ProductBatchIntakeScanner
         string $filename,
         string $folder
     ): array {
+        $identity = $this->identityInspector->inspect($path, $filename);
         $itemId = $this->itemIdFromFilename($filename);
         $productId = $itemId > 0 ? $this->productIdByItemId($itemId) : 0;
+
+        if ($productId <= 0 && $identity->success) {
+            $productId = $this->productIdByIdentity(
+                $identity->name,
+                $identity->productType
+            );
+
+            if ($productId > 0 && $itemId <= 0) {
+                $itemId = $this->sourceItemId($productId);
+            }
+        }
+
         $productTitle = $productId > 0
             ? trim((string) ($this->call)('get_the_title', $productId))
             : '';
         $productType = $productId > 0
             ? $this->existingProductType($productId, $productTitle)
-            : $this->detectNewProductType($path, $filename);
+            : ($identity->success
+                ? $identity->productType
+                : $this->detectNewProductType($path, $filename));
         $currentVersion = $productId > 0
             ? $this->currentVersion($productId)
             : '';
@@ -177,15 +193,25 @@ final class ProductBatchIntakeScanner
         $status = 'READY';
         $note = '';
 
-        if ($itemId <= 0) {
-            $status = 'REVIEW';
-            $note = 'ITEM ID NOT DETECTED FROM ZIP FILENAME';
-        } elseif ($productType === '') {
+        if ($productType === '') {
             $status = 'REVIEW';
             $note = 'PRODUCT TYPE NOT DETECTED';
         } elseif ($productType === CatalogProductType::TEMPLATE_KIT) {
             $detectedVersion = '—';
-            $note = 'VERSIONLESS TEMPLATE KIT';
+            $note = $identity->success && $productId > 0
+                ? 'MATCHED BY ZIP IDENTITY: ' . $identity->name
+                : 'VERSIONLESS TEMPLATE KIT';
+        } elseif (
+            $identity->success
+            && $identity->productType === $productType
+            && $identity->version !== ''
+        ) {
+            $detectedVersion = $identity->version;
+            $note = $productId > 0 && $this->itemIdFromFilename($filename) <= 0
+                ? 'MATCHED BY ZIP IDENTITY: '
+                    . $identity->name
+                    . ' (' . $identity->source . ')'
+                : 'ZIP VERSION SOURCE = ' . $identity->source;
         } else {
             $inspection = $this->versionInspector->inspect(
                 [
@@ -205,6 +231,17 @@ final class ProductBatchIntakeScanner
             }
         }
 
+        $action = $productId > 0
+            ? 'UPDATE'
+            : ($itemId > 0 ? 'CREATE' : 'REVIEW');
+
+        if ($action === 'REVIEW' && $status === 'READY') {
+            $status = 'REVIEW';
+            $note = $identity->success
+                ? 'NEW PRODUCT ITEM ID REQUIRED; ZIP IDENTITY = ' . $identity->name
+                : 'ITEM ID NOT DETECTED FROM ZIP FILENAME';
+        }
+
         return [
             'filename' => $filename,
             'relativePath' => ($folder !== '' ? $folder . '/' : '') . $filename,
@@ -214,9 +251,7 @@ final class ProductBatchIntakeScanner
             'productType' => $productType,
             'currentVersion' => $currentVersion,
             'detectedVersion' => $detectedVersion,
-            'action' => $itemId <= 0
-                ? 'REVIEW'
-                : ($productId > 0 ? 'UPDATE' : 'CREATE'),
+            'action' => $action,
             'status' => $status,
             'note' => $note,
         ];
@@ -276,6 +311,65 @@ final class ProductBatchIntakeScanner
         }
 
         return (int) reset($ids);
+    }
+
+    private function productIdByIdentity(string $name, string $productType): int
+    {
+        $name = trim($name);
+
+        if ($name === '' || $productType === '') {
+            return 0;
+        }
+
+        $ids = ($this->call)(
+            'get_posts',
+            [
+                'post_type' => 'product',
+                'post_status' => ['publish', 'draft', 'private'],
+                'numberposts' => 10,
+                'fields' => 'ids',
+                's' => $name,
+            ]
+        );
+
+        if (! is_array($ids) || $ids === []) {
+            return 0;
+        }
+
+        $matches = [];
+
+        foreach ($ids as $candidateId) {
+            $candidateId = (int) $candidateId;
+
+            if ($candidateId <= 0) {
+                continue;
+            }
+
+            $title = trim((string) ($this->call)(
+                'get_the_title',
+                $candidateId
+            ));
+            $candidateType = $this->existingProductType(
+                $candidateId,
+                $title
+            );
+
+            if ($candidateType === $productType) {
+                $matches[] = $candidateId;
+            }
+        }
+
+        return count($matches) === 1 ? $matches[0] : 0;
+    }
+
+    private function sourceItemId(int $productId): int
+    {
+        return (int) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_source_item_id',
+            true
+        );
     }
 
     private function existingProductType(
