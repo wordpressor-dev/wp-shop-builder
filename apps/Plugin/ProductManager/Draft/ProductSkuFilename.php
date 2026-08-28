@@ -45,7 +45,8 @@ final class ProductSkuFilename
 
         /*
          * A filename for the same ThemeForest Item ID is safe to rebuild.
-         * This covers both an older version and an official item/slug rename.
+         * This covers an older version, an official item/slug rename, and an
+         * unversioned Template Kit whose publisher does not expose a version.
          */
         return $expected;
     }
@@ -63,20 +64,22 @@ final class ProductSkuFilename
             );
         }
 
-        if ($version === '') {
-            throw new InvalidArgumentException(
-                'Version is required before SKU / ZIP filename generation. '
-                . 'For Template Kits, enter the verified release version manually when Envato does not provide one.'
-            );
-        }
-
-        if (preg_match('/^[A-Za-z0-9._+-]+$/D', $version) !== 1) {
+        if (
+            $version !== ''
+            && preg_match('/^[A-Za-z0-9._+-]+$/D', $version) !== 1
+        ) {
             throw new InvalidArgumentException(
                 'Version contains unsupported characters for the SKU / ZIP filename.'
             );
         }
 
-        return self::prefix($itemId, $salesPage)
+        $prefix = self::prefix($itemId, $salesPage);
+
+        if ($version === '') {
+            return rtrim($prefix, '-') . '.zip';
+        }
+
+        return $prefix
             . $version
             . '.zip';
     }
