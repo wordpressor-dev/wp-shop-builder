@@ -25,6 +25,22 @@ final readonly class ProductUpdateData
         return trim($this->baseTitle . ' ' . $this->version);
     }
 
+    public function withVersion(string $version): self
+    {
+        return new self(
+            $this->productId,
+            $this->baseTitle,
+            $this->itemId,
+            $this->currentVersion,
+            trim($version),
+            $this->sourceUpdateDate,
+            $this->salesPage,
+            $this->currentSku,
+            $this->skuFilename,
+            $this->downloadUrl
+        );
+    }
+
     public function withSkuFilename(string $skuFilename): self
     {
         return $this->withArchive(
