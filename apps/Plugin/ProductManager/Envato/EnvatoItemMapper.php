@@ -96,7 +96,8 @@ final class EnvatoItemMapper
             $this->nullableString($item['published_at'] ?? null),
             $this->tags($item['tags'] ?? []),
             $skuFilename,
-            $item
+            $item,
+            $this->previewImageUrl($item)
         );
     }
 
@@ -210,6 +211,77 @@ final class EnvatoItemMapper
         }
 
         return trim($value, '-');
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function previewImageUrl(array $item): string
+    {
+        $previews = $item['previews'] ?? [];
+        $candidates = [];
+
+        if (is_array($previews)) {
+            foreach (
+                [
+                    'landscape_preview',
+                    'icon_with_landscape_preview',
+                    'icon_with_video_preview',
+                ] as $key
+            ) {
+                $preview = $previews[$key] ?? null;
+
+                if (is_array($preview)) {
+                    $candidates[] = $preview['landscape_url'] ?? null;
+                }
+            }
+
+            foreach ($previews as $preview) {
+                if (is_array($preview)) {
+                    $candidates[] = $preview['landscape_url'] ?? null;
+                }
+            }
+        }
+
+        $candidates[] = $item['thumbnail_url'] ?? null;
+
+        if (is_array($previews)) {
+            foreach ($previews as $preview) {
+                if (is_array($preview)) {
+                    $candidates[] = $preview['icon_url'] ?? null;
+                }
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $url = $this->imageUrl($candidate);
+
+            if ($url !== '') {
+                return $url;
+            }
+        }
+
+        return '';
+    }
+
+    private function imageUrl(mixed $value): string
+    {
+        $url = $this->string($value);
+
+        if ($url === '') {
+            return '';
+        }
+
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        if (
+            ($scheme !== 'https' && $scheme !== 'http')
+            || filter_var($url, FILTER_VALIDATE_URL) === false
+        ) {
+            return '';
+        }
+
+        return $url;
     }
 
     /**
