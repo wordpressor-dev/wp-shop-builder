@@ -14,6 +14,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
+use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
@@ -31,6 +32,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
+use WPShop\App\Plugin\ProductManager\Update\ProductArchiveUpdateCoordinator;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateScanner;
@@ -78,6 +80,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $tagSelector = new ExistingTagSelector($tagRepository);
         $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
+        $archiveUploader = new ProductArchiveUploader(
+            $functionCaller(...)
+        );
         $draftGateway = new WordPressWooCommerceDraftGateway(
             $functionCaller(...)
         );
@@ -124,7 +129,8 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $tagSelector,
             $draftCreator,
             $translator,
-            $tagParser
+            $tagParser,
+            $archiveUploader
         );
         $page = new ProductManagerPage(
             $controller,
@@ -132,6 +138,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $versionUpdater = new ProductVersionUpdater(
             $functionCaller(...)
+        );
+        $archiveUpdateCoordinator = new ProductArchiveUpdateCoordinator(
+            $versionUpdater,
+            $archiveUploader
         );
         $updateAdvisor = new ProductUpdateEnvatoAdvisor(
             $envatoClient
@@ -141,7 +151,8 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $versionUpdater,
             $updateAdvisor,
             $manualCandidateBuilder,
-            $functionCaller(...)
+            $functionCaller(...),
+            $archiveUpdateCoordinator
         );
         $updateScanner = new ProductUpdateScanner(
             $versionUpdater,
@@ -204,6 +215,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             WordPressFunctionCaller::class,
             $functionCaller
+        );
+        $this->container->set(
+            ProductArchiveUploader::class,
+            $archiveUploader
         );
         $this->container->set(
             ProductDraftGatewayInterface::class,
@@ -272,6 +287,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductVersionUpdater::class,
             $versionUpdater
+        );
+        $this->container->set(
+            ProductArchiveUpdateCoordinator::class,
+            $archiveUpdateCoordinator
         );
         $this->container->set(
             ProductUpdateEnvatoAdvisor::class,
