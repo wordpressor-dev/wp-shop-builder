@@ -44,8 +44,25 @@ final class ProductManagerControllerTest extends TestCase
             "elementor|elementor\nторговая площадка|marketplace",
             $result->fields['tags']
         );
+        self::assertSame(
+            'https://assets.market.envato.com/aabbe-landscape.jpg',
+            $result->fields['featured_image_source_url']
+        );
+        self::assertSame('', $result->fields['featured_image_id']);
         self::assertContains(
             'ENVATO AUTOFILL = READY',
+            $result->logs
+        );
+        self::assertContains(
+            'FEATURED IMAGE SOURCE = ENVATO PREVIEW READY',
+            $result->logs
+        );
+        self::assertContains(
+            'FEATURED IMAGE AUTO-IMPORT = UNAVAILABLE',
+            $result->logs
+        );
+        self::assertContains(
+            'FEATURED IMAGE FALLBACK = MANUAL PICKER',
             $result->logs
         );
     }
@@ -109,7 +126,8 @@ final class ProductManagerEnvatoClient implements
                     'marketplace',
                     'unknown-envato-tag',
                 ],
-            ]
+            ],
+            'https://assets.market.envato.com/aabbe-landscape.jpg'
         );
     }
 }
