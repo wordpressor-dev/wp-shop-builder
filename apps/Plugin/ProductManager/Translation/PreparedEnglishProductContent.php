@@ -20,7 +20,7 @@ final class PreparedEnglishProductContent
                 'add_filter',
                 'the_content',
                 [$this, 'filterPostContent'],
-                999,
+                PHP_INT_MAX,
                 1
             );
         } catch (Throwable) {
@@ -57,27 +57,57 @@ final class PreparedEnglishProductContent
         }
 
         try {
-            $source = ($this->call)(
+            $sourceLong = ($this->call)(
                 'get_post_field',
                 'post_content',
+                $productId
+            );
+            $sourceShort = ($this->call)(
+                'get_post_field',
+                'post_excerpt',
                 $productId
             );
         } catch (Throwable) {
             return $content;
         }
 
-        if (! is_string($source) || trim($source) === '') {
-            return $content;
-        }
-
-        if ($this->normalizedText($content) !== $this->normalizedText($source)) {
-            return $content;
-        }
-
-        return $this->preparedContent(
-            $content,
+        $preparedLong = $this->preparedValue(
+            $productId,
             '_wp_shop_en_long_description'
         );
+        $preparedShort = $this->preparedValue(
+            $productId,
+            '_wp_shop_en_short_description'
+        );
+
+        if (
+            is_string($sourceLong)
+            && trim($sourceLong) !== ''
+            && $preparedLong !== ''
+            && $this->normalizedText($content) === $this->normalizedText($sourceLong)
+        ) {
+            return $preparedLong;
+        }
+
+        $patched = $content;
+
+        if (is_string($sourceLong) && $preparedLong !== '') {
+            $patched = $this->replaceSourceFragment(
+                $patched,
+                $sourceLong,
+                $preparedLong
+            );
+        }
+
+        if (is_string($sourceShort) && $preparedShort !== '') {
+            $patched = $this->replaceSourceFragment(
+                $patched,
+                $sourceShort,
+                $preparedShort
+            );
+        }
+
+        return $patched;
     }
 
     private function preparedContent(
@@ -94,21 +124,61 @@ final class PreparedEnglishProductContent
             return $content;
         }
 
-        $prepared = ($this->call)(
-            'get_post_meta',
-            $productId,
-            $metaKey,
-            true
-        );
+        $prepared = $this->preparedValue($productId, $metaKey);
 
-        if (! is_string($prepared) || trim($prepared) === '') {
+        return $prepared !== '' ? $prepared : $content;
+    }
+
+    private function preparedValue(int $productId, string $metaKey): string
+    {
+        try {
+            $prepared = ($this->call)(
+                'get_post_meta',
+                $productId,
+                $metaKey,
+                true
+            );
+        } catch (Throwable) {
+            return '';
+        }
+
+        return is_string($prepared) ? trim($prepared) : '';
+    }
+
+    private function replaceSourceFragment(
+        string $content,
+        string $source,
+        string $prepared
+    ): string {
+        $source = trim($source);
+        $prepared = trim($prepared);
+
+        if ($source === '' || $prepared === '') {
             return $content;
         }
 
-        return $prepared;
+        $exact = str_replace($source, $prepared, $content, $count);
+
+        if ($count > 0) {
+            return $exact;
+        }
+
+        $sourceText = $this->plainText($source);
+        $preparedText = $this->plainText($prepared);
+
+        if ($sourceText === '' || $preparedText === '') {
+            return $content;
+        }
+
+        return str_replace($sourceText, $preparedText, $content);
     }
 
     private function normalizedText(string $content): string
+    {
+        return mb_strtolower($this->plainText($content), 'UTF-8');
+    }
+
+    private function plainText(string $content): string
     {
         $content = html_entity_decode(
             strip_tags($content),
