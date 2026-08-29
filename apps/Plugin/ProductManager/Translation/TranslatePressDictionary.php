@@ -450,7 +450,7 @@ final class TranslatePressDictionary implements
             ];
 
             foreach ($variants as $from => $to) {
-                if ($from === '' || ! str_contains($result, $from)) {
+                if (! str_contains($result, $from)) {
                     continue;
                 }
 
