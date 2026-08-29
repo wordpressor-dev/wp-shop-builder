@@ -88,6 +88,7 @@ final class ProductEditorialDraftBuilder
             $ruShort = $ruSource;
             $ruLong = $this->ruLegacyLong(
                 $title,
+                $ruSource,
                 $ruDetails,
                 $developer,
                 $productType,
@@ -106,6 +107,7 @@ final class ProductEditorialDraftBuilder
             $enShort = $enSource;
             $enLong = $this->enLegacyLong(
                 $title,
+                $enSource,
                 $enDetails,
                 $developer,
                 $productType,
@@ -127,6 +129,7 @@ final class ProductEditorialDraftBuilder
 
     private function ruLegacyLong(
         string $title,
+        string $legacySummary,
         string $legacyDetails,
         string $developer,
         string $productType,
@@ -135,6 +138,14 @@ final class ProductEditorialDraftBuilder
     ): string {
         $safeTitle = $this->text($title);
         $type = $this->ruType($productType);
+        $features = $this->legacyFeatures(
+            $legacyDetails,
+            $this->sameText($legacySummary, $legacyDetails)
+        );
+        $featuresSection = $this->featureSection(
+            'Основные возможности',
+            $features
+        );
         $scope = $topics !== ''
             ? '<li><strong>Тематика:</strong> ' . $this->text($topics) . '.</li>'
             : '';
@@ -145,10 +156,17 @@ final class ProductEditorialDraftBuilder
             ? '<li><strong>Дата обновления источника:</strong> '
                 . $this->text($sourceUpdateDate) . '.</li>'
             : '';
+        $detailsFallback = $featuresSection === ''
+            && ! $this->sameText($legacySummary, $legacyDetails)
+                ? '<h3>Описание и возможности</h3><p>'
+                    . $this->text($legacyDetails) . '</p>'
+                : '';
 
         return '<h2>' . $safeTitle . '</h2>'
-            . '<p>' . $this->text($legacyDetails) . '</p>'
-            . '<h3>Основные сведения</h3>'
+            . '<p>' . $this->text($legacySummary) . '</p>'
+            . $featuresSection
+            . $detailsFallback
+            . '<h3>Техническая информация</h3>'
             . '<ul>'
             . '<li><strong>Тип продукта:</strong> ' . $this->text($type) . '.</li>'
             . $scope
@@ -159,6 +177,7 @@ final class ProductEditorialDraftBuilder
 
     private function enLegacyLong(
         string $title,
+        string $legacySummary,
         string $legacyDetails,
         string $developer,
         string $productType,
@@ -167,6 +186,11 @@ final class ProductEditorialDraftBuilder
     ): string {
         $safeTitle = $this->text($title);
         $type = $this->enType($productType);
+        $features = $this->legacyFeatures(
+            $legacyDetails,
+            $this->sameText($legacySummary, $legacyDetails)
+        );
+        $featuresSection = $this->featureSection('Key features', $features);
         $scope = $topics !== ''
             ? '<li><strong>Project focus:</strong> ' . $this->text($topics) . '.</li>'
             : '';
@@ -177,10 +201,17 @@ final class ProductEditorialDraftBuilder
             ? '<li><strong>Source update date:</strong> '
                 . $this->text($sourceUpdateDate) . '.</li>'
             : '';
+        $detailsFallback = $featuresSection === ''
+            && ! $this->sameText($legacySummary, $legacyDetails)
+                ? '<h3>Description and features</h3><p>'
+                    . $this->text($legacyDetails) . '</p>'
+                : '';
 
         return '<h2>' . $safeTitle . '</h2>'
-            . '<p>' . $this->text($legacyDetails) . '</p>'
-            . '<h3>Product details</h3>'
+            . '<p>' . $this->text($legacySummary) . '</p>'
+            . $featuresSection
+            . $detailsFallback
+            . '<h3>Technical information</h3>'
             . '<ul>'
             . '<li><strong>Product type:</strong> ' . $this->text($type) . '.</li>'
             . $scope
@@ -517,6 +548,76 @@ final class ProductEditorialDraftBuilder
         $joiner = $language === 'ru' ? ' и ' : ' and ';
 
         return implode(', ', $values) . $joiner . $last;
+    }
+
+    /** @return list<string> */
+    private function legacyFeatures(string $value, bool $skipFirstSentence): array
+    {
+        $sentences = preg_split('/(?<=[.!?])\s+/u', trim($value)) ?: [];
+
+        if ($skipFirstSentence && count($sentences) > 1) {
+            array_shift($sentences);
+        }
+
+        $features = [];
+
+        foreach ($sentences as $sentence) {
+            $sentence = trim((string) $sentence, " \t\n\r\0\x0B.!?");
+
+            if ($sentence === '') {
+                continue;
+            }
+
+            $parts = preg_split('/\s*[,;]\s*/u', $sentence) ?: [];
+
+            if (count($parts) < 2) {
+                continue;
+            }
+
+            foreach ($parts as $part) {
+                $part = trim((string) $part, " \t\n\r\0\x0B.!?");
+
+                if ($part === '' || $this->textLength($part) < 3) {
+                    continue;
+                }
+
+                $features[] = $part;
+            }
+        }
+
+        return array_values(array_unique(array_slice($features, 0, 12)));
+    }
+
+    /** @param list<string> $features */
+    private function featureSection(string $heading, array $features): string
+    {
+        if ($features === []) {
+            return '';
+        }
+
+        $items = '';
+
+        foreach ($features as $feature) {
+            $items .= '<li>' . $this->text($feature) . '.</li>';
+        }
+
+        return '<h3>' . $this->text($heading) . '</h3><ul>' . $items . '</ul>';
+    }
+
+    private function sameText(string $left, string $right): bool
+    {
+        $normalize = static fn (string $value): string => trim(
+            (string) preg_replace('/\s+/u', ' ', $value)
+        );
+
+        return $normalize($left) === $normalize($right);
+    }
+
+    private function textLength(string $value): int
+    {
+        $chars = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY);
+
+        return is_array($chars) ? count($chars) : strlen($value);
     }
 
     private function legacyText(string $value): string
