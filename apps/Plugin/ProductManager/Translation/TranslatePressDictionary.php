@@ -48,35 +48,54 @@ final class TranslatePressDictionary implements
         $items = [];
 
         foreach ($map as $source => $target) {
-            $row = $rows[$source] ?? null;
+            $sourceRows = $rows[$source] ?? [];
+            $row = $sourceRows[0] ?? null;
 
-            if (! is_array($row)) {
+            if ($sourceRows === []) {
                 $action = 'MISSING';
                 $missing++;
-            } elseif (
-                (int) ($row['status'] ?? 0) === 2
-                && trim((string) ($row['translated'] ?? '')) !== ''
-            ) {
-                if (
-                    $this->mapBuilder->normalize(
-                        (string) $row['translated']
-                    ) === $this->mapBuilder->normalize($target)
-                ) {
-                    $action = 'EXACT';
-                    $exact++;
-                } else {
+            } else {
+                $targetNormalized = $this->mapBuilder->normalize($target);
+                $hasUnfinished = false;
+                $hasDifferentFinished = false;
+
+                foreach ($sourceRows as $candidate) {
+                    $translated = trim(
+                        (string) ($candidate['translated'] ?? '')
+                    );
+                    $finished = (int) ($candidate['status'] ?? 0) === 2
+                        && $translated !== '';
+
+                    if (! $finished) {
+                        $hasUnfinished = true;
+                        continue;
+                    }
+
+                    if (
+                        $this->mapBuilder->normalize($translated)
+                            !== $targetNormalized
+                    ) {
+                        $hasDifferentFinished = true;
+                    }
+                }
+
+                if ($hasUnfinished) {
+                    $action = 'FILL';
+                    $fill++;
+                } elseif ($hasDifferentFinished) {
                     $action = 'KEEP';
                     $keep++;
+                } else {
+                    $action = 'EXACT';
+                    $exact++;
                 }
-            } else {
-                $action = 'FILL';
-                $fill++;
             }
 
             $items[] = [
                 'source' => $source,
                 'target' => $target,
                 'row' => $row,
+                'rows' => $sourceRows,
                 'action' => $action,
             ];
         }
@@ -109,13 +128,22 @@ final class TranslatePressDictionary implements
         }
 
         $rows = [];
+        $seen = [];
 
         foreach ($status->items as $item) {
-            if (
-                $item['action'] === 'FILL'
-                && is_array($item['row'])
-            ) {
-                $rows[] = $item['row'];
+            foreach ($this->itemRows($item) as $row) {
+                if ($this->rowFinished($row)) {
+                    continue;
+                }
+
+                $id = (int) ($row['id'] ?? 0);
+
+                if ($id <= 0 || isset($seen[$id])) {
+                    continue;
+                }
+
+                $seen[$id] = true;
+                $rows[] = $row;
             }
         }
 
@@ -148,31 +176,39 @@ final class TranslatePressDictionary implements
         }
 
         $filled = 0;
+        $seen = [];
 
         foreach ($status->items as $item) {
-            if ($item['action'] !== 'FILL') {
-                continue;
-            }
+            foreach ($this->itemRows($item) as $row) {
+                if ($this->rowFinished($row)) {
+                    continue;
+                }
 
-            $row = $item['row'];
+                $id = (int) ($row['id'] ?? 0);
 
-            if (! is_array($row) || ! isset($row['id'])) {
-                throw new RuntimeException(
-                    'TranslatePress FILL row has no ID.'
+                if ($id <= 0) {
+                    throw new RuntimeException(
+                        'TranslatePress FILL row has no ID.'
+                    );
+                }
+
+                if (isset($seen[$id])) {
+                    continue;
+                }
+
+                $seen[$id] = true;
+                $this->database->update(
+                    $table,
+                    [
+                        'translated' => $item['target'],
+                        'status' => 2,
+                    ],
+                    ['id' => $id],
+                    ['%s', '%d'],
+                    ['%d']
                 );
+                $filled++;
             }
-
-            $this->database->update(
-                $table,
-                [
-                    'translated' => $item['target'],
-                    'status' => 2,
-                ],
-                ['id' => (int) $row['id']],
-                ['%s', '%d'],
-                ['%d']
-            );
-            $filled++;
         }
 
         return $filled;
@@ -221,7 +257,7 @@ final class TranslatePressDictionary implements
 
     /**
      * @param array<string, string> $map
-     * @return array<string, array<string, mixed>>
+     * @return array<string, list<array<string, mixed>>>
      */
     private function rows(
         string $table,
@@ -253,24 +289,22 @@ final class TranslatePressDictionary implements
                 $table,
                 $placeholders
             );
-            $rows = $this->database->fetchAll(
+            $found = $this->database->fetchAll(
                 $sql,
                 $chunk
             );
 
-            foreach ($rows as $row) {
+            foreach ($found as $row) {
                 $normalized = $this->mapBuilder->normalize(
                     (string) ($row['original'] ?? '')
                 );
 
-                if (
-                    $normalized === ''
-                    || isset($byNormalized[$normalized])
-                ) {
+                if ($normalized === '') {
                     continue;
                 }
 
-                $byNormalized[$normalized] = $row;
+                $byNormalized[$normalized] ??= [];
+                $byNormalized[$normalized][] = $row;
             }
         }
 
@@ -285,6 +319,41 @@ final class TranslatePressDictionary implements
         }
 
         return $result;
+    }
+
+    /**
+     * @param array{
+     *     source:string,
+     *     target:string,
+     *     row:array<string,mixed>|null,
+     *     rows?:list<array<string,mixed>>,
+     *     action:string
+     * } $item
+     * @return list<array<string, mixed>>
+     */
+    private function itemRows(array $item): array
+    {
+        $rows = $item['rows'] ?? null;
+
+        if (is_array($rows)) {
+            return array_values(
+                array_filter(
+                    $rows,
+                    static fn(mixed $row): bool => is_array($row)
+                )
+            );
+        }
+
+        return is_array($item['row'])
+            ? [$item['row']]
+            : [];
+    }
+
+    /** @param array<string, mixed> $row */
+    private function rowFinished(array $row): bool
+    {
+        return (int) ($row['status'] ?? 0) === 2
+            && trim((string) ($row['translated'] ?? '')) !== '';
     }
 
     /**
