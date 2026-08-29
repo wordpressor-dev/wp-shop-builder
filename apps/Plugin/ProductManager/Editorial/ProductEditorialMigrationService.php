@@ -425,7 +425,10 @@ final class ProductEditorialMigrationService
         return is_scalar($value) ? trim((string) $value) : '';
     }
 
-    /** @param list<string> $current @param list<string> $generated */
+    /**
+     * @param list<string> $current
+     * @param list<string> $generated
+     */
     private function pairStatus(array $current, array $generated): string
     {
         if ($this->allEmpty($current)) {
@@ -437,7 +440,10 @@ final class ProductEditorialMigrationService
             : 'OLD';
     }
 
-    /** @param list<string> $current @param list<string> $generated */
+    /**
+     * @param list<string> $current
+     * @param list<string> $generated
+     */
     private function tripleStatus(array $current, array $generated): string
     {
         if ($this->allEmpty($current)) {
@@ -472,7 +478,10 @@ final class ProductEditorialMigrationService
         return true;
     }
 
-    /** @param list<string> $left @param list<string> $right */
+    /**
+     * @param list<string> $left
+     * @param list<string> $right
+     */
     private function sameList(array $left, array $right): bool
     {
         if (count($left) !== count($right)) {
