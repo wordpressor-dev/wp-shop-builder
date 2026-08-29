@@ -37,7 +37,7 @@ final class PreparedEnglishProductContent
         mixed $content,
         string $metaKey
     ): mixed {
-        if (! is_string($content) || ! $this->isEnglishProductRequest()) {
+        if (! is_string($content) || ! $this->isEnglishRequest()) {
             return $content;
         }
 
@@ -61,31 +61,60 @@ final class PreparedEnglishProductContent
         return $prepared;
     }
 
-    private function isEnglishProductRequest(): bool
+    private function isEnglishRequest(): bool
     {
         try {
             if ((bool) ($this->call)('is_admin')) {
                 return false;
             }
 
-            if (! (bool) ($this->call)('is_singular', 'product')) {
-                return false;
+            $locale = ($this->call)('get_locale');
+
+            if ($this->isEnglishLocale($locale)) {
+                return true;
             }
 
-            if (! (bool) ($this->call)(
-                'function_exists',
-                'trp_get_current_language'
-            )) {
-                return false;
+            if ((bool) ($this->call)('function_exists', 'determine_locale')) {
+                $locale = ($this->call)('determine_locale');
+
+                if ($this->isEnglishLocale($locale)) {
+                    return true;
+                }
             }
-
-            $language = ($this->call)('trp_get_current_language');
-
-            return is_string($language)
-                && strtolower(trim($language)) === 'en_us';
         } catch (Throwable) {
+            // Fall back to the translated URL below.
+        }
+
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+
+        if (! is_string($requestUri) || $requestUri === '') {
             return false;
         }
+
+        $path = parse_url($requestUri, PHP_URL_PATH);
+
+        if (! is_string($path) || $path === '') {
+            return false;
+        }
+
+        return preg_match(
+            '#^/(?:en|en-us)(?:/|$)#i',
+            $path
+        ) === 1;
+    }
+
+    private function isEnglishLocale(mixed $locale): bool
+    {
+        if (! is_string($locale)) {
+            return false;
+        }
+
+        $locale = strtolower(
+            str_replace('-', '_', trim($locale))
+        );
+
+        return $locale === 'en'
+            || str_starts_with($locale, 'en_');
     }
 
     private function productId(): int
