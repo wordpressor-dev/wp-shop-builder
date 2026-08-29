@@ -9,6 +9,7 @@ use RuntimeException;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
 
 final class ProductMetadataWriter implements
     ProductDraftWriterInterface
@@ -36,6 +37,43 @@ final class ProductMetadataWriter implements
             $productType
         );
         $displayVersion = $data->version;
+        $editorial = $this->importQueueEditorial($data, $productType);
+        $editorialLogs = [];
+
+        if ($editorial !== null) {
+            $updated = ($this->call)(
+                'wp_update_post',
+                [
+                    'ID' => $productId,
+                    'post_excerpt' => $editorial['ruShort'],
+                    'post_content' => $editorial['ruLong'],
+                ],
+                true
+            );
+
+            if (
+                is_int($updated)
+                && $updated <= 0
+            ) {
+                throw new RuntimeException(
+                    'Editorial auto-draft could not update product content.'
+                );
+            }
+
+            if (
+                is_object($updated)
+                && method_exists($updated, 'get_error_message')
+            ) {
+                throw new RuntimeException(
+                    'Editorial auto-draft failed: '
+                    . (string) $updated->get_error_message()
+                );
+            }
+
+            $editorialLogs[] = 'EDITORIAL AUTO-DRAFT = APPLIED';
+            $editorialLogs[] = 'RU SHORT / LONG = UPDATED';
+            $editorialLogs[] = 'EN SHORT / LONG / META = PREPARED';
+        }
 
         if (
             $productType === CatalogProductType::TEMPLATE_KIT
@@ -121,35 +159,76 @@ final class ProductMetadataWriter implements
         $this->updateMeta(
             $productId,
             '_wp_shop_en_short_description',
-            $data->enShortDescription
+            $editorial['enShort'] ?? $data->enShortDescription
         );
         $this->updateMeta(
             $productId,
             '_wp_shop_en_long_description',
-            $data->enLongDescription
+            $editorial['enLong'] ?? $data->enLongDescription
         );
         $this->updateMeta(
             $productId,
             '_wp_shop_en_meta_description',
-            $data->enMetaDescription
+            $editorial['enMeta'] ?? $data->enMetaDescription
         );
 
-        return [
-            'DISPLAY ACF/META LABELS = UPDATED',
-            'ACF PRODUCT VALUES = UPDATED',
-            'PRODUCT TYPE = ' . $productType,
-            'CATALOG CATEGORY = ' . $categoryLabel,
-            'STORAGE FOLDER = ' . $storageFolder,
-            'SOURCE ITEM ID = ' . $data->itemId,
-            'SOURCE UPDATE DATE = ' . $data->sourceUpdateDate,
-            $displayVersion === '—'
-                ? 'DISPLAY VERSION = VERSIONLESS PLACEHOLDER'
-                : 'DISPLAY VERSION = ' . $displayVersion,
-            $data->hasCompleteEnglishContent()
-                ? 'EN DRAFT CONTENT = SAVED'
-                : 'EN DRAFT CONTENT = NOT COMPLETE',
-            'attr_update_value = SKIPPED',
-        ];
+        return array_merge(
+            [
+                'DISPLAY ACF/META LABELS = UPDATED',
+                'ACF PRODUCT VALUES = UPDATED',
+                'PRODUCT TYPE = ' . $productType,
+                'CATALOG CATEGORY = ' . $categoryLabel,
+                'STORAGE FOLDER = ' . $storageFolder,
+                'SOURCE ITEM ID = ' . $data->itemId,
+                'SOURCE UPDATE DATE = ' . $data->sourceUpdateDate,
+                $displayVersion === '—'
+                    ? 'DISPLAY VERSION = VERSIONLESS PLACEHOLDER'
+                    : 'DISPLAY VERSION = ' . $displayVersion,
+            ],
+            $editorialLogs,
+            [
+                ($editorial !== null || $data->hasCompleteEnglishContent())
+                    ? 'EN DRAFT CONTENT = SAVED'
+                    : 'EN DRAFT CONTENT = NOT COMPLETE',
+                'attr_update_value = SKIPPED',
+            ]
+        );
+    }
+
+    /**
+     * @return array{
+     *   ruShort: string,
+     *   ruLong: string,
+     *   ruMeta: string,
+     *   enShort: string,
+     *   enLong: string,
+     *   enMeta: string
+     * }|null
+     */
+    private function importQueueEditorial(
+        ProductDraftData $data,
+        string $productType
+    ): ?array {
+        if (! str_contains(
+            $data->notes,
+            'Created from WP Shop Builder Import Queue.'
+        )) {
+            return null;
+        }
+
+        $tagNames = [];
+
+        foreach ($data->tags as $tag) {
+            $tagNames[] = $tag->name;
+        }
+
+        return (new ProductEditorialDraftBuilder())->build(
+            $data->baseTitle,
+            $data->developer,
+            $productType,
+            $tagNames,
+            $data->sourceUpdateDate
+        );
     }
 
     /**
