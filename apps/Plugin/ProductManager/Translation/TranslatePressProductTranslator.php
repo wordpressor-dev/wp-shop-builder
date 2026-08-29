@@ -84,7 +84,7 @@ final class TranslatePressProductTranslator
         $catalogPair = null;
 
         try {
-            $map = $this->mapBuilder->build(
+            $baseMap = $this->mapBuilder->build(
                 $ruShort,
                 $ruLong,
                 $ruMeta,
@@ -97,7 +97,7 @@ final class TranslatePressProductTranslator
             );
 
             if ($catalogPair !== null) {
-                $map[$catalogPair['source']] = $catalogPair['target'];
+                $baseMap[$catalogPair['source']] = $catalogPair['target'];
             }
         } catch (InvalidArgumentException $exception) {
             return new ProductTranslationResult(
@@ -116,16 +116,27 @@ final class TranslatePressProductTranslator
                     . ' -> '
                     . $catalogPair['target']
                 : 'CATALOG DISPLAY TRANSLATION = NOT FOUND',
-            'TRANSLATION SEGMENTS = ' . count($map),
         ];
 
         try {
             $logs[] = $this->registrar->registerPage($slug);
+
+            $map = $this->productAwareMap(
+                $productId,
+                $baseMap
+            );
+            $logs[] = 'TRANSLATION BLOCK SEGMENTS = '
+                . max(0, count($map) - count($baseMap));
+            $logs[] = 'TRANSLATION SEGMENTS = ' . count($map);
             $translationStatus = $this->dictionary->status($map);
 
             if ($translationStatus->missing > 0) {
                 $logs[] = 'RETRY_'
                     . $this->registrar->registerPage($slug);
+                $map = $this->productAwareMap(
+                    $productId,
+                    $baseMap
+                );
                 $translationStatus = $this->dictionary->status($map);
             }
 
@@ -138,6 +149,10 @@ final class TranslatePressProductTranslator
                     $this->registrar->registerMissing(
                         $translationStatus
                     )
+                );
+                $map = $this->productAwareMap(
+                    $productId,
+                    $baseMap
                 );
                 $translationStatus = $this->dictionary->status($map);
             }
@@ -178,6 +193,11 @@ final class TranslatePressProductTranslator
                 $translationStatus
             );
             $logs[] = 'EN FILLED = ' . $filled;
+
+            $map = $this->productAwareMap(
+                $productId,
+                $baseMap
+            );
             $final = $this->dictionary->status($map);
         } catch (Throwable $exception) {
             $logs[] = 'TRANSLATION_ERROR: '
@@ -205,11 +225,37 @@ final class TranslatePressProductTranslator
     }
 
     /**
+     * @param array<string, string> $map
+     * @return array<string, string>
+     */
+    private function productAwareMap(
+        int $productId,
+        array $map
+    ): array {
+        if (! $this->dictionary instanceof TranslatePressDictionary) {
+            return $map;
+        }
+
+        return $this->dictionary->augmentMapForProduct(
+            $productId,
+            $map
+        );
+    }
+
+    /**
      * @return array{source: string, target: string}|null
      */
     private function catalogDisplayTranslation(
         int $productId
     ): ?array {
+        $taxonomyPair = $this->taxonomyCategoryTranslation(
+            $productId
+        );
+
+        if ($taxonomyPair !== null) {
+            return $taxonomyPair;
+        }
+
         $category = ($this->call)(
             'get_post_meta',
             $productId,
@@ -218,19 +264,10 @@ final class TranslatePressProductTranslator
         );
 
         if (is_string($category)) {
-            $category = trim($category);
-            $english = match ($category) {
-                'Темы' => 'Themes',
-                'Плагины' => 'Plugins',
-                'Шаблоны' => 'Templates',
-                default => '',
-            };
+            $pair = $this->categoryPair(trim($category));
 
-            if ($english !== '') {
-                return [
-                    'source' => $category,
-                    'target' => $english,
-                ];
+            if ($pair !== null) {
+                return $pair;
             }
         }
 
@@ -262,6 +299,62 @@ final class TranslatePressProductTranslator
             ],
             default => null,
         };
+    }
+
+    /**
+     * @return array{source: string, target: string}|null
+     */
+    private function taxonomyCategoryTranslation(
+        int $productId
+    ): ?array {
+        $terms = ($this->call)(
+            'wp_get_post_terms',
+            $productId,
+            'product_cat',
+            ['fields' => 'names']
+        );
+
+        if (! is_array($terms)) {
+            return null;
+        }
+
+        foreach ($terms as $term) {
+            if (! is_scalar($term)) {
+                continue;
+            }
+
+            $pair = $this->categoryPair(
+                trim((string) $term)
+            );
+
+            if ($pair !== null) {
+                return $pair;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{source: string, target: string}|null
+     */
+    private function categoryPair(string $category): ?array
+    {
+        $english = match ($category) {
+            'Темы' => 'Themes',
+            'Плагины' => 'Plugins',
+            'Шаблоны' => 'Templates',
+            default => '',
+        };
+
+        if ($english === '') {
+            return null;
+        }
+
+        return [
+            'source' => $category,
+            'target' => $english,
+        ];
     }
 
     private function savePreparedEnglish(
