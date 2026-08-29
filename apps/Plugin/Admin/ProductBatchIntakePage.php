@@ -47,17 +47,64 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             ? trim((string) ($uploads['basedir'] ?? ''))
             : '';
         $selectedFolder = trim($this->posted('intake_folder'));
+        $filename = trim($this->posted('intake_filename'));
+        $action = $this->posted('wp_shop_pm_batch_intake_action');
         $rows = [];
         $error = '';
         $root = '';
         $folders = [];
+        $logs = [];
+        $success = null;
+        $showResults = false;
 
         try {
             $root = $this->scanner->ensureInbox($uploadsBaseDir);
             $folders = $this->scanner->folders($uploadsBaseDir);
 
-            if ($this->posted('wp_shop_pm_batch_intake_action') === 'scan') {
+            if (in_array($action, ['scan', 'apply', 'skip', 'review'], true)) {
                 $this->checkNonce();
+                $showResults = true;
+            }
+
+            if ($action === 'apply') {
+                $result = $this->scanner->applyUpdate(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    $filename
+                );
+                $logs = $result->logs;
+                $success = $result->success;
+            } elseif ($action === 'skip') {
+                $target = $this->scanner->moveToBucket(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    $filename,
+                    '_SKIPPED'
+                );
+                $logs = [
+                    'BATCH ACTION = SKIP',
+                    'ZIP = ' . $filename,
+                    'MOVED TO = ' . $target,
+                    'NO PRODUCT WRITTEN = YES',
+                ];
+                $success = true;
+            } elseif ($action === 'review') {
+                $target = $this->scanner->moveToBucket(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    $filename,
+                    '_REVIEW'
+                );
+                $logs = [
+                    'BATCH ACTION = REVIEW',
+                    'ZIP = ' . $filename,
+                    'MOVED TO = ' . $target,
+                    'NO PRODUCT WRITTEN = YES',
+                ];
+                $success = true;
+            }
+
+            if ($showResults) {
                 $rows = $this->scanner->scan(
                     $uploadsBaseDir,
                     $selectedFolder
@@ -65,17 +112,20 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             }
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
+            $success = false;
         }
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Import Queue</h1>';
-        echo '<p>Пакетный вход для ZIP-архивов. На этом этапе сканирование только анализирует файлы и определяет CREATE / UPDATE / REVIEW. Товары и архивы не изменяются.</p>';
+        echo '<p>Пакетный вход для ZIP-архивов. Сканирование определяет CREATE / UPDATE / REVIEW. Для READY UPDATE можно применить обновление прямо из очереди; исходный ZIP после успешного обновления удаляется из INBOX.</p>';
 
         if ($error !== '') {
             echo '<div class="notice notice-error"><p><strong>BATCH INTAKE ERROR:</strong> '
                 . $this->escape($error)
                 . '</p></div>';
         }
+
+        $this->renderLogs($logs, $success);
 
         echo '<div class="notice notice-info" style="max-width:1400px;padding:10px 14px;">';
         echo '<p><strong>INBOX ROOT</strong> = '
@@ -86,9 +136,9 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         $this->renderScanForm($folders, $selectedFolder);
 
-        if ($this->posted('wp_shop_pm_batch_intake_action') === 'scan' && $error === '') {
+        if ($showResults && $error === '') {
             $this->renderSummary($rows, $selectedFolder);
-            $this->renderTable($rows);
+            $this->renderTable($rows, $selectedFolder);
         }
 
         echo '</div>';
@@ -102,13 +152,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">1. Выбрать папку партии</h2>';
         echo '<form method="post" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;">';
-        ($this->call)(
-            'wp_nonce_field',
-            'wp_shop_pm_batch_intake_scan',
-            '_wpnonce',
-            true,
-            true
-        );
+        $this->nonceField();
         echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="scan">';
         echo '<label><strong>INBOX folder</strong><br>';
         echo '<select name="intake_folder" style="min-width:320px;">';
@@ -199,13 +243,14 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
      *   note: string
      * }> $rows
      */
-    private function renderTable(array $rows): void
+    private function renderTable(array $rows, string $selectedFolder): void
     {
-        echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">2. Проверка партии</h2>';
 
         if ($rows === []) {
-            echo '<p><em>ZIP-файлы в выбранной папке не найдены.</em></p>';
+            echo '<p><strong>BATCH FOLDER = COMPLETE / EMPTY</strong></p>';
+            echo '<p><em>Активных ZIP-файлов в выбранной папке больше нет.</em></p>';
             echo '</div>';
 
             return;
@@ -225,6 +270,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 'Action',
                 'Status',
                 'Note',
+                'Controls',
             ] as $heading
         ) {
             echo '<th>' . $this->escape($heading) . '</th>';
@@ -247,12 +293,130 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             echo '<td><strong>' . $this->escape($row['action']) . '</strong></td>';
             echo '<td><strong>' . $this->escape($row['status']) . '</strong></td>';
             echo '<td>' . $this->escape($row['note']) . '</td>';
+            echo '<td style="min-width:260px;">';
+            $this->renderRowControls($row, $selectedFolder);
+            echo '</td>';
             echo '</tr>';
         }
 
         echo '</tbody></table>';
-        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Следующий этап v26:</strong> добавить кнопки Apply / Skip / Review и выполнять UPDATE или создавать заполненный Draft прямо из этой очереди.</p>';
+        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> Apply доступен только для READY UPDATE. Перед записью выполняется внутренний Preflight; при ошибке товар не меняется, а старый целевой ZIP восстанавливается. CREATE пока остаётся review-only — его автоматизация будет следующим шагом.</p>';
         echo '</div>';
+    }
+
+    /**
+     * @param array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * } $row
+     */
+    private function renderRowControls(array $row, string $selectedFolder): void
+    {
+        echo '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
+
+        if ($row['action'] === 'UPDATE' && $row['status'] === 'READY') {
+            $this->actionButton(
+                'apply',
+                'Apply Update',
+                'button button-primary',
+                $row['filename'],
+                $selectedFolder,
+                "Применить обновление к товару #{$row['productId']}?"
+            );
+        } elseif ($row['action'] === 'CREATE' && $row['status'] === 'READY') {
+            echo '<button type="button" class="button" disabled title="CREATE automation is the next v26 slice">Create Draft — next</button>';
+        }
+
+        $this->actionButton(
+            'review',
+            'Review',
+            'button button-secondary',
+            $row['filename'],
+            $selectedFolder,
+            ''
+        );
+        $this->actionButton(
+            'skip',
+            'Skip',
+            'button',
+            $row['filename'],
+            $selectedFolder,
+            ''
+        );
+        echo '</div>';
+    }
+
+    private function actionButton(
+        string $action,
+        string $label,
+        string $class,
+        string $filename,
+        string $folder,
+        string $confirm
+    ): void {
+        echo '<form method="post" style="margin:0;display:inline;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="'
+            . $this->escapeAttr($action)
+            . '">';
+        echo '<input type="hidden" name="intake_folder" value="'
+            . $this->escapeAttr($folder)
+            . '">';
+        echo '<input type="hidden" name="intake_filename" value="'
+            . $this->escapeAttr($filename)
+            . '">';
+        echo '<button type="submit" class="'
+            . $this->escapeAttr($class)
+            . '"';
+
+        if ($confirm !== '') {
+            echo ' onclick="return confirm(\''
+                . $this->escapeAttr($confirm)
+                . '\');"';
+        }
+
+        echo '>' . $this->escape($label) . '</button>';
+        echo '</form>';
+    }
+
+    /**
+     * @param list<string> $logs
+     */
+    private function renderLogs(array $logs, ?bool $success): void
+    {
+        if ($logs === []) {
+            return;
+        }
+
+        $color = $success === true ? '#00a32a' : '#d63638';
+        echo '<div style="max-width:1400px;background:#fff;border-left:4px solid '
+            . $this->escapeAttr($color)
+            . ';padding:12px 16px;margin:15px 0 20px;">';
+        echo '<strong>BATCH INTAKE LOG</strong>';
+        echo '<pre style="white-space:pre-wrap;margin-bottom:0;">'
+            . $this->escape(implode("\n", $logs))
+            . '</pre>';
+        echo '</div>';
+    }
+
+    private function nonceField(): void
+    {
+        ($this->call)(
+            'wp_nonce_field',
+            'wp_shop_pm_batch_intake_scan',
+            '_wpnonce',
+            true,
+            true
+        );
     }
 
     private function checkNonce(): void
