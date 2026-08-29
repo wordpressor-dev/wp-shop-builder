@@ -115,11 +115,11 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruShort']
         );
         self::assertStringContainsString(
-            'расписание занятий',
+            '<h3>Основные возможности</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Основные сведения</h3>',
+            'расписание занятий',
             $content['ruLong']
         );
         self::assertStringContainsString(
@@ -127,11 +127,19 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruLong']
         );
         self::assertStringContainsString(
+            '<h3>Техническая информация</h3>',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
             'class schedules',
             $content['enLong']
         );
         self::assertStringContainsString(
-            '<h3>Product details</h3>',
+            '<h3>Key features</h3>',
+            $content['enLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Technical information</h3>',
             $content['enLong']
         );
     }
