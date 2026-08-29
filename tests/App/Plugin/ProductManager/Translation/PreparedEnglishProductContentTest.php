@@ -43,40 +43,51 @@ final class PreparedEnglishProductContentTest extends TestCase
         );
     }
 
-    public function testReplacesOnlyRawProductPostContent(): void
+    public function testReplacesRawProductPostContent(): void
     {
-        $source = '<h2>Русский заголовок</h2><p>Русский абзац.</p>';
-        $prepared = '<h2>English heading</h2><p>English paragraph.</p>';
-        $call = static function (
-            string $name,
-            mixed ...$arguments
-        ) use (
-            $source,
-            $prepared
-        ): mixed {
-            return match ($name) {
-                'is_admin' => false,
-                'get_locale' => 'en_US',
-                'function_exists' => true,
-                'determine_locale' => 'en_US',
-                'get_queried_object_id' => 4561,
-                'get_post_type' => 'product',
-                'get_the_ID' => 4561,
-                'get_post_field' => $source,
-                'get_post_meta' => $prepared,
-                default => null,
-            };
-        };
+        $sourceLong = '<h2>Русский заголовок</h2><p>Русский абзац.</p>';
+        $sourceShort = '<p>Русский short.</p>';
+        $preparedLong = '<h2>English heading</h2><p>English paragraph.</p>';
+        $preparedShort = '<p>English short.</p>';
+        $call = $this->englishProductCaller(
+            $sourceLong,
+            $sourceShort,
+            $preparedLong,
+            $preparedShort
+        );
         $content = new PreparedEnglishProductContent($call(...));
 
         self::assertSame(
-            $prepared,
-            $content->filterPostContent($source)
+            $preparedLong,
+            $content->filterPostContent($sourceLong)
         );
+    }
 
-        $assembled = '<div>Price 249</div>' . $source . '<div>Add to cart</div>';
+    public function testPatchesOnlyRussianFragmentInsideAssembledContent(): void
+    {
+        $sourceLong = '<h2>Русский заголовок</h2><p>Другой русский текст.</p>';
+        $sourceShort = '<p>Русский short.</p>';
+        $preparedLong = '<h2>English heading</h2><p>English paragraph.</p>';
+        $preparedShort = '<p>English short.</p>';
+        $call = $this->englishProductCaller(
+            $sourceLong,
+            $sourceShort,
+            $preparedLong,
+            $preparedShort
+        );
+        $content = new PreparedEnglishProductContent($call(...));
+        $assembled = '<section class="product-layout">'
+            . '<h2>English heading</h2>'
+            . '<p>Русский short.</p>'
+            . '<p>English paragraph.</p>'
+            . '</section>';
+
         self::assertSame(
-            $assembled,
+            '<section class="product-layout">'
+                . '<h2>English heading</h2>'
+                . '<p>English short.</p>'
+                . '<p>English paragraph.</p>'
+                . '</section>',
             $content->filterPostContent($assembled)
         );
     }
@@ -101,5 +112,43 @@ final class PreparedEnglishProductContentTest extends TestCase
             '<p>Русский текст.</p>',
             $content->filterShortDescription('<p>Русский текст.</p>')
         );
+    }
+
+    private function englishProductCaller(
+        string $sourceLong,
+        string $sourceShort,
+        string $preparedLong,
+        string $preparedShort
+    ): Closure {
+        return static function (
+            string $name,
+            mixed ...$arguments
+        ) use (
+            $sourceLong,
+            $sourceShort,
+            $preparedLong,
+            $preparedShort
+        ): mixed {
+            return match ($name) {
+                'is_admin' => false,
+                'get_locale' => 'en_US',
+                'function_exists' => true,
+                'determine_locale' => 'en_US',
+                'get_queried_object_id' => 4561,
+                'get_post_type' => 'product',
+                'get_the_ID' => 4561,
+                'get_post_field' => match ((string) $arguments[0]) {
+                    'post_content' => $sourceLong,
+                    'post_excerpt' => $sourceShort,
+                    default => '',
+                },
+                'get_post_meta' => match ((string) $arguments[1]) {
+                    '_wp_shop_en_long_description' => $preparedLong,
+                    '_wp_shop_en_short_description' => $preparedShort,
+                    default => '',
+                },
+                default => null,
+            };
+        };
     }
 }
