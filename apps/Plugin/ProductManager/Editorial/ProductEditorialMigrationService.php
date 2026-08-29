@@ -6,7 +6,9 @@ namespace WPShop\App\Plugin\ProductManager\Editorial;
 
 use Closure;
 use RuntimeException;
+use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 
 final class ProductEditorialMigrationService
 {
@@ -14,30 +16,22 @@ final class ProductEditorialMigrationService
     private const STANDARD_META = '_wp_shop_editorial_standard';
     private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';
 
-    /**
-     * @param Closure(string, mixed...): mixed $call
-     */
+    /** @param Closure(string, mixed...): mixed $call */
     public function __construct(
         private readonly Closure $call,
-        private readonly ProductEditorialDraftBuilder $builder = new ProductEditorialDraftBuilder()
+        private readonly ?EnvatoClientInterface $envato = null,
+        private readonly ProductEditorialDraftBuilder $builder = new ProductEditorialDraftBuilder(),
+        private readonly EnvatoOfficialFactsExtractor $officialExtractor = new EnvatoOfficialFactsExtractor()
     ) {
     }
 
     /**
      * @return array{
-     *   productId: int,
-     *   title: string,
-     *   baseTitle: string,
-     *   status: string,
-     *   productType: string,
-     *   developer: string,
-     *   sourceUpdateDate: string,
-     *   ruStatus: string,
-     *   enStatus: string,
-     *   metaStatus: string,
-     *   backupAvailable: bool,
-     *   current: array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
-     *   generated: array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
+     * productId:int,title:string,baseTitle:string,status:string,productType:string,
+     * developer:string,sourceUpdateDate:string,ruStatus:string,enStatus:string,
+     * metaStatus:string,backupAvailable:bool,officialStatus:string,officialFacts:int,
+     * current:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
+     * generated:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
      * }
      */
     public function preview(int $productId): array
@@ -61,18 +55,9 @@ final class ProductEditorialMigrationService
             'ruShort' => (string) ($row['post_excerpt'] ?? ''),
             'ruLong' => (string) ($row['post_content'] ?? ''),
             'ruMeta' => $this->sureRankMeta($productId),
-            'enShort' => $this->meta(
-                $productId,
-                '_wp_shop_en_short_description'
-            ),
-            'enLong' => $this->meta(
-                $productId,
-                '_wp_shop_en_long_description'
-            ),
-            'enMeta' => $this->meta(
-                $productId,
-                '_wp_shop_en_meta_description'
-            ),
+            'enShort' => $this->meta($productId, '_wp_shop_en_short_description'),
+            'enLong' => $this->meta($productId, '_wp_shop_en_long_description'),
+            'enMeta' => $this->meta($productId, '_wp_shop_en_meta_description'),
         ];
         $backup = ($this->call)(
             'get_post_meta',
@@ -81,6 +66,11 @@ final class ProductEditorialMigrationService
             true
         );
         $signals = $this->signals($productId, $baseTitle);
+        $official = $this->officialFacts($productId);
+        $signals = array_values(array_unique(array_merge(
+            $signals,
+            $official['signals']
+        )));
         $generic = $this->builder->build(
             $baseTitle,
             $developer,
@@ -89,40 +79,25 @@ final class ProductEditorialMigrationService
             $sourceUpdateDate
         );
         $generated = $generic;
-        $currentValues = [
-            $current['ruShort'],
-            $current['ruLong'],
-            $current['ruMeta'],
-            $current['enShort'],
-            $current['enLong'],
-            $current['enMeta'],
-        ];
-        $genericValues = [
-            $generic['ruShort'],
-            $generic['ruLong'],
-            $generic['ruMeta'],
-            $generic['enShort'],
-            $generic['enLong'],
-            $generic['enMeta'],
-        ];
+        $currentValues = array_values($current);
+        $genericValues = array_values($generic);
+        $legacy = null;
 
         if (is_array($backup) && $backup !== []) {
-            $generated = $this->builder->build(
-                $baseTitle,
-                $developer,
-                $productType,
-                $signals,
-                $sourceUpdateDate,
-                $backup
-            );
+            $legacy = $backup;
         } elseif (! $this->sameList($currentValues, $genericValues)) {
+            $legacy = $current;
+        }
+
+        if (is_array($legacy)) {
+            $legacy = $this->enrichLegacy($legacy, $official);
             $generated = $this->builder->build(
                 $baseTitle,
                 $developer,
                 $productType,
                 $signals,
                 $sourceUpdateDate,
-                $current
+                $legacy
             );
         }
 
@@ -155,6 +130,8 @@ final class ProductEditorialMigrationService
             'enStatus' => $enStatus,
             'metaStatus' => $metaStatus,
             'backupAvailable' => is_array($backup) && $backup !== [],
+            'officialStatus' => $official['status'],
+            'officialFacts' => count($official['ruFacts']),
             'current' => $current,
             'generated' => $generated,
         ];
@@ -182,15 +159,10 @@ final class ProductEditorialMigrationService
         $backupLog = 'EDITORIAL BACKUP = REUSED';
 
         if (! is_array($backup) || $backup === []) {
-            $backup = [
-                'created_at' => $this->now(),
-                'ruShort' => $preview['current']['ruShort'],
-                'ruLong' => $preview['current']['ruLong'],
-                'ruMeta' => $preview['current']['ruMeta'],
-                'enShort' => $preview['current']['enShort'],
-                'enLong' => $preview['current']['enLong'],
-                'enMeta' => $preview['current']['enMeta'],
-            ];
+            $backup = array_merge(
+                ['created_at' => $this->now()],
+                $preview['current']
+            );
             ($this->call)(
                 'update_post_meta',
                 $productId,
@@ -201,12 +173,7 @@ final class ProductEditorialMigrationService
         }
 
         $this->writeContent($productId, $preview['generated']);
-        ($this->call)(
-            'update_post_meta',
-            $productId,
-            self::STANDARD_META,
-            'v28'
-        );
+        ($this->call)('update_post_meta', $productId, self::STANDARD_META, 'v28');
         ($this->call)(
             'update_post_meta',
             $productId,
@@ -218,6 +185,8 @@ final class ProductEditorialMigrationService
             'EDITORIAL MIGRATION = READY',
             'PRODUCT ID = ' . $productId,
             $backupLog,
+            'OFFICIAL ENVATO ENRICHMENT = ' . $preview['officialStatus'],
+            'OFFICIAL FACTS USED = ' . $preview['officialFacts'],
             'RU SHORT / LONG = UPDATED',
             'SURERANK META DESCRIPTION = UPDATED',
             'EN SHORT / LONG / META = PREPARED',
@@ -263,6 +232,124 @@ final class ProductEditorialMigrationService
     }
 
     /**
+     * @param array<string,mixed> $legacy
+     * @param array{status:string,signals:list<string>,ruFacts:list<string>,enFacts:list<string>} $official
+     * @return array<string,mixed>
+     */
+    private function enrichLegacy(array $legacy, array $official): array
+    {
+        if ($official['ruFacts'] !== []) {
+            $legacy['ruLong'] = $this->appendFacts(
+                (string) ($legacy['ruLong'] ?? ''),
+                $official['ruFacts']
+            );
+        }
+
+        if ($official['enFacts'] !== []) {
+            $legacy['enLong'] = $this->appendFacts(
+                (string) ($legacy['enLong'] ?? ''),
+                $official['enFacts']
+            );
+        }
+
+        return $legacy;
+    }
+
+    /** @param list<string> $facts */
+    private function appendFacts(string $content, array $facts): string
+    {
+        $content = trim($content);
+        $factLine = implode(', ', $facts) . '.';
+
+        if ($content === '') {
+            return $factLine;
+        }
+
+        return $content . ' ' . $factLine;
+    }
+
+    /**
+     * @return array{status:string,signals:list<string>,ruFacts:list<string>,enFacts:list<string>}
+     */
+    private function officialFacts(int $productId): array
+    {
+        $empty = [
+            'status' => 'NOT REQUESTED',
+            'signals' => [],
+            'ruFacts' => [],
+            'enFacts' => [],
+        ];
+
+        if ($this->envato === null || ! $this->officialRequested($productId)) {
+            return $empty;
+        }
+
+        $salesPage = $this->meta($productId, 'sales_page');
+        $token = $this->envatoToken();
+
+        if ($salesPage === '' || $token === '') {
+            $empty['status'] = 'NOT AVAILABLE';
+
+            return $empty;
+        }
+
+        try {
+            $item = $this->envato->fetch($salesPage, $token);
+            $facts = $this->officialExtractor->extract($item->source);
+            $facts['status'] = $facts['ruFacts'] === []
+                ? 'READY / NO EXTRA FACTS'
+                : 'READY';
+
+            return $facts;
+        } catch (Throwable) {
+            $empty['status'] = 'FAILED / LEGACY FALLBACK';
+
+            return $empty;
+        }
+    }
+
+    private function officialRequested(int $productId): bool
+    {
+        $preview = $_REQUEST['preview_id'] ?? null;
+        $apply = $_POST['editorial_apply_id'] ?? null;
+
+        if ((int) $preview === $productId || (int) $apply === $productId) {
+            return true;
+        }
+
+        $selected = $_POST['editorial_selected'] ?? [];
+
+        if (! is_array($selected)) {
+            return false;
+        }
+
+        foreach ($selected as $value) {
+            if ((int) $value === $productId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function envatoToken(): string
+    {
+        if (defined('WP_SHOP_ENVATO_TOKEN')) {
+            $configured = constant('WP_SHOP_ENVATO_TOKEN');
+
+            if (is_string($configured) && trim($configured) !== '') {
+                return trim($configured);
+            }
+        }
+
+        return trim((string) ($this->call)(
+            'get_option',
+            'wp_shop_envato_personal_token',
+            ''
+        ));
+    }
+
+    /**
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
      */
     private function writeContent(int $productId, array $content): void
@@ -287,10 +374,7 @@ final class ProductEditorialMigrationService
             throw new RuntimeException('Product content update failed.');
         }
 
-        if (
-            is_object($updated)
-            && method_exists($updated, 'get_error_message')
-        ) {
+        if (is_object($updated) && method_exists($updated, 'get_error_message')) {
             throw new RuntimeException(
                 'Product content update failed: '
                 . (string) $updated->get_error_message()
@@ -303,11 +387,7 @@ final class ProductEditorialMigrationService
             'surerank_settings_general',
             true
         );
-
-        if (! is_array($settings)) {
-            $settings = [];
-        }
-
+        $settings = is_array($settings) ? $settings : [];
         $settings['page_description'] = (string) ($this->call)(
             'sanitize_textarea_field',
             $content['ruMeta']
@@ -319,12 +399,10 @@ final class ProductEditorialMigrationService
             $settings
         );
 
-        foreach (
-            [
-                '_wp_shop_en_short_description' => $content['enShort'],
-                '_wp_shop_en_long_description' => $content['enLong'],
-            ] as $key => $value
-        ) {
+        foreach ([
+            '_wp_shop_en_short_description' => $content['enShort'],
+            '_wp_shop_en_long_description' => $content['enLong'],
+        ] as $key => $value) {
             ($this->call)(
                 'update_post_meta',
                 $productId,
@@ -354,32 +432,27 @@ final class ProductEditorialMigrationService
 
         $suffix = ' ' . $version;
 
-        if (str_ends_with($title, $suffix)) {
-            return trim(substr($title, 0, -strlen($suffix)));
-        }
-
-        return $title;
+        return str_ends_with($title, $suffix)
+            ? trim(substr($title, 0, -strlen($suffix)))
+            : $title;
     }
 
     private function productType(int $productId, string $baseTitle): string
     {
         $stored = trim($this->meta($productId, '_wp_shop_product_type'));
 
-        if (in_array(
-            $stored,
-            [
-                CatalogProductType::THEME,
-                CatalogProductType::PLUGIN,
-                CatalogProductType::TEMPLATE_KIT,
-            ],
-            true
-        )) {
+        if (in_array($stored, [
+            CatalogProductType::THEME,
+            CatalogProductType::PLUGIN,
+            CatalogProductType::TEMPLATE_KIT,
+        ], true)) {
             return $stored;
         }
 
-        $category = strtolower(trim(
-            $this->meta($productId, 'attr_category_value')
-        ));
+        $category = strtolower(trim($this->meta(
+            $productId,
+            'attr_category_value'
+        )));
 
         if (in_array($category, ['шаблоны', 'templates'], true)) {
             return CatalogProductType::TEMPLATE_KIT;
@@ -454,44 +527,21 @@ final class ProductEditorialMigrationService
 
     private function meta(int $productId, string $key): string
     {
-        $value = ($this->call)(
-            'get_post_meta',
-            $productId,
-            $key,
-            true
-        );
+        $value = ($this->call)('get_post_meta', $productId, $key, true);
 
         return is_scalar($value) ? trim((string) $value) : '';
     }
 
-    /**
-     * @param list<string> $current
-     * @param list<string> $generated
-     */
+    /** @param list<string> $current @param list<string> $generated */
     private function pairStatus(array $current, array $generated): string
     {
-        if ($this->allEmpty($current)) {
-            return 'MISSING';
-        }
-
-        return $this->sameList($current, $generated)
-            ? 'CURRENT'
-            : 'OLD';
+        return $this->status($current, $generated);
     }
 
-    /**
-     * @param list<string> $current
-     * @param list<string> $generated
-     */
+    /** @param list<string> $current @param list<string> $generated */
     private function tripleStatus(array $current, array $generated): string
     {
-        if ($this->allEmpty($current)) {
-            return 'MISSING';
-        }
-
-        return $this->sameList($current, $generated)
-            ? 'CURRENT'
-            : 'OLD';
+        return $this->status($current, $generated);
     }
 
     private function singleStatus(string $current, string $generated): string
@@ -503,6 +553,16 @@ final class ProductEditorialMigrationService
         return $this->normalize($current) === $this->normalize($generated)
             ? 'CURRENT'
             : 'OLD';
+    }
+
+    /** @param list<string> $current @param list<string> $generated */
+    private function status(array $current, array $generated): string
+    {
+        if ($this->allEmpty($current)) {
+            return 'MISSING';
+        }
+
+        return $this->sameList($current, $generated) ? 'CURRENT' : 'OLD';
     }
 
     /** @param list<string> $values */
@@ -517,10 +577,7 @@ final class ProductEditorialMigrationService
         return true;
     }
 
-    /**
-     * @param list<string> $left
-     * @param list<string> $right
-     */
+    /** @param list<string> $left @param list<string> $right */
     private function sameList(array $left, array $right): bool
     {
         if (count($left) !== count($right)) {
@@ -528,10 +585,7 @@ final class ProductEditorialMigrationService
         }
 
         foreach ($left as $index => $value) {
-            if (
-                $this->normalize($value)
-                !== $this->normalize($right[$index] ?? '')
-            ) {
+            if ($this->normalize($value) !== $this->normalize($right[$index])) {
                 return false;
             }
         }
@@ -541,19 +595,11 @@ final class ProductEditorialMigrationService
 
     private function normalize(string $value): string
     {
-        $value = html_entity_decode(
-            $value,
-            ENT_QUOTES | ENT_HTML5,
-            'UTF-8'
-        );
-
         return trim((string) preg_replace('/\s+/u', ' ', $value));
     }
 
     private function now(): string
     {
-        $value = ($this->call)('current_time', 'mysql');
-
-        return is_scalar($value) ? (string) $value : '';
+        return (string) ($this->call)('current_time', 'mysql');
     }
 }
