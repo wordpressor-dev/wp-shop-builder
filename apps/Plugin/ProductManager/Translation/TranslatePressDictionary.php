@@ -336,12 +336,7 @@ final class TranslatePressDictionary implements
         $rows = $item['rows'] ?? null;
 
         if (is_array($rows)) {
-            return array_values(
-                array_filter(
-                    $rows,
-                    static fn(mixed $row): bool => is_array($row)
-                )
-            );
+            return $rows;
         }
 
         return is_array($item['row'])
