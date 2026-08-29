@@ -79,33 +79,33 @@ final class ProductEditorialMigrationService
             $sourceUpdateDate
         );
         $generated = $generic;
-        $currentValues = array_values($current);
-        $genericValues = array_values($generic);
         $legacy = null;
 
         if (is_array($backup) && $backup !== []) {
             $legacy = $backup;
-        } elseif (! $this->sameList($currentValues, $genericValues)) {
+        } elseif (! $this->sameList(
+            array_values($current),
+            array_values($generic)
+        )) {
             $legacy = $current;
         }
 
         if (is_array($legacy)) {
-            $legacy = $this->enrichLegacy($legacy, $official);
             $generated = $this->builder->build(
                 $baseTitle,
                 $developer,
                 $productType,
                 $signals,
                 $sourceUpdateDate,
-                $legacy
+                $this->enrichLegacy($legacy, $official)
             );
         }
 
-        $ruStatus = $this->pairStatus(
+        $ruStatus = $this->status(
             [$current['ruShort'], $current['ruLong']],
             [$generated['ruShort'], $generated['ruLong']]
         );
-        $enStatus = $this->tripleStatus(
+        $enStatus = $this->status(
             [$current['enShort'], $current['enLong'], $current['enMeta']],
             [$generated['enShort'], $generated['enLong'], $generated['enMeta']]
         );
@@ -211,15 +211,14 @@ final class ProductEditorialMigrationService
             );
         }
 
-        $content = [
+        $this->writeContent($productId, [
             'ruShort' => (string) ($backup['ruShort'] ?? ''),
             'ruLong' => (string) ($backup['ruLong'] ?? ''),
             'ruMeta' => (string) ($backup['ruMeta'] ?? ''),
             'enShort' => (string) ($backup['enShort'] ?? ''),
             'enLong' => (string) ($backup['enLong'] ?? ''),
             'enMeta' => (string) ($backup['enMeta'] ?? ''),
-        ];
-        $this->writeContent($productId, $content);
+        ]);
         ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
         ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
 
@@ -258,14 +257,10 @@ final class ProductEditorialMigrationService
     /** @param list<string> $facts */
     private function appendFacts(string $content, array $facts): string
     {
+        $line = implode(', ', $facts) . '.';
         $content = trim($content);
-        $factLine = implode(', ', $facts) . '.';
 
-        if ($content === '') {
-            return $factLine;
-        }
-
-        return $content . ' ' . $factLine;
+        return $content === '' ? $line : $content . ' ' . $line;
     }
 
     /**
@@ -294,8 +289,9 @@ final class ProductEditorialMigrationService
         }
 
         try {
-            $item = $this->envato->fetch($salesPage, $token);
-            $facts = $this->officialExtractor->extract($item->source);
+            $facts = $this->officialExtractor->extract(
+                $this->envato->fetch($salesPage, $token)->source
+            );
             $facts['status'] = $facts['ruFacts'] === []
                 ? 'READY / NO EXTRA FACTS'
                 : 'READY';
@@ -310,10 +306,10 @@ final class ProductEditorialMigrationService
 
     private function officialRequested(int $productId): bool
     {
-        $preview = $_REQUEST['preview_id'] ?? null;
-        $apply = $_POST['editorial_apply_id'] ?? null;
-
-        if ((int) $preview === $productId || (int) $apply === $productId) {
+        if (
+            (int) ($_REQUEST['preview_id'] ?? 0) === $productId
+            || (int) ($_POST['editorial_apply_id'] ?? 0) === $productId
+        ) {
             return true;
         }
 
@@ -532,18 +528,6 @@ final class ProductEditorialMigrationService
         return is_scalar($value) ? trim((string) $value) : '';
     }
 
-    /** @param list<string> $current @param list<string> $generated */
-    private function pairStatus(array $current, array $generated): string
-    {
-        return $this->status($current, $generated);
-    }
-
-    /** @param list<string> $current @param list<string> $generated */
-    private function tripleStatus(array $current, array $generated): string
-    {
-        return $this->status($current, $generated);
-    }
-
     private function singleStatus(string $current, string $generated): string
     {
         if (trim($current) === '') {
@@ -555,7 +539,10 @@ final class ProductEditorialMigrationService
             : 'OLD';
     }
 
-    /** @param list<string> $current @param list<string> $generated */
+    /**
+     * @param list<string> $current
+     * @param list<string> $generated
+     */
     private function status(array $current, array $generated): string
     {
         if ($this->allEmpty($current)) {
@@ -577,7 +564,10 @@ final class ProductEditorialMigrationService
         return true;
     }
 
-    /** @param list<string> $left @param list<string> $right */
+    /**
+     * @param list<string> $left
+     * @param list<string> $right
+     */
     private function sameList(array $left, array $right): bool
     {
         if (count($left) !== count($right)) {
