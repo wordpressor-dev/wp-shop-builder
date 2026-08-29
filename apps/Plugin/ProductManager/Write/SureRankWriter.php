@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Write;
 
 use Closure;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
 
 final class SureRankWriter implements ProductDraftWriterInterface
 {
@@ -33,8 +35,34 @@ final class SureRankWriter implements ProductDraftWriterInterface
             $settings = [];
         }
 
-        $settings['page_description'] =
-            $data->metaDescription;
+        $description = $data->metaDescription;
+        $autoDraft = str_contains(
+            $data->notes,
+            'Created from WP Shop Builder Import Queue.'
+        );
+
+        if ($autoDraft) {
+            $productType = CatalogProductType::infer(
+                $data->baseTitle,
+                $data->salesPage
+            );
+            $tagNames = [];
+
+            foreach ($data->tags as $tag) {
+                $tagNames[] = $tag->name;
+            }
+
+            $editorial = (new ProductEditorialDraftBuilder())->build(
+                $data->baseTitle,
+                $data->developer,
+                $productType,
+                $tagNames,
+                $data->sourceUpdateDate
+            );
+            $description = $editorial['ruMeta'];
+        }
+
+        $settings['page_description'] = $description;
 
         ($this->call)(
             'update_post_meta',
@@ -44,7 +72,9 @@ final class SureRankWriter implements ProductDraftWriterInterface
         );
 
         return [
-            'SURERANK META DESCRIPTION = UPDATED',
+            $autoDraft
+                ? 'SURERANK META DESCRIPTION = AUTO-DRAFT UPDATED'
+                : 'SURERANK META DESCRIPTION = UPDATED',
         ];
     }
 }
