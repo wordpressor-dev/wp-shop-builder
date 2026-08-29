@@ -10,6 +10,7 @@ final class ProductEditorialDraftBuilder
 {
     /**
      * @param list<string> $sourceTags
+     * @param array{ruShort?:string,ruLong?:string,enShort?:string,enLong?:string} $legacy
      * @return array{
      *   ruShort: string,
      *   ruLong: string,
@@ -24,7 +25,8 @@ final class ProductEditorialDraftBuilder
         string $developer,
         string $productType,
         array $sourceTags = [],
-        string $sourceUpdateDate = ''
+        string $sourceUpdateDate = '',
+        array $legacy = []
     ): array {
         $title = trim($title);
         $developer = trim($developer);
@@ -77,6 +79,42 @@ final class ProductEditorialDraftBuilder
             $enMeta .= '. For ' . $enTopics;
         }
 
+        $legacyRuShort = $this->legacyText((string) ($legacy['ruShort'] ?? ''));
+        $legacyRuLong = $this->legacyText((string) ($legacy['ruLong'] ?? ''));
+
+        if ($legacyRuShort !== '' || $legacyRuLong !== '') {
+            $ruSource = $legacyRuShort !== '' ? $legacyRuShort : $legacyRuLong;
+            $ruDetails = $legacyRuLong !== '' ? $legacyRuLong : $ruSource;
+            $ruShort = $ruSource;
+            $ruLong = $this->ruLegacyLong(
+                $title,
+                $ruDetails,
+                $developer,
+                $productType,
+                $ruTopics,
+                $sourceUpdateDate
+            );
+            $ruMeta = $this->limit($ruSource);
+        }
+
+        $legacyEnShort = $this->legacyText((string) ($legacy['enShort'] ?? ''));
+        $legacyEnLong = $this->legacyText((string) ($legacy['enLong'] ?? ''));
+
+        if ($legacyEnShort !== '' || $legacyEnLong !== '') {
+            $enSource = $legacyEnShort !== '' ? $legacyEnShort : $legacyEnLong;
+            $enDetails = $legacyEnLong !== '' ? $legacyEnLong : $enSource;
+            $enShort = $enSource;
+            $enLong = $this->enLegacyLong(
+                $title,
+                $enDetails,
+                $developer,
+                $productType,
+                $enTopics,
+                $sourceUpdateDate
+            );
+            $enMeta = $this->limit($enSource);
+        }
+
         return [
             'ruShort' => '<p>' . $this->text($ruShort) . '</p>',
             'ruLong' => $ruLong,
@@ -85,6 +123,70 @@ final class ProductEditorialDraftBuilder
             'enLong' => $enLong,
             'enMeta' => $this->limit($enMeta . '.'),
         ];
+    }
+
+    private function ruLegacyLong(
+        string $title,
+        string $legacyDetails,
+        string $developer,
+        string $productType,
+        string $topics,
+        string $sourceUpdateDate
+    ): string {
+        $safeTitle = $this->text($title);
+        $type = $this->ruType($productType);
+        $scope = $topics !== ''
+            ? '<li><strong>Тематика:</strong> ' . $this->text($topics) . '.</li>'
+            : '';
+        $developerRow = $developer !== ''
+            ? '<li><strong>Разработчик:</strong> ' . $this->text($developer) . '.</li>'
+            : '';
+        $dateRow = $sourceUpdateDate !== ''
+            ? '<li><strong>Дата обновления источника:</strong> '
+                . $this->text($sourceUpdateDate) . '.</li>'
+            : '';
+
+        return '<h2>' . $safeTitle . '</h2>'
+            . '<p>' . $this->text($legacyDetails) . '</p>'
+            . '<h3>Основные сведения</h3>'
+            . '<ul>'
+            . '<li><strong>Тип продукта:</strong> ' . $this->text($type) . '.</li>'
+            . $scope
+            . $developerRow
+            . $dateRow
+            . '</ul>';
+    }
+
+    private function enLegacyLong(
+        string $title,
+        string $legacyDetails,
+        string $developer,
+        string $productType,
+        string $topics,
+        string $sourceUpdateDate
+    ): string {
+        $safeTitle = $this->text($title);
+        $type = $this->enType($productType);
+        $scope = $topics !== ''
+            ? '<li><strong>Project focus:</strong> ' . $this->text($topics) . '.</li>'
+            : '';
+        $developerRow = $developer !== ''
+            ? '<li><strong>Developer:</strong> ' . $this->text($developer) . '.</li>'
+            : '';
+        $dateRow = $sourceUpdateDate !== ''
+            ? '<li><strong>Source update date:</strong> '
+                . $this->text($sourceUpdateDate) . '.</li>'
+            : '';
+
+        return '<h2>' . $safeTitle . '</h2>'
+            . '<p>' . $this->text($legacyDetails) . '</p>'
+            . '<h3>Product details</h3>'
+            . '<ul>'
+            . '<li><strong>Product type:</strong> ' . $this->text($type) . '.</li>'
+            . $scope
+            . $developerRow
+            . $dateRow
+            . '</ul>';
     }
 
     private function ruLong(
@@ -297,7 +399,7 @@ final class ProductEditorialDraftBuilder
             'corporate' => 'корпоративные сайты',
             'agency' => 'агентства',
             'marketing' => 'маркетинг',
-            'education' => 'образование и онлайн-обучение',
+            'education' => ['образование', 'онлайн-обучение'],
             'school' => 'школы',
             'university' => 'университеты',
             'lms' => 'LMS',
@@ -326,8 +428,12 @@ final class ProductEditorialDraftBuilder
         $translated = [];
 
         foreach ($topics as $topic) {
-            if (isset($map[$topic])) {
-                $translated[] = $map[$topic];
+            if (! isset($map[$topic])) {
+                continue;
+            }
+
+            foreach ((array) $map[$topic] as $value) {
+                $translated[] = $value;
             }
         }
 
@@ -350,7 +456,7 @@ final class ProductEditorialDraftBuilder
             'corporate' => 'corporate websites',
             'agency' => 'agencies',
             'marketing' => 'marketing',
-            'education' => 'education and online learning',
+            'education' => ['education', 'online learning'],
             'school' => 'schools',
             'university' => 'universities',
             'lms' => 'LMS',
@@ -379,8 +485,12 @@ final class ProductEditorialDraftBuilder
         $translated = [];
 
         foreach ($topics as $topic) {
-            if (isset($map[$topic])) {
-                $translated[] = $map[$topic];
+            if (! isset($map[$topic])) {
+                continue;
+            }
+
+            foreach ((array) $map[$topic] as $value) {
+                $translated[] = $value;
             }
         }
 
@@ -407,6 +517,17 @@ final class ProductEditorialDraftBuilder
         $joiner = $language === 'ru' ? ' и ' : ' and ';
 
         return implode(', ', $values) . $joiner . $last;
+    }
+
+    private function legacyText(string $value): string
+    {
+        $value = html_entity_decode(
+            strip_tags($value),
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+
+        return trim((string) preg_replace('/\s+/u', ' ', $value));
     }
 
     private function limit(string $value, int $max = 155): string
