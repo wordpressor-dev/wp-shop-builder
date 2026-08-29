@@ -86,6 +86,16 @@ final class ProductEditorialDraftBuilderTest extends TestCase
 
     public function testPreservesLegacyFactsInsideV28Structure(): void
     {
+        $legacyRuShort = '<strong>Edubin – Education WordPress Theme</strong>'
+            . ' — это современная тема WordPress для школ, курсов,'
+            . ' университетов и онлайн-образования.';
+        $legacyRuLong = '<p>Адаптивный дизайн, интеграция с LMS,'
+            . ' расписание занятий, страницы преподавателей, календарь событий,'
+            . ' галерея, отзывы и форма обратной связи.</p>';
+        $legacyEnShort = '<p>Edubin is a WordPress education theme for schools,'
+            . ' courses and universities.</p>';
+        $legacyEnLong = '<p>Includes class schedules, instructor pages, events,'
+            . ' galleries, testimonials and contact forms.</p>';
         $content = (new ProductEditorialDraftBuilder())->build(
             'Edubin – Education WordPress Theme',
             'pixelcurve',
@@ -93,10 +103,10 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             ['education', 'lms'],
             '2026-08-28',
             [
-                'ruShort' => '<strong>Edubin – Education WordPress Theme</strong> — это современная тема WordPress для школ, курсов, университетов и онлайн-образования.',
-                'ruLong' => '<p>Адаптивный дизайн, интеграция с LMS, расписание занятий, страницы преподавателей, календарь событий, галерея, отзывы и форма обратной связи.</p>',
-                'enShort' => '<p>Edubin is a WordPress education theme for schools, courses and universities.</p>',
-                'enLong' => '<p>Includes class schedules, instructor pages, events, galleries, testimonials and contact forms.</p>',
+                'ruShort' => $legacyRuShort,
+                'ruLong' => $legacyRuLong,
+                'enShort' => $legacyEnShort,
+                'enLong' => $legacyEnLong,
             ]
         );
 
