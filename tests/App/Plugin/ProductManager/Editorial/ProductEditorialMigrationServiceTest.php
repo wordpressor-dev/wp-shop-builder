@@ -11,8 +11,12 @@ final class ProductEditorialMigrationServiceTest extends TestCase
 {
     public function testPreviewsAppliesAndRestoresLegacyEditorialContent(): void
     {
-        $oldShort = '<strong>Edubin – Education WordPress Theme</strong> — это современная тема WordPress для школ, курсов, университетов и онлайн-образования.';
-        $oldLong = '<p>Адаптивный дизайн, интеграция с LMS, расписание занятий, страницы преподавателей, календарь событий, галерея, отзывы и форма обратной связи.</p>';
+        $oldShort = '<strong>Edubin – Education WordPress Theme</strong>'
+            . ' — это современная тема WordPress для школ, курсов,'
+            . ' университетов и онлайн-образования.';
+        $oldLong = '<p>Адаптивный дизайн, интеграция с LMS,'
+            . ' расписание занятий, страницы преподавателей, календарь событий,'
+            . ' галерея, отзывы и форма обратной связи.</p>';
         $post = [
             'ID' => 4561,
             'post_type' => 'product',
@@ -40,7 +44,10 @@ final class ProductEditorialMigrationServiceTest extends TestCase
 
         $preview = $service->preview(4561);
 
-        self::assertSame('Edubin – Education WordPress Theme', $preview['baseTitle']);
+        self::assertSame(
+            'Edubin – Education WordPress Theme',
+            $preview['baseTitle']
+        );
         self::assertSame('theme', $preview['productType']);
         self::assertSame('MIGRATE', $preview['status']);
         self::assertSame('OLD', $preview['ruStatus']);
@@ -138,8 +145,10 @@ final class ProductEditorialMigrationServiceTest extends TestCase
                 $data = $arguments[0];
 
                 if (is_array($data)) {
-                    $post['post_excerpt'] = $data['post_excerpt'] ?? $post['post_excerpt'];
-                    $post['post_content'] = $data['post_content'] ?? $post['post_content'];
+                    $post['post_excerpt'] = $data['post_excerpt']
+                        ?? $post['post_excerpt'];
+                    $post['post_content'] = $data['post_content']
+                        ?? $post['post_content'];
                 }
 
                 return (int) $post['ID'];
