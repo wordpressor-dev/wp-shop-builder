@@ -43,6 +43,41 @@ final class PreparedEnglishProductContentTest extends TestCase
         );
     }
 
+    public function testReplacesOnlyRawProductPostContent(): void
+    {
+        $source = '<h2>Русский заголовок</h2><p>Русский абзац.</p>';
+        $prepared = '<h2>English heading</h2><p>English paragraph.</p>';
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ) use ($source, $prepared): mixed {
+            return match ($name) {
+                'is_admin' => false,
+                'get_locale' => 'en_US',
+                'function_exists' => true,
+                'determine_locale' => 'en_US',
+                'get_queried_object_id' => 4561,
+                'get_post_type' => 'product',
+                'get_the_ID' => 4561,
+                'get_post_field' => $source,
+                'get_post_meta' => $prepared,
+                default => null,
+            };
+        };
+        $content = new PreparedEnglishProductContent($call(...));
+
+        self::assertSame(
+            $prepared,
+            $content->filterPostContent($source)
+        );
+
+        $assembled = '<div>Price 249</div>' . $source . '<div>Add to cart</div>';
+        self::assertSame(
+            $assembled,
+            $content->filterPostContent($assembled)
+        );
+    }
+
     public function testKeepsRussianContentOnRussianLocale(): void
     {
         $call = static function (string $name): mixed {
