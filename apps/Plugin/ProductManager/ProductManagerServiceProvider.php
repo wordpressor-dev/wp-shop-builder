@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
+use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
@@ -21,6 +22,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
@@ -83,6 +85,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $tagSelector = new ExistingTagSelector($tagRepository);
         $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
+        $editorialMigrationService = new ProductEditorialMigrationService(
+            $functionCaller(...)
+        );
+        $editorialMigrationPage = new ProductEditorialMigrationPage(
+            $editorialMigrationService,
+            $functionCaller(...)
+        );
         $archiveUploader = new ProductArchiveUploader(
             $functionCaller(...)
         );
@@ -190,6 +199,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($batchIntakePage);
+        $registry->addSubmenu($editorialMigrationPage);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
@@ -230,6 +240,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             WordPressFunctionCaller::class,
             $functionCaller
+        );
+        $this->container->set(
+            ProductEditorialMigrationService::class,
+            $editorialMigrationService
+        );
+        $this->container->set(
+            ProductEditorialMigrationPage::class,
+            $editorialMigrationPage
         );
         $this->container->set(
             ProductArchiveUploader::class,
