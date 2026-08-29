@@ -78,14 +78,6 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $tagSelector = new ExistingTagSelector($tagRepository);
         $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
-        $editorialMigrationService = new ProductEditorialMigrationService(
-            $functionCaller(...),
-            $envatoClient
-        );
-        $editorialMigrationPage = new ProductEditorialMigrationPage(
-            $editorialMigrationService,
-            $functionCaller(...)
-        );
         $archiveUploader = new ProductArchiveUploader($functionCaller(...));
         $archiveVersionInspector = new ProductArchiveVersionInspector();
         $archiveIdentityInspector = new ProductArchiveIdentityInspector();
@@ -129,6 +121,15 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $translationMapBuilder,
             $translationDictionary,
             $translationRegistrar,
+            $functionCaller(...)
+        );
+        $editorialMigrationService = new ProductEditorialMigrationService(
+            $functionCaller(...),
+            $envatoClient,
+            translate: $translator->translate(...)
+        );
+        $editorialMigrationPage = new ProductEditorialMigrationPage(
+            $editorialMigrationService,
             $functionCaller(...)
         );
         $controller = new ProductManagerController(
