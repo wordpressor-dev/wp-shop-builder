@@ -74,13 +74,58 @@ final class ProductEditorialMigrationService
                 '_wp_shop_en_meta_description'
             ),
         ];
-        $generated = $this->builder->build(
+        $backup = ($this->call)(
+            'get_post_meta',
+            $productId,
+            self::BACKUP_META,
+            true
+        );
+        $signals = $this->signals($productId, $baseTitle);
+        $generic = $this->builder->build(
             $baseTitle,
             $developer,
             $productType,
-            $this->signals($productId, $baseTitle),
+            $signals,
             $sourceUpdateDate
         );
+        $generated = $generic;
+        $currentValues = [
+            $current['ruShort'],
+            $current['ruLong'],
+            $current['ruMeta'],
+            $current['enShort'],
+            $current['enLong'],
+            $current['enMeta'],
+        ];
+        $genericValues = [
+            $generic['ruShort'],
+            $generic['ruLong'],
+            $generic['ruMeta'],
+            $generic['enShort'],
+            $generic['enLong'],
+            $generic['enMeta'],
+        ];
+
+        if (is_array($backup) && $backup !== []) {
+            $generated = $this->builder->build(
+                $baseTitle,
+                $developer,
+                $productType,
+                $signals,
+                $sourceUpdateDate,
+                $backup
+            );
+        } elseif (! $this->sameList($currentValues, $genericValues)) {
+            $generated = $this->builder->build(
+                $baseTitle,
+                $developer,
+                $productType,
+                $signals,
+                $sourceUpdateDate,
+                $current
+            );
+        }
+
         $ruStatus = $this->pairStatus(
             [$current['ruShort'], $current['ruLong']],
             [$generated['ruShort'], $generated['ruLong']]
@@ -92,12 +137,6 @@ final class ProductEditorialMigrationService
         $metaStatus = $this->singleStatus(
             $current['ruMeta'],
             $generated['ruMeta']
-        );
-        $backup = ($this->call)(
-            'get_post_meta',
-            $productId,
-            self::BACKUP_META,
-            true
         );
 
         return [
@@ -166,7 +205,7 @@ final class ProductEditorialMigrationService
             'update_post_meta',
             $productId,
             self::STANDARD_META,
-            'v27'
+            'v28'
         );
         ($this->call)(
             'update_post_meta',
@@ -183,7 +222,7 @@ final class ProductEditorialMigrationService
             'SURERANK META DESCRIPTION = UPDATED',
             'EN SHORT / LONG / META = PREPARED',
             'TRANSLATEPRESS = NOT TOUCHED',
-            'EDITORIAL STANDARD = v27',
+            'EDITORIAL STANDARD = v28',
         ];
     }
 
