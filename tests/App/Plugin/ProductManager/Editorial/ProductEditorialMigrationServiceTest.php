@@ -6,6 +6,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager\Editorial;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
+use WPShop\App\Plugin\ProductManager\Translation\ProductTranslationResult;
 
 final class ProductEditorialMigrationServiceTest extends TestCase
 {
@@ -86,7 +87,7 @@ final class ProductEditorialMigrationServiceTest extends TestCase
         $logs = $service->apply(4561);
 
         self::assertContains('EDITORIAL BACKUP = CREATED', $logs);
-        self::assertContains('TRANSLATEPRESS = NOT TOUCHED', $logs);
+        self::assertContains('TRANSLATEPRESS SYNC = NOT AVAILABLE', $logs);
         self::assertIsArray($meta['_wp_shop_editorial_backup_v28']);
         self::assertSame('v28', $meta['_wp_shop_editorial_standard']);
         self::assertStringContainsString(
@@ -117,6 +118,34 @@ final class ProductEditorialMigrationServiceTest extends TestCase
         $after = $service->preview(4561);
         self::assertSame('CURRENT', $after['status']);
         self::assertTrue($after['backupAvailable']);
+
+        $translatedProductId = 0;
+        $syncService = new ProductEditorialMigrationService(
+            $this->caller($post, $meta),
+            translate: static function (
+                int $productId,
+                string $enShort,
+                string $enLong,
+                string $enMeta
+            ) use (&$translatedProductId): ProductTranslationResult {
+                $translatedProductId = $productId;
+                self::assertNotSame('', $enShort);
+                self::assertNotSame('', $enLong);
+                self::assertNotSame('', $enMeta);
+
+                return new ProductTranslationResult(
+                    true,
+                    ['EN FILLED = 12', 'OVERALL = READY']
+                );
+            }
+        );
+        $syncLogs = $syncService->apply(4561);
+
+        self::assertSame(4561, $translatedProductId);
+        self::assertContains('EDITORIAL MIGRATION = NO CHANGE', $syncLogs);
+        self::assertContains('TRANSLATEPRESS SYNC = READY', $syncLogs);
+        self::assertContains('EN FILLED = 12', $syncLogs);
+        self::assertContains('OVERALL = READY', $syncLogs);
 
         $restoreLogs = $service->restore(4561);
 
