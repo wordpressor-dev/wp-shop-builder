@@ -20,7 +20,11 @@ final class ProductDraftDataEditorialTest extends TestCase
             $data->shortDescription
         );
         self::assertStringContainsString(
-            '<h3>Назначение и основные сведения</h3>',
+            '<h3>Elementor и настройка страниц</h3>',
+            $data->longDescription
+        );
+        self::assertStringContainsString(
+            '<h3>Кому подходит Villora?</h3>',
             $data->longDescription
         );
         self::assertStringContainsString(
@@ -28,7 +32,11 @@ final class ProductDraftDataEditorialTest extends TestCase
             $data->enShortDescription
         );
         self::assertStringContainsString(
-            '<h3>Purpose and product details</h3>',
+            '<h3>Elementor and page building</h3>',
+            $data->enLongDescription
+        );
+        self::assertStringContainsString(
+            '<h3>Who is Villora for?</h3>',
             $data->enLongDescription
         );
         self::assertNotSame('RU meta placeholder', $data->metaDescription);
