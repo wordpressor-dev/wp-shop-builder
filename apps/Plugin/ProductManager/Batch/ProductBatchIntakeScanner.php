@@ -26,7 +26,8 @@ final class ProductBatchIntakeScanner
      */
     public function __construct(
         private readonly Closure $call,
-        private readonly ProductArchiveVersionInspector $versionInspector
+        private readonly ProductArchiveVersionInspector $versionInspector,
+        private readonly ProductArchiveIdentityInspector $identityInspector
     ) {
     }
 
@@ -60,9 +61,7 @@ final class ProductBatchIntakeScanner
         return $directory;
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     public function folders(string $uploadsBaseDir): array
     {
         $root = $this->ensureInbox($uploadsBaseDir);
@@ -125,14 +124,12 @@ final class ProductBatchIntakeScanner
         $rows = [];
 
         foreach ($entries as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-
             $path = $directory . DIRECTORY_SEPARATOR . $entry;
 
             if (
-                ! is_file($path)
+                $entry === '.'
+                || $entry === '..'
+                || ! is_file($path)
                 || strtolower((string) pathinfo($entry, PATHINFO_EXTENSION)) !== 'zip'
             ) {
                 continue;
@@ -152,11 +149,6 @@ final class ProductBatchIntakeScanner
         return $rows;
     }
 
-    /**
-     * Apply one READY UPDATE row directly from INBOX. The source file is copied
-     * to canonical storage first, so it remains available for rollback until
-     * the WooCommerce update succeeds.
-     */
     public function applyUpdate(
         string $uploadsBaseDir,
         string $folder,
@@ -182,11 +174,10 @@ final class ProductBatchIntakeScanner
             );
         }
 
-        $productId = $row['productId'];
         $updater = new ProductVersionUpdater($this->call);
 
         try {
-            $snapshot = $updater->load($productId);
+            $snapshot = $updater->load($row['productId']);
         } catch (Throwable $exception) {
             return $this->batchFailure(
                 'BATCH APPLY LOAD ERROR = ' . $exception->getMessage()
@@ -203,10 +194,7 @@ final class ProductBatchIntakeScanner
 
         try {
             $transport = new WordPressEnvatoTransport();
-            $client = new EnvatoClient(
-                $transport(...),
-                new EnvatoItemMapper()
-            );
+            $client = new EnvatoClient($transport(...), new EnvatoItemMapper());
             $suggestion = (new ProductUpdateEnvatoAdvisor($client))->suggest(
                 $snapshot,
                 $token
@@ -235,9 +223,7 @@ final class ProductBatchIntakeScanner
         $uploads = ($this->call)('wp_upload_dir');
 
         if (! is_array($uploads)) {
-            return $this->batchFailure(
-                'BATCH APPLY = WORDPRESS UPLOADS UNAVAILABLE'
-            );
+            return $this->batchFailure('BATCH APPLY = WORDPRESS UPLOADS UNAVAILABLE');
         }
 
         $baseDir = trim((string) ($uploads['basedir'] ?? ''));
@@ -250,19 +236,14 @@ final class ProductBatchIntakeScanner
         }
 
         if (! $this->validZipSignature($sourcePath)) {
-            return $this->batchFailure(
-                'BATCH APPLY = INVALID ZIP SIGNATURE'
-            );
+            return $this->batchFailure('BATCH APPLY = INVALID ZIP SIGNATURE');
         }
 
         $storage = CatalogProductType::storageFolder($productType);
         $vendor = ProductDownloadUrl::vendorFolder($skuFilename);
         $storagePath = $storage . ($vendor !== '' ? '/' . $vendor : '');
         $directory = rtrim($baseDir, '/\\')
-            . '/woocommerce_uploads/'
-            . $storagePath
-            . '/'
-            . $snapshot->itemId;
+            . '/woocommerce_uploads/' . $storagePath . '/' . $snapshot->itemId;
 
         if (! (bool) ($this->call)('wp_mkdir_p', $directory)) {
             return $this->batchFailure(
@@ -332,10 +313,7 @@ final class ProductBatchIntakeScanner
                         'BATCH PRODUCT ID = ' . $snapshot->productId,
                     ],
                     $preflight->logs,
-                    [
-                        'BATCH APPLY = PREFLIGHT FAILED',
-                        'BATCH ROLLBACK = READY',
-                    ]
+                    ['BATCH APPLY = PREFLIGHT FAILED', 'BATCH ROLLBACK = READY']
                 )
             );
         }
@@ -348,16 +326,10 @@ final class ProductBatchIntakeScanner
             return new ProductUpdateResult(
                 false,
                 array_merge(
-                    [
-                        'BATCH APPLY = RECEIVED',
-                        'BATCH ZIP = ' . $filename,
-                    ],
+                    ['BATCH APPLY = RECEIVED', 'BATCH ZIP = ' . $filename],
                     $preflight->logs,
                     $result->logs,
-                    [
-                        'BATCH APPLY = PRODUCT UPDATE FAILED',
-                        'BATCH ROLLBACK = READY',
-                    ]
+                    ['BATCH APPLY = PRODUCT UPDATE FAILED', 'BATCH ROLLBACK = READY']
                 )
             );
         }
@@ -401,9 +373,6 @@ final class ProductBatchIntakeScanner
         );
     }
 
-    /**
-     * Move a source ZIP out of the active batch without touching products.
-     */
     public function moveToBucket(
         string $uploadsBaseDir,
         string $folder,
@@ -423,12 +392,9 @@ final class ProductBatchIntakeScanner
             throw new RuntimeException('Source ZIP does not exist.');
         }
 
-        $root = $this->ensureInbox($uploadsBaseDir);
-        $targetDir = $root . DIRECTORY_SEPARATOR . $bucket;
-
-        if ($folder !== '') {
-            $targetDir .= DIRECTORY_SEPARATOR . $folder;
-        }
+        $targetDir = $this->ensureInbox($uploadsBaseDir)
+            . DIRECTORY_SEPARATOR . $bucket
+            . ($folder !== '' ? DIRECTORY_SEPARATOR . $folder : '');
 
         if (! (bool) ($this->call)('wp_mkdir_p', $targetDir)) {
             throw new RuntimeException('Cannot create INBOX bucket directory.');
@@ -498,24 +464,17 @@ final class ProductBatchIntakeScanner
         string $filename,
         string $folder
     ): array {
+        $identity = $this->identityInspector->inspect($path, $filename);
         $itemId = $this->itemIdFromFilename($filename);
         $productId = $itemId > 0 ? $this->productIdByItemId($itemId) : 0;
-        $productTitle = $productId > 0
-            ? trim((string) ($this->call)('get_the_title', $productId))
-            : '';
-        $identity = $this->archiveIdentity($path, $filename);
 
-        if ($productId <= 0 && $itemId <= 0 && $identity['name'] !== '') {
+        if ($productId <= 0 && $identity->success && $identity->name !== '') {
             $productId = $this->productIdByArchiveIdentity(
-                $identity['name'],
-                $identity['type']
+                $identity->name,
+                $identity->productType
             );
 
             if ($productId > 0) {
-                $productTitle = trim((string) ($this->call)(
-                    'get_the_title',
-                    $productId
-                ));
                 $itemId = (int) ($this->call)(
                     'get_post_meta',
                     $productId,
@@ -525,11 +484,12 @@ final class ProductBatchIntakeScanner
             }
         }
 
+        $productTitle = $productId > 0
+            ? trim((string) ($this->call)('get_the_title', $productId))
+            : '';
         $productType = $productId > 0
             ? $this->existingProductType($productId, $productTitle)
-            : ($identity['type'] !== ''
-                ? $identity['type']
-                : $this->detectNewProductType($path, $filename));
+            : ($identity->success ? $identity->productType : '');
         $currentVersion = $productId > 0
             ? $this->currentVersion($productId)
             : '';
@@ -546,6 +506,14 @@ final class ProductBatchIntakeScanner
         } elseif ($productType === CatalogProductType::TEMPLATE_KIT) {
             $detectedVersion = '—';
             $note = 'VERSIONLESS TEMPLATE KIT';
+        } elseif (
+            $identity->success
+            && $identity->productType === $productType
+            && $identity->version !== ''
+        ) {
+            $detectedVersion = $identity->version;
+            $note = 'MATCHED BY ZIP IDENTITY: '
+                . $identity->name . ' (' . $identity->source . ')';
         } else {
             $inspection = $this->versionInspector->inspect(
                 [
@@ -561,11 +529,7 @@ final class ProductBatchIntakeScanner
                 $note = $inspection->logs[0] ?? 'ZIP VERSION NOT DETECTED';
             } else {
                 $detectedVersion = $inspection->version;
-                $note = $identity['source'] !== ''
-                    ? 'MATCHED BY ZIP IDENTITY: '
-                        . $identity['name']
-                        . ' (' . $identity['source'] . ')'
-                    : ($inspection->logs[2] ?? 'ZIP INSPECTION = READY');
+                $note = $inspection->logs[2] ?? 'ZIP INSPECTION = READY';
             }
         }
 
@@ -591,9 +555,7 @@ final class ProductBatchIntakeScanner
         string $folder,
         string $filename
     ): string {
-        $root = $this->ensureInbox($uploadsBaseDir);
-
-        return $root
+        return $this->ensureInbox($uploadsBaseDir)
             . ($folder !== '' ? DIRECTORY_SEPARATOR . $folder : '')
             . DIRECTORY_SEPARATOR . $filename;
     }
@@ -636,11 +598,8 @@ final class ProductBatchIntakeScanner
     private function itemIdFromFilename(string $filename): int
     {
         if (
-            preg_match(
-                '/(?:themeforest|codecanyon)-(\d+)-/i',
-                $filename,
-                $matches
-            ) === 1
+            preg_match('/(?:themeforest|codecanyon)-(\d+)-/i', $filename, $matches)
+            === 1
         ) {
             return (int) $matches[1];
         }
@@ -662,17 +621,11 @@ final class ProductBatchIntakeScanner
             ]
         );
 
-        if (! is_array($ids) || $ids === []) {
-            return 0;
-        }
-
-        return (int) reset($ids);
+        return is_array($ids) && $ids !== [] ? (int) reset($ids) : 0;
     }
 
-    private function productIdByArchiveIdentity(
-        string $name,
-        string $type
-    ): int {
+    private function productIdByArchiveIdentity(string $name, string $type): int
+    {
         $tokens = $this->identityTokens($name);
 
         if ($tokens === []) {
@@ -702,13 +655,9 @@ final class ProductBatchIntakeScanner
                 continue;
             }
 
-            $title = trim((string) ($this->call)(
-                'get_the_title',
-                $candidateId
-            ));
-            $storedType = $this->existingProductType($candidateId, $title);
+            $title = trim((string) ($this->call)('get_the_title', $candidateId));
 
-            if ($type !== '' && $storedType !== $type) {
+            if ($type !== '' && $this->existingProductType($candidateId, $title) !== $type) {
                 continue;
             }
 
@@ -735,166 +684,7 @@ final class ProductBatchIntakeScanner
         return count($matches) === 1 ? $matches[0] : 0;
     }
 
-    /**
-     * @return array{name: string, type: string, source: string}
-     */
-    private function archiveIdentity(string $path, string $filename): array
-    {
-        if (! class_exists(\ZipArchive::class)) {
-            return ['name' => '', 'type' => '', 'source' => ''];
-        }
-
-        $zip = new \ZipArchive();
-
-        if ($zip->open($path) !== true) {
-            return ['name' => '', 'type' => '', 'source' => ''];
-        }
-
-        try {
-            $theme = $this->themeIdentity($zip);
-
-            if ($theme['name'] !== '') {
-                return $theme;
-            }
-
-            $plugin = $this->pluginIdentity($zip);
-
-            if ($plugin['name'] !== '') {
-                return $plugin;
-            }
-        } finally {
-            $zip->close();
-        }
-
-        $base = (string) pathinfo($filename, PATHINFO_FILENAME);
-
-        return [
-            'name' => trim(str_replace(['-', '_'], ' ', $base)),
-            'type' => '',
-            'source' => '',
-        ];
-    }
-
-    /**
-     * @return array{name: string, type: string, source: string}
-     */
-    private function themeIdentity(\ZipArchive $zip): array
-    {
-        $candidates = [];
-
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $name = $zip->getNameIndex($index);
-
-            if (! is_string($name)) {
-                continue;
-            }
-
-            $normalized = strtolower(str_replace('\\', '/', $name));
-
-            if ($normalized === 'style.css' || str_ends_with($normalized, '/style.css')) {
-                $candidates[] = [substr_count(trim($normalized, '/'), '/'), $index, $name];
-            }
-        }
-
-        usort(
-            $candidates,
-            static fn (array $left, array $right): int => $left[0] <=> $right[0]
-        );
-
-        foreach ($candidates as [, $index, $source]) {
-            $header = $zip->getFromIndex((int) $index, 16384);
-
-            if (! is_string($header)) {
-                continue;
-            }
-
-            $name = $this->headerValue($header, 'Theme Name');
-
-            if ($name !== '') {
-                return [
-                    'name' => $name,
-                    'type' => CatalogProductType::THEME,
-                    'source' => (string) $source,
-                ];
-            }
-        }
-
-        return ['name' => '', 'type' => '', 'source' => ''];
-    }
-
-    /**
-     * @return array{name: string, type: string, source: string}
-     */
-    private function pluginIdentity(\ZipArchive $zip): array
-    {
-        $candidates = [];
-
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $name = $zip->getNameIndex($index);
-
-            if (! is_string($name)) {
-                continue;
-            }
-
-            $normalized = strtolower(str_replace('\\', '/', $name));
-
-            if (
-                ! str_ends_with($normalized, '.php')
-                || str_contains($normalized, '/vendor/')
-                || str_contains($normalized, '/node_modules/')
-                || str_starts_with($normalized, '__macosx/')
-            ) {
-                continue;
-            }
-
-            $candidates[] = [substr_count(trim($normalized, '/'), '/'), $index, $name];
-        }
-
-        usort(
-            $candidates,
-            static fn (array $left, array $right): int => $left[0] <=> $right[0]
-        );
-
-        foreach (array_slice($candidates, 0, 80) as [, $index, $source]) {
-            $header = $zip->getFromIndex((int) $index, 16384);
-
-            if (! is_string($header)) {
-                continue;
-            }
-
-            $name = $this->headerValue($header, 'Plugin Name');
-
-            if ($name !== '') {
-                return [
-                    'name' => $name,
-                    'type' => CatalogProductType::PLUGIN,
-                    'source' => (string) $source,
-                ];
-            }
-        }
-
-        return ['name' => '', 'type' => '', 'source' => ''];
-    }
-
-    private function headerValue(string $content, string $field): string
-    {
-        $pattern = '/^[ \t\/*#@]*'
-            . preg_quote($field, '/')
-            . '\s*:\s*(.+?)\s*$/mi';
-
-        if (preg_match($pattern, $content, $matches) !== 1) {
-            return '';
-        }
-
-        $value = trim((string) $matches[1]);
-        $value = preg_replace('/\s*(?:\*\/)?\s*$/', '', $value);
-
-        return is_string($value) ? trim($value) : '';
-    }
-
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function identityTokens(string $name): array
     {
         $normalized = strtolower((string) preg_replace('/[^a-z0-9]+/i', ' ', $name));
@@ -906,20 +696,16 @@ final class ProductBatchIntakeScanner
         $result = [];
 
         foreach ($tokens as $token) {
-            if (strlen($token) < 4 || in_array($token, $stop, true)) {
-                continue;
+            if (strlen($token) >= 4 && ! in_array($token, $stop, true)) {
+                $result[] = $token;
             }
-
-            $result[] = $token;
         }
 
         return array_values(array_unique(array_slice($result, 0, 4)));
     }
 
-    private function existingProductType(
-        int $productId,
-        string $productTitle
-    ): string {
+    private function existingProductType(int $productId, string $productTitle): string
+    {
         $stored = trim((string) ($this->call)(
             'get_post_meta',
             $productId,
@@ -949,32 +735,6 @@ final class ProductBatchIntakeScanner
         ));
 
         return CatalogProductType::infer($productTitle, $salesPage);
-    }
-
-    private function detectNewProductType(
-        string $path,
-        string $filename
-    ): string {
-        if (str_starts_with(strtolower($filename), 'codecanyon-')) {
-            return CatalogProductType::PLUGIN;
-        }
-
-        if (! str_starts_with(strtolower($filename), 'themeforest-')) {
-            return '';
-        }
-
-        $themeInspection = $this->versionInspector->inspect(
-            [
-                'name' => $filename,
-                'tmp_name' => $path,
-                'error' => UPLOAD_ERR_OK,
-            ],
-            CatalogProductType::THEME
-        );
-
-        return $themeInspection->success
-            ? CatalogProductType::THEME
-            : CatalogProductType::TEMPLATE_KIT;
     }
 
     private function currentVersion(int $productId): string
@@ -1008,14 +768,7 @@ final class ProductBatchIntakeScanner
 
     private function validZipSignature(string $path): bool
     {
-        $signature = ($this->call)(
-            'file_get_contents',
-            $path,
-            false,
-            null,
-            0,
-            4
-        );
+        $signature = ($this->call)('file_get_contents', $path, false, null, 0, 4);
 
         return is_string($signature)
             && in_array(
@@ -1048,11 +801,7 @@ final class ProductBatchIntakeScanner
     {
         return new ProductUpdateResult(
             false,
-            [
-                'BATCH APPLY = STOPPED',
-                $message,
-                'NO PRODUCT WRITTEN = YES',
-            ]
+            ['BATCH APPLY = STOPPED', $message, 'NO PRODUCT WRITTEN = YES']
         );
     }
 }
