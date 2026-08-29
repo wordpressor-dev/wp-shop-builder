@@ -331,7 +331,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $functionCaller(
             'add_filter',
-            'the_content',
+            'woocommerce_product_get_short_description',
+            [$preparedEnglishContent, 'filterShortDescription'],
+            999,
+            1
+        );
+        $functionCaller(
+            'add_filter',
+            'woocommerce_product_get_description',
             [$preparedEnglishContent, 'filterLongDescription'],
             999,
             1
