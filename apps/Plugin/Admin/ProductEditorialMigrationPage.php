@@ -115,7 +115,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Editorial Migration</h1>';
-        echo '<p>Приведение старых товаров к единому v27 editorial-стандарту. Сначала Preview, затем Apply. Перед первой заменой каждого товара автоматически сохраняется исходный RU/EN/Meta backup.</p>';
+        echo '<p>Приведение старых товаров к единому v28 editorial-стандарту. Сначала Preview, затем Apply. Перед первой заменой каждого товара автоматически сохраняется исходный RU/EN/Meta backup.</p>';
 
         $this->renderLogs($logs, $success);
 
@@ -257,7 +257,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
 
         echo '</tbody></table>';
         echo '<p style="margin-bottom:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
-        echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Apply v27 editorial content to all selected products? Each product is backed up first.\');">Apply selected (max 25)</button>';
+        echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Apply v28 editorial content to all selected products? Each product is backed up first.\');">Apply selected (max 25)</button>';
         echo '<span>Выбирай только проверенные строки. CURRENT будет безопасно пропущен без записи.</span></p>';
         echo '</form>';
         $this->renderPagination($search, $page, $perPage, $hasNext);
@@ -288,7 +288,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             . ' &nbsp; <strong>Developer:</strong> ' . $this->escape($preview['developer'] !== '' ? $preview['developer'] : '—')
             . ' &nbsp; <strong>Source date:</strong> ' . $this->escape($preview['sourceUpdateDate'] !== '' ? $preview['sourceUpdateDate'] : '—')
             . '</p>';
-        echo '<table class="widefat striped"><thead><tr><th style="width:160px;">Field</th><th>Current</th><th>Generated v27</th></tr></thead><tbody>';
+        echo '<table class="widefat striped"><thead><tr><th style="width:160px;">Field</th><th>Current</th><th>Generated v28</th></tr></thead><tbody>';
 
         foreach (
             [
