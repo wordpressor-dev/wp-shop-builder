@@ -25,7 +25,7 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruShort']
         );
         self::assertStringContainsString(
-            'villa, hotel and resort',
+            'villas, hotels and resorts',
             $content['enShort']
         );
         self::assertStringContainsString(
@@ -40,6 +40,43 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             'Перед публикацией проверьте описание',
             $content['ruLong']
         );
+    }
+
+    public function testPrefersTitleTopicAndFiltersCompatibilityNoise(): void
+    {
+        $content = (new ProductEditorialDraftBuilder())->build(
+            'Edubin – Education WordPress Theme',
+            'pixelcurve',
+            CatalogProductType::THEME,
+            [
+                'learndash',
+                'lms',
+                'loco translate',
+                'rtl',
+                'woocommerce',
+                'wpml',
+            ],
+            '2026-08-28'
+        );
+
+        self::assertStringContainsString(
+            'образование и онлайн-обучение и LMS',
+            $content['ruShort']
+        );
+        self::assertStringContainsString(
+            'education and online learning and LMS',
+            $content['enShort']
+        );
+
+        foreach (
+            ['learndash', 'loco translate', 'rtl', 'woocommerce', 'wpml']
+            as $noise
+        ) {
+            self::assertStringNotContainsString(
+                $noise,
+                strtolower($content['enLong'])
+            );
+        }
     }
 
     public function testBuildsCompleteThemeAndPluginDraftsWithoutTopics(): void
