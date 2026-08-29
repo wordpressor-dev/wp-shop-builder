@@ -16,7 +16,7 @@ final class ProductDraftDataEditorialTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'виллы, отели и курорты',
+            'отели, курорты и виллы',
             $data->shortDescription
         );
         self::assertStringContainsString(
@@ -24,7 +24,7 @@ final class ProductDraftDataEditorialTest extends TestCase
             $data->longDescription
         );
         self::assertStringContainsString(
-            'villa, hotel and resort',
+            'hotels, resorts and villas',
             $data->enShortDescription
         );
         self::assertStringContainsString(
