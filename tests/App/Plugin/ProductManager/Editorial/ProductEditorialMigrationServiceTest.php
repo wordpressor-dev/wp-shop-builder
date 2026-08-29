@@ -59,11 +59,19 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             $preview['generated']['ruShort']
         );
         self::assertStringContainsString(
-            'расписание занятий',
+            '<h3>Основные возможности</h3>',
             $preview['generated']['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Основные сведения</h3>',
+            '<li>расписание занятий.</li>',
+            $preview['generated']['ruLong']
+        );
+        self::assertStringContainsString(
+            '<li>страницы преподавателей.</li>',
+            $preview['generated']['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Техническая информация</h3>',
             $preview['generated']['ruLong']
         );
 
@@ -78,11 +86,11 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             (string) $post['post_excerpt']
         );
         self::assertStringContainsString(
-            'расписание занятий',
+            '<h3>Основные возможности</h3>',
             (string) $post['post_content']
         );
         self::assertStringContainsString(
-            '<h3>Основные сведения</h3>',
+            '<h3>Техническая информация</h3>',
             (string) $post['post_content']
         );
         self::assertSame(
