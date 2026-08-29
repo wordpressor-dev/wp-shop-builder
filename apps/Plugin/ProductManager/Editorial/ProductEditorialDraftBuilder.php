@@ -58,14 +58,14 @@ final class ProductEditorialDraftBuilder
             $developer,
             $productType,
             $ruTopics,
-            $sourceUpdateDate
+            $sourceTags
         );
         $enLong = $this->enLong(
             $title,
             $developer,
             $productType,
             $enTopics,
-            $sourceUpdateDate
+            $sourceTags
         );
 
         $ruMeta = $title . ' — ' . $ruType . $ruDeveloper;
@@ -79,8 +79,12 @@ final class ProductEditorialDraftBuilder
             $enMeta .= '. For ' . $enTopics;
         }
 
-        $legacyRuShort = $this->legacyText((string) ($legacy['ruShort'] ?? ''));
-        $legacyRuLong = $this->legacyText((string) ($legacy['ruLong'] ?? ''));
+        $legacyRuShort = $this->legacyText(
+            (string) ($legacy['ruShort'] ?? '')
+        );
+        $legacyRuLong = $this->legacyText(
+            (string) ($legacy['ruLong'] ?? '')
+        );
 
         if ($legacyRuShort !== '' || $legacyRuLong !== '') {
             $ruSource = $legacyRuShort !== '' ? $legacyRuShort : $legacyRuLong;
@@ -90,16 +94,19 @@ final class ProductEditorialDraftBuilder
                 $title,
                 $ruSource,
                 $ruDetails,
-                $developer,
                 $productType,
                 $ruTopics,
-                $sourceUpdateDate
+                $sourceTags
             );
             $ruMeta = $this->limit($ruSource);
         }
 
-        $legacyEnShort = $this->legacyText((string) ($legacy['enShort'] ?? ''));
-        $legacyEnLong = $this->legacyText((string) ($legacy['enLong'] ?? ''));
+        $legacyEnShort = $this->legacyText(
+            (string) ($legacy['enShort'] ?? '')
+        );
+        $legacyEnLong = $this->legacyText(
+            (string) ($legacy['enLong'] ?? '')
+        );
 
         if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             $enSource = $legacyEnShort !== '' ? $legacyEnShort : $legacyEnLong;
@@ -109,10 +116,9 @@ final class ProductEditorialDraftBuilder
                 $title,
                 $enSource,
                 $enDetails,
-                $developer,
                 $productType,
                 $enTopics,
-                $sourceUpdateDate
+                $sourceTags
             );
             $enMeta = $this->limit($enSource);
         }
@@ -127,35 +133,25 @@ final class ProductEditorialDraftBuilder
         ];
     }
 
+    /** @param list<string> $sourceTags */
     private function ruLegacyLong(
         string $title,
         string $legacySummary,
         string $legacyDetails,
-        string $developer,
         string $productType,
         string $topics,
-        string $sourceUpdateDate
+        array $sourceTags
     ): string {
         $safeTitle = $this->text($title);
-        $type = $this->ruType($productType);
+        $product = $this->productName($title);
         $features = $this->legacyFeatures(
             $legacyDetails,
             $this->sameText($legacySummary, $legacyDetails)
         );
         $featuresSection = $this->featureSection(
-            'Основные возможности',
+            'Основные возможности ' . $product,
             $features
         );
-        $scope = $topics !== ''
-            ? '<li><strong>Тематика:</strong> ' . $this->text($topics) . '.</li>'
-            : '';
-        $developerRow = $developer !== ''
-            ? '<li><strong>Разработчик:</strong> ' . $this->text($developer) . '.</li>'
-            : '';
-        $dateRow = $sourceUpdateDate !== ''
-            ? '<li><strong>Дата обновления источника:</strong> '
-                . $this->text($sourceUpdateDate) . '.</li>'
-            : '';
         $detailsFallback = $featuresSection === ''
             && ! $this->sameText($legacySummary, $legacyDetails)
                 ? '<h3>Описание и возможности</h3><p>'
@@ -164,43 +160,50 @@ final class ProductEditorialDraftBuilder
 
         return '<h2>' . $safeTitle . '</h2>'
             . '<p>' . $this->text($legacySummary) . '</p>'
+            . $this->ruLeadParagraph(
+                $product,
+                $legacySummary,
+                $legacyDetails,
+                $productType,
+                $topics
+            )
             . $featuresSection
             . $detailsFallback
-            . '<h3>Техническая информация</h3>'
-            . '<ul>'
-            . '<li><strong>Тип продукта:</strong> ' . $this->text($type) . '.</li>'
-            . $scope
-            . $developerRow
-            . $dateRow
-            . '</ul>';
+            . $this->ruEditorialSections(
+                $product,
+                $legacySummary,
+                $legacyDetails,
+                $productType,
+                $topics,
+                $sourceTags
+            )
+            . $this->ruAudienceSection(
+                $product,
+                $legacySummary,
+                $productType,
+                $topics
+            );
     }
 
+    /** @param list<string> $sourceTags */
     private function enLegacyLong(
         string $title,
         string $legacySummary,
         string $legacyDetails,
-        string $developer,
         string $productType,
         string $topics,
-        string $sourceUpdateDate
+        array $sourceTags
     ): string {
         $safeTitle = $this->text($title);
-        $type = $this->enType($productType);
+        $product = $this->productName($title);
         $features = $this->legacyFeatures(
             $legacyDetails,
             $this->sameText($legacySummary, $legacyDetails)
         );
-        $featuresSection = $this->featureSection('Key features', $features);
-        $scope = $topics !== ''
-            ? '<li><strong>Project focus:</strong> ' . $this->text($topics) . '.</li>'
-            : '';
-        $developerRow = $developer !== ''
-            ? '<li><strong>Developer:</strong> ' . $this->text($developer) . '.</li>'
-            : '';
-        $dateRow = $sourceUpdateDate !== ''
-            ? '<li><strong>Source update date:</strong> '
-                . $this->text($sourceUpdateDate) . '.</li>'
-            : '';
+        $featuresSection = $this->featureSection(
+            'Key features of ' . $product,
+            $features
+        );
         $detailsFallback = $featuresSection === ''
             && ! $this->sameText($legacySummary, $legacyDetails)
                 ? '<h3>Description and features</h3><p>'
@@ -209,103 +212,400 @@ final class ProductEditorialDraftBuilder
 
         return '<h2>' . $safeTitle . '</h2>'
             . '<p>' . $this->text($legacySummary) . '</p>'
+            . $this->enLeadParagraph(
+                $product,
+                $legacySummary,
+                $legacyDetails,
+                $productType,
+                $topics
+            )
             . $featuresSection
             . $detailsFallback
-            . '<h3>Technical information</h3>'
-            . '<ul>'
-            . '<li><strong>Product type:</strong> ' . $this->text($type) . '.</li>'
-            . $scope
-            . $developerRow
-            . $dateRow
-            . '</ul>';
+            . $this->enEditorialSections(
+                $product,
+                $legacySummary,
+                $legacyDetails,
+                $productType,
+                $topics,
+                $sourceTags
+            )
+            . $this->enAudienceSection(
+                $product,
+                $legacySummary,
+                $productType,
+                $topics
+            );
     }
 
+    private function ruLeadParagraph(
+        string $product,
+        string $summary,
+        string $details,
+        string $productType,
+        string $topics
+    ): string {
+        $combined = $summary . ' ' . $details;
+
+        if ($this->matches($combined, '/(?:образован|lms|курс|школ)/ui')) {
+            return '<p>' . $this->text(
+                $product
+                . ' ориентирован на образовательные проекты. '
+                . 'Сведения в карточке указывают на сценарии онлайн-обучения, '
+                . 'работу с учебным контентом и организацию образовательного сайта.'
+            ) . '</p>';
+        }
+
+        if ($topics !== '') {
+            return '<p>' . $this->text(
+                $product . ' можно рассматривать для проектов в тематике '
+                . $topics . '. Основные возможности перечислены ниже на основе '
+                . 'имеющегося описания товара.'
+            ) . '</p>';
+        }
+
+        $type = $this->ruType($productType);
+
+        return '<p>' . $this->text(
+            $product . ' — ' . $type
+            . '. Ниже собраны основные возможности из существующего описания товара.'
+        ) . '</p>';
+    }
+
+    private function enLeadParagraph(
+        string $product,
+        string $summary,
+        string $details,
+        string $productType,
+        string $topics
+    ): string {
+        $combined = $summary . ' ' . $details;
+
+        if ($this->matches($combined, '/(?:education|lms|course|school)/ui')) {
+            return '<p>' . $this->text(
+                $product
+                . ' is aimed at education projects. The available product '
+                . 'information points to online learning, course content and '
+                . 'education-site workflows.'
+            ) . '</p>';
+        }
+
+        if ($topics !== '') {
+            return '<p>' . $this->text(
+                $product . ' can be considered for projects focused on '
+                . $topics . '. The main capabilities below are based on the '
+                . 'existing product description.'
+            ) . '</p>';
+        }
+
+        return '<p>' . $this->text(
+            $product . ' is a ' . $this->enType($productType)
+            . '. The main capabilities below are preserved from the existing '
+            . 'product description.'
+        ) . '</p>';
+    }
+
+    /** @param list<string> $sourceTags */
+    private function ruEditorialSections(
+        string $product,
+        string $summary,
+        string $details,
+        string $productType,
+        string $topics,
+        array $sourceTags
+    ): string {
+        $html = '';
+        $combined = $summary . ' ' . $details;
+
+        if (
+            $this->matches($combined, '/(?:lms|курс|обучен|преподавател)/ui')
+            || $this->hasAnyTag(
+                $sourceTags,
+                ['learndash', 'learnpress', 'lifterlms', 'sensei', 'tutor', 'tutor lms']
+            )
+        ) {
+            $facts = $this->matchingFacts(
+                $details,
+                '/(?:lms|курс|расписан|преподавател|учеб)/ui'
+            );
+            $sentence = $facts !== []
+                ? 'В существующем описании отмечены ' . $this->humanList($facts, 'ru') . '.'
+                : 'В данных товара отмечена направленность на LMS и онлайн-обучение.';
+            $html .= '<h3>Онлайн-курсы и LMS</h3><p>'
+                . $this->text($sentence)
+                . ' Это делает ' . $this->text($product)
+                . ' подходящей основой для образовательных сайтов, где важна '
+                . 'структура учебного контента и связанных страниц.</p>';
+        }
+
+        if ($this->hasAnyTag($sourceTags, ['elementor', 'elementor pro'])) {
+            $html .= '<h3>Elementor и настройка страниц</h3><p>'
+                . 'Elementor указан среди связанных технологий продукта. '
+                . 'Это позволяет учитывать визуальный редактор при настройке '
+                . 'страниц и подготовке структуры сайта.</p>';
+        }
+
+        if ($this->hasAnyTag($sourceTags, ['woocommerce'])) {
+            $html .= '<h3>WooCommerce и коммерческие сценарии</h3><p>'
+                . 'WooCommerce отмечен среди интеграций продукта. Поэтому '
+                . $this->text($product)
+                . ' можно рассматривать для проектов, где вместе с основным '
+                . 'сайтом используются стандартные возможности интернет-магазина.</p>';
+        }
+
+        $languageTags = $this->selectedTags(
+            $sourceTags,
+            ['wpml', 'rtl', 'loco translate', 'translation ready']
+        );
+
+        if ($languageTags !== []) {
+            $html .= '<h3>Многоязычные проекты</h3><p>'
+                . 'В данных товара отмечены возможности, связанные с '
+                . $this->text($this->humanList($languageTags, 'ru'))
+                . '. Это полезно при подготовке сайтов для нескольких языков '
+                . 'или международной аудитории.</p>';
+        }
+
+        if ($html === '' && $topics !== '') {
+            $html .= '<h3>Сценарии использования</h3><p>'
+                . $this->text($product)
+                . ' подходит для проектов в тематике '
+                . $this->text($topics)
+                . '. Конкретный набор сценариев определяется возможностями, '
+                . 'зафиксированными в описании товара.</p>';
+        }
+
+        if ($html === '' && $productType === CatalogProductType::PLUGIN) {
+            $html .= '<h3>Сценарии использования</h3><p>'
+                . $this->text($product)
+                . ' расширяет WordPress специализированной функциональностью. '
+                . 'Практические сценарии зависят от возможностей, перечисленных '
+                . 'в описании плагина.</p>';
+        }
+
+        return $html;
+    }
+
+    /** @param list<string> $sourceTags */
+    private function enEditorialSections(
+        string $product,
+        string $summary,
+        string $details,
+        string $productType,
+        string $topics,
+        array $sourceTags
+    ): string {
+        $html = '';
+        $combined = $summary . ' ' . $details;
+
+        if (
+            $this->matches($combined, '/(?:lms|course|learning|instructor)/ui')
+            || $this->hasAnyTag(
+                $sourceTags,
+                ['learndash', 'learnpress', 'lifterlms', 'sensei', 'tutor', 'tutor lms']
+            )
+        ) {
+            $facts = $this->matchingFacts(
+                $details,
+                '/(?:lms|course|class|schedule|instructor|learning)/ui'
+            );
+            $sentence = $facts !== []
+                ? 'The existing description highlights '
+                    . $this->humanList($facts, 'en') . '.'
+                : 'The product data indicates an LMS and online-learning focus.';
+            $html .= '<h3>Online courses and LMS</h3><p>'
+                . $this->text($sentence)
+                . ' This makes ' . $this->text($product)
+                . ' relevant to education websites that need structured '
+                . 'learning content and related pages.</p>';
+        }
+
+        if ($this->hasAnyTag($sourceTags, ['elementor', 'elementor pro'])) {
+            $html .= '<h3>Elementor and page building</h3><p>'
+                . 'Elementor is listed among the product-related technologies. '
+                . 'It can therefore be considered when building and adjusting '
+                . 'the site page structure.</p>';
+        }
+
+        if ($this->hasAnyTag($sourceTags, ['woocommerce'])) {
+            $html .= '<h3>WooCommerce and commerce workflows</h3><p>'
+                . 'WooCommerce is listed among the product integrations. '
+                . $this->text($product)
+                . ' can therefore be considered for projects that combine the '
+                . 'main site with standard online-store functionality.</p>';
+        }
+
+        $languageTags = $this->selectedTags(
+            $sourceTags,
+            ['wpml', 'rtl', 'loco translate', 'translation ready']
+        );
+
+        if ($languageTags !== []) {
+            $html .= '<h3>Multilingual projects</h3><p>'
+                . 'The product data includes '
+                . $this->text($this->humanList($languageTags, 'en'))
+                . '. This is relevant when preparing sites for multiple '
+                . 'languages or an international audience.</p>';
+        }
+
+        if ($html === '' && $topics !== '') {
+            $html .= '<h3>Use cases</h3><p>'
+                . $this->text($product)
+                . ' is suitable for projects focused on '
+                . $this->text($topics)
+                . '. The exact workflows depend on the capabilities preserved '
+                . 'from the product description.</p>';
+        }
+
+        if ($html === '' && $productType === CatalogProductType::PLUGIN) {
+            $html .= '<h3>Use cases</h3><p>'
+                . $this->text($product)
+                . ' extends WordPress with focused functionality. Practical '
+                . 'workflows depend on the capabilities listed in the plugin '
+                . 'description.</p>';
+        }
+
+        return $html;
+    }
+
+    private function ruAudienceSection(
+        string $product,
+        string $summary,
+        string $productType,
+        string $topics
+    ): string {
+        $audience = $this->audienceFromRuSummary($summary);
+
+        if ($audience !== '') {
+            return '<h3>Кому подходит ' . $this->text($product) . '?</h3><p>'
+                . $this->text($product) . ' подходит для ' . $this->text($audience)
+                . '. Перед использованием стоит сверить конкретные требования '
+                . 'проекта с актуальной документацией продукта.</p>';
+        }
+
+        if ($topics !== '') {
+            return '<h3>Кому подходит ' . $this->text($product) . '?</h3><p>'
+                . $this->text($product)
+                . ' можно рассматривать для проектов в тематике '
+                . $this->text($topics)
+                . '. Выбор зависит от требуемых функций и структуры сайта.</p>';
+        }
+
+        return '<h3>Кому подходит ' . $this->text($product) . '?</h3><p>'
+            . $this->text($product) . ' подойдёт пользователям, которым нужен '
+            . $this->text($this->ruType($productType))
+            . ' с возможностями, перечисленными в описании товара.</p>';
+    }
+
+    private function enAudienceSection(
+        string $product,
+        string $summary,
+        string $productType,
+        string $topics
+    ): string {
+        $audience = $this->audienceFromEnSummary($summary);
+
+        if ($audience !== '') {
+            return '<h3>Who is ' . $this->text($product) . ' for?</h3><p>'
+                . $this->text($product) . ' is suitable for '
+                . $this->text($audience)
+                . '. Check the current product documentation against the '
+                . 'specific requirements of the project before use.</p>';
+        }
+
+        if ($topics !== '') {
+            return '<h3>Who is ' . $this->text($product) . ' for?</h3><p>'
+                . $this->text($product) . ' can be considered for projects '
+                . 'focused on ' . $this->text($topics)
+                . '. The final choice depends on the required site structure '
+                . 'and features.</p>';
+        }
+
+        return '<h3>Who is ' . $this->text($product) . ' for?</h3><p>'
+            . $this->text($product) . ' is suitable for users who need a '
+            . $this->text($this->enType($productType))
+            . ' with the capabilities listed in the product description.</p>';
+    }
+
+    /** @param list<string> $sourceTags */
     private function ruLong(
         string $title,
         string $developer,
         string $productType,
         string $topics,
-        string $sourceUpdateDate
+        array $sourceTags
     ): string {
         $safeTitle = $this->text($title);
+        $product = $this->productName($title);
         $type = $this->ruType($productType);
         $developerSentence = $developer !== ''
             ? ' Разработчик — ' . $this->text($developer) . '.'
             : '';
         $purpose = match ($productType) {
             CatalogProductType::PLUGIN =>
-                'Он расширяет возможности WordPress и предназначен для добавления специализированной функциональности без разработки решения с нуля.',
+                'Он расширяет возможности WordPress специализированной функциональностью.',
             CatalogProductType::TEMPLATE_KIT =>
-                'Он содержит согласованный набор шаблонов для сборки страниц в Elementor и помогает быстрее подготовить визуальную структуру сайта.',
+                'Он содержит согласованный набор шаблонов для сборки страниц в Elementor.',
             default =>
-                'Она служит готовой основой для WordPress-сайта и помогает быстрее перейти от установки к настройке структуры, оформления и контента.',
+                'Она служит готовой основой для WordPress-сайта.',
         };
-        $scope = $topics !== ''
-            ? '<li><strong>Тематика:</strong> ' . $this->text($topics) . '.</li>'
-            : '<li><strong>Тематика:</strong> определяется назначением продукта и официальной демонстрацией.</li>';
-        $developerRow = $developer !== ''
-            ? '<li><strong>Разработчик:</strong> ' . $this->text($developer) . '.</li>'
-            : '';
-        $dateRow = $sourceUpdateDate !== ''
-            ? '<li><strong>Дата обновления источника:</strong> '
-                . $this->text($sourceUpdateDate) . '.</li>'
+        $topicSentence = $topics !== ''
+            ? ' Подходит для проектов в тематике ' . $this->text($topics) . '.'
             : '';
 
-        return '<h2>' . $safeTitle . '</h2>'
-            . '<p>' . $safeTitle . ' — ' . $this->text($type) . '.'
-            . $developerSentence . ' ' . $this->text($purpose) . '</p>'
-            . '<h3>Назначение и основные сведения</h3>'
-            . '<ul>'
-            . '<li><strong>Тип продукта:</strong> ' . $this->text($type) . '.</li>'
-            . $scope
-            . $developerRow
-            . $dateRow
-            . '</ul>'
-            . '<p>Перед публикацией рекомендуется сверить системные требования, совместимость, состав и особенности установки с официальной страницей разработчика.</p>';
+        return '<h2>' . $safeTitle . '</h2><p>'
+            . $safeTitle . ' — ' . $this->text($type) . '.'
+            . $developerSentence . ' ' . $this->text($purpose)
+            . $topicSentence . '</p>'
+            . $this->ruEditorialSections(
+                $product,
+                '',
+                '',
+                $productType,
+                $topics,
+                $sourceTags
+            )
+            . $this->ruAudienceSection($product, '', $productType, $topics);
     }
 
+    /** @param list<string> $sourceTags */
     private function enLong(
         string $title,
         string $developer,
         string $productType,
         string $topics,
-        string $sourceUpdateDate
+        array $sourceTags
     ): string {
         $safeTitle = $this->text($title);
+        $product = $this->productName($title);
         $type = $this->enType($productType);
         $developerSentence = $developer !== ''
             ? ' The developer is ' . $this->text($developer) . '.'
             : '';
         $purpose = match ($productType) {
             CatalogProductType::PLUGIN =>
-                'It extends WordPress with focused functionality and can reduce the amount of custom development needed for the intended workflow.',
+                'It extends WordPress with focused functionality.',
             CatalogProductType::TEMPLATE_KIT =>
-                'It provides a coordinated set of Elementor templates that can speed up page building and establish a consistent visual structure.',
+                'It provides a coordinated set of Elementor page templates.',
             default =>
-                'It provides a ready WordPress foundation that can speed up the move from installation to site structure, styling and content setup.',
+                'It provides a ready foundation for a WordPress site.',
         };
-        $scope = $topics !== ''
-            ? '<li><strong>Project focus:</strong> ' . $this->text($topics) . '.</li>'
-            : '<li><strong>Project focus:</strong> see the official product demo and documentation.</li>';
-        $developerRow = $developer !== ''
-            ? '<li><strong>Developer:</strong> ' . $this->text($developer) . '.</li>'
-            : '';
-        $dateRow = $sourceUpdateDate !== ''
-            ? '<li><strong>Source update date:</strong> '
-                . $this->text($sourceUpdateDate) . '.</li>'
+        $topicSentence = $topics !== ''
+            ? ' Suitable for projects focused on ' . $this->text($topics) . '.'
             : '';
 
-        return '<h2>' . $safeTitle . '</h2>'
-            . '<p>' . $safeTitle . ' is a ' . $this->text($type) . '.'
-            . $developerSentence . ' ' . $this->text($purpose) . '</p>'
-            . '<h3>Purpose and product details</h3>'
-            . '<ul>'
-            . '<li><strong>Product type:</strong> ' . $this->text($type) . '.</li>'
-            . $scope
-            . $developerRow
-            . $dateRow
-            . '</ul>'
-            . '<p>Before publishing, verify system requirements, compatibility, included components and installation details on the official developer page.</p>';
+        return '<h2>' . $safeTitle . '</h2><p>'
+            . $safeTitle . ' is a ' . $this->text($type) . '.'
+            . $developerSentence . ' ' . $this->text($purpose)
+            . $topicSentence . '</p>'
+            . $this->enEditorialSections(
+                $product,
+                '',
+                '',
+                $productType,
+                $topics,
+                $sourceTags
+            )
+            . $this->enAudienceSection($product, '', $productType, $topics);
     }
 
     private function ruType(string $productType): string
@@ -602,6 +902,78 @@ final class ProductEditorialDraftBuilder
         }
 
         return '<h3>' . $this->text($heading) . '</h3><ul>' . $items . '</ul>';
+    }
+
+    /** @return list<string> */
+    private function matchingFacts(string $details, string $pattern): array
+    {
+        $facts = $this->legacyFeatures($details, false);
+
+        return array_values(array_filter(
+            $facts,
+            fn (string $fact): bool => $this->matches($fact, $pattern)
+        ));
+    }
+
+    /** @param list<string> $tags */
+    private function hasAnyTag(array $tags, array $needles): bool
+    {
+        return $this->selectedTags($tags, $needles) !== [];
+    }
+
+    /**
+     * @param list<string> $tags
+     * @param list<string> $needles
+     * @return list<string>
+     */
+    private function selectedTags(array $tags, array $needles): array
+    {
+        $normalizedNeedles = array_map(
+            static fn (string $value): string => strtolower(trim($value)),
+            $needles
+        );
+        $result = [];
+
+        foreach ($tags as $tag) {
+            $normalized = strtolower(trim((string) $tag));
+
+            if (in_array($normalized, $normalizedNeedles, true)) {
+                $result[] = trim((string) $tag);
+            }
+        }
+
+        return array_values(array_unique($result));
+    }
+
+    private function audienceFromRuSummary(string $summary): string
+    {
+        if (preg_match('/\bдля\s+([^.!?]+)/ui', $summary, $matches) !== 1) {
+            return '';
+        }
+
+        return trim((string) ($matches[1] ?? ''));
+    }
+
+    private function audienceFromEnSummary(string $summary): string
+    {
+        if (preg_match('/\bfor\s+([^.!?]+)/ui', $summary, $matches) !== 1) {
+            return '';
+        }
+
+        return trim((string) ($matches[1] ?? ''));
+    }
+
+    private function productName(string $title): string
+    {
+        $parts = preg_split('/\s+[–—-]\s+/u', $title, 2) ?: [];
+        $name = trim((string) ($parts[0] ?? $title));
+
+        return $name !== '' ? $name : $title;
+    }
+
+    private function matches(string $value, string $pattern): bool
+    {
+        return preg_match($pattern, $value) === 1;
     }
 
     private function sameText(string $left, string $right): bool
