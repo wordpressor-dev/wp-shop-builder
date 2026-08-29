@@ -33,6 +33,7 @@ use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
+use WPShop\App\Plugin\ProductManager\Translation\PreparedEnglishProductContent;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
@@ -78,6 +79,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $tagSelector = new ExistingTagSelector($tagRepository);
         $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
+        $preparedEnglishContent = new PreparedEnglishProductContent(
+            $functionCaller(...)
+        );
         $archiveUploader = new ProductArchiveUploader($functionCaller(...));
         $archiveVersionInspector = new ProductArchiveVersionInspector();
         $archiveIdentityInspector = new ProductArchiveIdentityInspector();
@@ -197,6 +201,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(ExistingCatalogTagParser::class, $tagParser);
         $this->container->set(WordPressFunctionCaller::class, $functionCaller);
         $this->container->set(
+            PreparedEnglishProductContent::class,
+            $preparedEnglishContent
+        );
+        $this->container->set(
             ProductEditorialMigrationService::class,
             $editorialMigrationService
         );
@@ -271,6 +279,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             ProductUpdateQueueReturnNavigation::class
         );
         $functionCaller = $this->container->get(WordPressFunctionCaller::class);
+        $preparedEnglishContent = $this->container->get(
+            PreparedEnglishProductContent::class
+        );
 
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
@@ -290,6 +301,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             );
         }
 
+        if (! $preparedEnglishContent instanceof PreparedEnglishProductContent) {
+            throw new LogicException(
+                'PreparedEnglishProductContent must be registered before boot.'
+            );
+        }
+
         $functionCaller(
             'add_action',
             'admin_post_wp_shop_pm_export_update_report',
@@ -304,6 +321,20 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_footer',
             [$returnNavigation, 'injectQueueReturnState']
+        );
+        $functionCaller(
+            'add_filter',
+            'woocommerce_short_description',
+            [$preparedEnglishContent, 'filterShortDescription'],
+            999,
+            1
+        );
+        $functionCaller(
+            'add_filter',
+            'the_content',
+            [$preparedEnglishContent, 'filterLongDescription'],
+            999,
+            1
         );
     }
 }
