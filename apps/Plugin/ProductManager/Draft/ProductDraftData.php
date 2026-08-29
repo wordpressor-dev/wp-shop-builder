@@ -66,7 +66,7 @@ final readonly class ProductDraftData
                 $baseTitle,
                 $developer,
                 CatalogProductType::infer($baseTitle, $salesPage),
-                $this->editorialSignals($baseTitle, $tags),
+                $this->editorialSignals($baseTitle),
                 $sourceUpdateDate
             );
             $shortDescription = $editorial['ruShort'];
@@ -159,34 +159,23 @@ final readonly class ProductDraftData
         );
     }
 
-    /**
-     * @param list<CatalogTag> $tags
-     * @return list<string>
-     */
-    private function editorialSignals(string $title, array $tags): array
+    /** @return list<string> */
+    private function editorialSignals(string $title): array
     {
-        $signals = [];
-
-        foreach ($tags as $tag) {
-            if (trim($tag->name) !== '') {
-                $signals[] = trim($tag->name);
-            }
-        }
-
-        $titleParts = preg_split('/[^a-z0-9-]+/i', $title) ?: [];
-        $titleParts = array_values(array_filter(
-            $titleParts,
-            static fn (string $value): bool => trim($value) !== ''
+        $parts = preg_split('/[^a-z0-9-]+/i', $title) ?: [];
+        $parts = array_values(array_filter(
+            $parts,
+            static fn (string $value): bool => strlen(trim($value)) >= 4
         ));
 
-        foreach (array_slice($titleParts, 1) as $part) {
-            $signals[] = $part;
+        if ($parts !== []) {
+            array_shift($parts);
         }
 
         if (str_contains(strtolower($title), 'real estate')) {
-            $signals[] = 'real estate';
+            $parts[] = 'real estate';
         }
 
-        return array_values(array_unique($signals));
+        return array_values(array_unique($parts));
     }
 }
