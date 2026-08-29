@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WPShop\Tests\App\Plugin\ProductManager\Translation;
 
+use Closure;
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Translation\PreparedEnglishProductContent;
 
