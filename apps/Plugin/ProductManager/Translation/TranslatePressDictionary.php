@@ -14,6 +14,8 @@ final class TranslatePressDictionary implements
 {
     private ?string $table = null;
 
+    private ?string $originalMetaTable = null;
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -22,6 +24,65 @@ final class TranslatePressDictionary implements
         private readonly Closure $call,
         private readonly TranslationMapBuilder $mapBuilder
     ) {
+    }
+
+    /**
+     * Add active TranslatePress translation-block strings that belong to
+     * one product. TranslatePress can render a paragraph from block_type=1
+     * even when the same plain text row is already translated.
+     *
+     * @param array<string, string> $map
+     * @return array<string, string>
+     */
+    public function augmentMapForProduct(
+        int $productId,
+        array $map
+    ): array {
+        if ($productId <= 0 || $map === []) {
+            return $map;
+        }
+
+        $table = $this->table();
+        $metaTable = $this->originalMetaTable();
+
+        if ($table === null || $metaTable === null) {
+            return $map;
+        }
+
+        $originalIds = $this->productOriginalIds(
+            $metaTable,
+            $productId
+        );
+
+        if ($originalIds === []) {
+            return $map;
+        }
+
+        $augmented = $map;
+
+        foreach (
+            $this->activeBlockRows($table, $originalIds)
+            as $row
+        ) {
+            $source = trim((string) ($row['original'] ?? ''));
+
+            if ($source === '') {
+                continue;
+            }
+
+            $target = $this->translateBlock($source, $map);
+
+            if (
+                $this->mapBuilder->normalize($target)
+                === $this->mapBuilder->normalize($source)
+            ) {
+                continue;
+            }
+
+            $augmented[$source] = $target;
+        }
+
+        return $augmented;
     }
 
     public function status(array $map): TranslationDictionaryStatus
@@ -255,6 +316,151 @@ final class TranslatePressDictionary implements
         return null;
     }
 
+    private function originalMetaTable(): ?string
+    {
+        if ($this->originalMetaTable !== null) {
+            return $this->originalMetaTable;
+        }
+
+        $row = $this->database->fetchOne(
+            'SHOW TABLES LIKE %s',
+            ['%trp_original_meta']
+        );
+
+        if ($row === null) {
+            return null;
+        }
+
+        foreach ($row as $value) {
+            if (! is_scalar($value)) {
+                continue;
+            }
+
+            $table = (string) $value;
+
+            if (
+                str_ends_with($table, 'trp_original_meta')
+                && preg_match(
+                    '/^[A-Za-z0-9_]+$/D',
+                    $table
+                ) === 1
+            ) {
+                $this->originalMetaTable = $table;
+
+                return $table;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function productOriginalIds(
+        string $metaTable,
+        int $productId
+    ): array {
+        $sql = sprintf(
+            'SELECT original_id FROM %s '
+            . 'WHERE meta_key = %%s AND meta_value = %%s '
+            . 'ORDER BY meta_id DESC',
+            $metaTable
+        );
+        $rows = $this->database->fetchAll(
+            $sql,
+            ['post_parent_id', (string) $productId]
+        );
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $id = (int) ($row['original_id'] ?? 0);
+
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param list<int> $originalIds
+     * @return list<array<string, mixed>>
+     */
+    private function activeBlockRows(
+        string $table,
+        array $originalIds
+    ): array {
+        $rows = [];
+
+        foreach (array_chunk($originalIds, 100) as $chunk) {
+            $placeholders = implode(
+                ',',
+                array_fill(0, count($chunk), '%d')
+            );
+            $sql = sprintf(
+                'SELECT id, original, translated, status, '
+                . 'block_type, original_id FROM %s '
+                . 'WHERE original_id IN (%s) '
+                . 'AND block_type = 1 ORDER BY id DESC',
+                $table,
+                $placeholders
+            );
+            $rows = array_merge(
+                $rows,
+                $this->database->fetchAll($sql, $chunk)
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string, string> $map
+     */
+    private function translateBlock(
+        string $block,
+        array $map
+    ): string {
+        $result = $block;
+        $pairs = $map;
+
+        uksort(
+            $pairs,
+            static fn(string $left, string $right): int =>
+                strlen($right) <=> strlen($left)
+        );
+
+        foreach ($pairs as $source => $target) {
+            $source = trim($source);
+
+            if ($source === '') {
+                continue;
+            }
+
+            $variants = [
+                $source => $target,
+                str_replace('&', '&amp;', $source)
+                    => str_replace('&', '&amp;', $target),
+                str_replace('&', '&#038;', $source)
+                    => str_replace('&', '&#038;', $target),
+                str_replace('&', '&#38;', $source)
+                    => str_replace('&', '&#38;', $target),
+            ];
+
+            foreach ($variants as $from => $to) {
+                if ($from === '' || ! str_contains($result, $from)) {
+                    continue;
+                }
+
+                $result = str_replace($from, $to, $result);
+            }
+        }
+
+        return $result;
+    }
+
     /**
      * @param array<string, string> $map
      * @return array<string, list<array<string, mixed>>>
@@ -284,7 +490,8 @@ final class TranslatePressDictionary implements
                 array_fill(0, count($chunk), '%s')
             );
             $sql = sprintf(
-                'SELECT id, original, translated, status, original_id '
+                'SELECT id, original, translated, status, '
+                . 'block_type, original_id '
                 . 'FROM %s WHERE original IN (%s) ORDER BY id DESC',
                 $table,
                 $placeholders
