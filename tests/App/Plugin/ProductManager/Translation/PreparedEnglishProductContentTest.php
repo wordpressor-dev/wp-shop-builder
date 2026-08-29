@@ -50,7 +50,10 @@ final class PreparedEnglishProductContentTest extends TestCase
         $call = static function (
             string $name,
             mixed ...$arguments
-        ) use ($source, $prepared): mixed {
+        ) use (
+            $source,
+            $prepared
+        ): mixed {
             return match ($name) {
                 'is_admin' => false,
                 'get_locale' => 'en_US',
