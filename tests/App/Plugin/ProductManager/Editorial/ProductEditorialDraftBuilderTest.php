@@ -60,11 +60,11 @@ final class ProductEditorialDraftBuilderTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'образование и онлайн-обучение и LMS',
+            'образование, онлайн-обучение и LMS',
             $content['ruShort']
         );
         self::assertStringContainsString(
-            'education and online learning and LMS',
+            'education, online learning and LMS',
             $content['enShort']
         );
 
@@ -82,6 +82,48 @@ final class ProductEditorialDraftBuilderTest extends TestCase
                 strtolower($content['enLong'])
             );
         }
+    }
+
+    public function testPreservesLegacyFactsInsideV28Structure(): void
+    {
+        $content = (new ProductEditorialDraftBuilder())->build(
+            'Edubin – Education WordPress Theme',
+            'pixelcurve',
+            CatalogProductType::THEME,
+            ['education', 'lms'],
+            '2026-08-28',
+            [
+                'ruShort' => '<strong>Edubin – Education WordPress Theme</strong> — это современная тема WordPress для школ, курсов, университетов и онлайн-образования.',
+                'ruLong' => '<p>Адаптивный дизайн, интеграция с LMS, расписание занятий, страницы преподавателей, календарь событий, галерея, отзывы и форма обратной связи.</p>',
+                'enShort' => '<p>Edubin is a WordPress education theme for schools, courses and universities.</p>',
+                'enLong' => '<p>Includes class schedules, instructor pages, events, galleries, testimonials and contact forms.</p>',
+            ]
+        );
+
+        self::assertStringContainsString(
+            'школ, курсов, университетов',
+            $content['ruShort']
+        );
+        self::assertStringContainsString(
+            'расписание занятий',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Основные сведения</h3>',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            'календарь событий',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            'class schedules',
+            $content['enLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Product details</h3>',
+            $content['enLong']
+        );
     }
 
     public function testBuildsCompleteThemeAndPluginDraftsWithoutTopics(): void
