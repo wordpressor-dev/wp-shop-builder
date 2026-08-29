@@ -10,9 +10,22 @@ use Throwable;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
+use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
+use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
+use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
+use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
+use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
+use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
+use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
+use WPShop\App\Plugin\ProductManager\Write\ProductTaxonomyWriter;
+use WPShop\App\Plugin\ProductManager\Write\SureRankWriter;
 
 final class ProductBatchCreateCoordinator
 {
@@ -22,8 +35,8 @@ final class ProductBatchCreateCoordinator
     public function __construct(
         private readonly Closure $call,
         private readonly ProductBatchIntakeScanner $scanner,
-        private readonly ProductArchiveIdentityInspector $identityInspector,
-        private readonly ProductManagerController $controller
+        private readonly ?ProductArchiveIdentityInspector $identityInspector = null,
+        private readonly ?ProductManagerController $controller = null
     ) {
     }
 
@@ -92,7 +105,8 @@ final class ProductBatchCreateCoordinator
                 );
             }
 
-            $autofill = $this->controller->autofill($reference, $token);
+            $controller = $this->controller ?? $this->buildController();
+            $autofill = $controller->autofill($reference, $token);
 
             if (! $autofill->success) {
                 return new ProductDraftResult(
@@ -138,7 +152,9 @@ final class ProductBatchCreateCoordinator
                 );
             }
 
-            $identity = $this->identityInspector->inspect(
+            $identityInspector = $this->identityInspector
+                ?? new ProductArchiveIdentityInspector();
+            $identity = $identityInspector->inspect(
                 $sourcePath,
                 $filename
             );
@@ -236,7 +252,7 @@ final class ProductBatchCreateCoordinator
             );
 
             try {
-                $tags = $this->controller->parseExistingTags(
+                $tags = $controller->parseExistingTags(
                     (string) ($fields['tags'] ?? '')
                 );
             } catch (Throwable $exception) {
@@ -268,7 +284,7 @@ final class ProductBatchCreateCoordinator
                 false,
                 false
             );
-            $preflight = $this->controller->preflightDraft($data);
+            $preflight = $controller->preflightDraft($data);
 
             if (! $preflight->success) {
                 return new ProductDraftResult(
@@ -297,7 +313,7 @@ final class ProductBatchCreateCoordinator
                 return $this->failure('BATCH CREATE = ZIP COPY FAILED');
             }
 
-            $result = $this->controller->createDraft($data);
+            $result = $controller->createDraft($data);
 
             if (! $result->success) {
                 if ((bool) ($this->call)('file_exists', $targetPath)) {
@@ -616,6 +632,33 @@ final class ProductBatchCreateCoordinator
     private function text(string $value): string
     {
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    private function buildController(): ProductManagerController
+    {
+        $transport = new WordPressEnvatoTransport();
+        $envato = new EnvatoClient($transport(...), new EnvatoItemMapper());
+        $tagRepository = new WordPressCatalogTagRepository();
+        $gateway = new WordPressWooCommerceDraftGateway($this->call);
+        $creator = new ProductDraftCreator(
+            $gateway,
+            new ProductDraftValidator(),
+            [
+                new ProductTaxonomyWriter($this->call),
+                new ProductMetadataWriter($this->call),
+                new SureRankWriter($this->call),
+                new AdvancedLabelWriter($this->call),
+            ]
+        );
+
+        return new ProductManagerController(
+            $envato,
+            new ExistingTagSelector($tagRepository),
+            $creator,
+            null,
+            new ExistingCatalogTagParser($tagRepository),
+            null
+        );
     }
 
     private function failure(string $message): ProductDraftResult
