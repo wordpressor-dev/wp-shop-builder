@@ -15,6 +15,17 @@ final class PreparedEnglishProductContent
     public function __construct(
         private readonly Closure $call
     ) {
+        try {
+            ($this->call)(
+                'add_filter',
+                'the_content',
+                [$this, 'filterPostContent'],
+                999,
+                1
+            );
+        } catch (Throwable) {
+            // WordPress hooks are not available in isolated tests.
+        }
     }
 
     public function filterShortDescription(mixed $content): mixed
@@ -27,6 +38,42 @@ final class PreparedEnglishProductContent
 
     public function filterLongDescription(mixed $content): mixed
     {
+        return $this->preparedContent(
+            $content,
+            '_wp_shop_en_long_description'
+        );
+    }
+
+    public function filterPostContent(mixed $content): mixed
+    {
+        if (! is_string($content) || ! $this->isEnglishRequest()) {
+            return $content;
+        }
+
+        $productId = $this->productId();
+
+        if ($productId <= 0) {
+            return $content;
+        }
+
+        try {
+            $source = ($this->call)(
+                'get_post_field',
+                'post_content',
+                $productId
+            );
+        } catch (Throwable) {
+            return $content;
+        }
+
+        if (! is_string($source) || trim($source) === '') {
+            return $content;
+        }
+
+        if ($this->normalizedText($content) !== $this->normalizedText($source)) {
+            return $content;
+        }
+
         return $this->preparedContent(
             $content,
             '_wp_shop_en_long_description'
@@ -59,6 +106,17 @@ final class PreparedEnglishProductContent
         }
 
         return $prepared;
+    }
+
+    private function normalizedText(string $content): string
+    {
+        $content = html_entity_decode(
+            strip_tags($content),
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+
+        return trim((string) preg_replace('/\s+/u', ' ', $content));
     }
 
     private function isEnglishRequest(): bool
