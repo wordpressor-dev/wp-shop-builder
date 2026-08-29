@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\Admin;
 
 use Closure;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateCoordinator;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
@@ -48,6 +49,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             : '';
         $selectedFolder = trim($this->posted('intake_folder'));
         $filename = trim($this->posted('intake_filename'));
+        $itemReference = trim($this->posted('intake_item_reference'));
         $action = $this->posted('wp_shop_pm_batch_intake_action');
         $rows = [];
         $error = '';
@@ -61,7 +63,13 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             $root = $this->scanner->ensureInbox($uploadsBaseDir);
             $folders = $this->scanner->folders($uploadsBaseDir);
 
-            if (in_array($action, ['scan', 'apply', 'skip', 'review'], true)) {
+            if (
+                in_array(
+                    $action,
+                    ['scan', 'apply', 'create', 'skip', 'review'],
+                    true
+                )
+            ) {
                 $this->checkNonce();
                 $showResults = true;
             }
@@ -71,6 +79,19 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     $uploadsBaseDir,
                     $selectedFolder,
                     $filename
+                );
+                $logs = $result->logs;
+                $success = $result->success;
+            } elseif ($action === 'create') {
+                $coordinator = new ProductBatchCreateCoordinator(
+                    $this->call,
+                    $this->scanner
+                );
+                $result = $coordinator->createDraft(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    $filename,
+                    $itemReference
                 );
                 $logs = $result->logs;
                 $success = $result->success;
@@ -117,7 +138,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Import Queue</h1>';
-        echo '<p>Пакетный вход для ZIP-архивов. Сканирование определяет CREATE / UPDATE / REVIEW. Для READY UPDATE можно применить обновление прямо из очереди; исходный ZIP после успешного обновления удаляется из INBOX.</p>';
+        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди. Для нового товара Import Queue создаёт WooCommerce Draft, переносит архив в каноническую папку и заполняет доступные данные Envato. Draft всегда нужно проверить перед публикацией.</p>';
 
         if ($error !== '') {
             echo '<div class="notice notice-error"><p><strong>BATCH INTAKE ERROR:</strong> '
@@ -127,11 +148,11 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         $this->renderLogs($logs, $success);
 
-        echo '<div class="notice notice-info" style="max-width:1400px;padding:10px 14px;">';
+        echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
         echo '<p><strong>INBOX ROOT</strong> = '
             . $this->escape($root !== '' ? $root : 'UNAVAILABLE')
             . '</p>';
-        echo '<p>Создай внутри INBOX отдельную папку для партии, загрузи туда ZIP-файлы с исходными именами и выбери эту папку ниже.</p>';
+        echo '<p>Загрузи ZIP-файлы с исходными именами в отдельную папку внутри INBOX. Для существующих товаров Item ID определяется по каталогу/ZIP. Для нового ZIP без Item ID достаточно один раз вставить ThemeForest/CodeCanyon URL или Item ID.</p>';
         echo '</div>';
 
         $this->renderScanForm($folders, $selectedFolder);
@@ -144,12 +165,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '</div>';
     }
 
-    /**
-     * @param list<string> $folders
-     */
+    /** @param list<string> $folders */
     private function renderScanForm(array $folders, string $selectedFolder): void
     {
-        echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">1. Выбрать папку партии</h2>';
         echo '<form method="post" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;">';
         $this->nonceField();
@@ -217,7 +236,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             }
         }
 
-        echo '<div class="notice notice-info" style="max-width:1400px;padding:10px 14px;">';
+        echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
         echo '<p><strong>BATCH SCAN = READY</strong> &nbsp; FOLDER = '
             . $this->escape($folder !== '' ? $folder : 'INBOX root')
             . ' &nbsp; ZIP = ' . $this->escape((string) count($rows))
@@ -245,7 +264,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
      */
     private function renderTable(array $rows, string $selectedFolder): void
     {
-        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<div class="postbox" style="max-width:1600px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">2. Проверка партии</h2>';
 
         if ($rows === []) {
@@ -293,14 +312,14 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             echo '<td><strong>' . $this->escape($row['action']) . '</strong></td>';
             echo '<td><strong>' . $this->escape($row['status']) . '</strong></td>';
             echo '<td>' . $this->escape($row['note']) . '</td>';
-            echo '<td style="min-width:260px;">';
+            echo '<td style="min-width:320px;">';
             $this->renderRowControls($row, $selectedFolder);
             echo '</td>';
             echo '</tr>';
         }
 
         echo '</tbody></table>';
-        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> Apply доступен только для READY UPDATE. Перед записью выполняется внутренний Preflight; при ошибке товар не меняется, а старый целевой ZIP восстанавливается. CREATE пока остаётся review-only — его автоматизация будет следующим шагом.</p>';
+        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> UPDATE выполняет внутренний Preflight и rollback. CREATE создаёт только Draft, сверяет ZIP с Envato, не назначает Hit/New автоматически и удаляет исходник из INBOX только после успешного создания.</p>';
         echo '</div>';
     }
 
@@ -332,8 +351,11 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 $selectedFolder,
                 "Применить обновление к товару #{$row['productId']}?"
             );
-        } elseif ($row['action'] === 'CREATE' && $row['status'] === 'READY') {
-            echo '<button type="button" class="button" disabled title="CREATE automation is the next v26 slice">Create Draft — next</button>';
+        } elseif (
+            $row['productId'] <= 0
+            && $row['productType'] !== ''
+        ) {
+            $this->createDraftForm($row, $selectedFolder);
         }
 
         $this->actionButton(
@@ -353,6 +375,45 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             ''
         );
         echo '</div>';
+    }
+
+    /**
+     * @param array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * } $row
+     */
+    private function createDraftForm(array $row, string $folder): void
+    {
+        echo '<form method="post" style="margin:0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="create">';
+        echo '<input type="hidden" name="intake_folder" value="'
+            . $this->escapeAttr($folder)
+            . '">';
+        echo '<input type="hidden" name="intake_filename" value="'
+            . $this->escapeAttr($row['filename'])
+            . '">';
+
+        if ($row['itemId'] > 0) {
+            echo '<input type="hidden" name="intake_item_reference" value="'
+                . $this->escapeAttr((string) $row['itemId'])
+                . '">';
+        } else {
+            echo '<input type="text" name="intake_item_reference" required placeholder="Envato URL / Item ID" style="width:210px;">';
+        }
+
+        echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Создать WooCommerce Draft из этого ZIP? Draft нужно проверить перед публикацией.\');">Create Draft</button>';
+        echo '</form>';
     }
 
     private function actionButton(
@@ -388,9 +449,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '</form>';
     }
 
-    /**
-     * @param list<string> $logs
-     */
+    /** @param list<string> $logs */
     private function renderLogs(array $logs, ?bool $success): void
     {
         if ($logs === []) {
@@ -398,7 +457,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         $color = $success === true ? '#00a32a' : '#d63638';
-        echo '<div style="max-width:1400px;background:#fff;border-left:4px solid '
+        echo '<div style="max-width:1500px;background:#fff;border-left:4px solid '
             . $this->escapeAttr($color)
             . ';padding:12px 16px;margin:15px 0 20px;">';
         echo '<strong>BATCH INTAKE LOG</strong>';
