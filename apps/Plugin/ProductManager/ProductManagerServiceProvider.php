@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
+use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
@@ -13,6 +14,8 @@ use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
+use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
+use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
@@ -33,6 +36,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductArchiveUpdateCoordinator;
+use WPShop\App\Plugin\ProductManager\Update\ProductArchiveVersionInspector;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateScanner;
@@ -42,7 +46,6 @@ use WPShop\App\Plugin\ProductManager\Write\AdvancedLabelWriter;
 use WPShop\App\Plugin\ProductManager\Write\ProductMetadataWriter;
 use WPShop\App\Plugin\ProductManager\Write\ProductTaxonomyWriter;
 use WPShop\App\Plugin\ProductManager\Write\SureRankWriter;
-use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\KernelInterface;
 use WPShop\Core\Provider\AbstractServiceProvider;
 use WPShop\WordPress\Admin\AdminPageRegistry;
@@ -81,6 +84,17 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
         $archiveUploader = new ProductArchiveUploader(
+            $functionCaller(...)
+        );
+        $archiveVersionInspector = new ProductArchiveVersionInspector();
+        $archiveIdentityInspector = new ProductArchiveIdentityInspector();
+        $batchIntakeScanner = new ProductBatchIntakeScanner(
+            $functionCaller(...),
+            $archiveVersionInspector,
+            $archiveIdentityInspector
+        );
+        $batchIntakePage = new ProductBatchIntakePage(
+            $batchIntakeScanner,
             $functionCaller(...)
         );
         $draftGateway = new WordPressWooCommerceDraftGateway(
@@ -175,6 +189,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
 
         $registry->addSubmenu($page);
+        $registry->addSubmenu($batchIntakePage);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
@@ -219,6 +234,22 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductArchiveUploader::class,
             $archiveUploader
+        );
+        $this->container->set(
+            ProductArchiveVersionInspector::class,
+            $archiveVersionInspector
+        );
+        $this->container->set(
+            ProductArchiveIdentityInspector::class,
+            $archiveIdentityInspector
+        );
+        $this->container->set(
+            ProductBatchIntakeScanner::class,
+            $batchIntakeScanner
+        );
+        $this->container->set(
+            ProductBatchIntakePage::class,
+            $batchIntakePage
         );
         $this->container->set(
             ProductDraftGatewayInterface::class,

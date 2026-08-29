@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
+use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
+use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -73,6 +75,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             WordPressFunctionCaller::class,
             $container->get(WordPressFunctionCaller::class)
+        );
+        self::assertInstanceOf(
+            ProductBatchIntakeScanner::class,
+            $container->get(ProductBatchIntakeScanner::class)
+        );
+        self::assertInstanceOf(
+            ProductBatchIntakePage::class,
+            $container->get(ProductBatchIntakePage::class)
         );
         self::assertInstanceOf(
             WordPressWooCommerceDraftGateway::class,
@@ -143,12 +153,20 @@ final class ProductManagerServiceProviderTest extends TestCase
             $registry->submenus()[0]->slug()
         );
         self::assertSame(
-            $container->get(ProductUpdatePage::class),
+            $container->get(ProductBatchIntakePage::class),
             $registry->submenus()[1]
         );
         self::assertSame(
-            'wp-shop-builder-product-update',
+            'wp-shop-builder-product-batch-intake',
             $registry->submenus()[1]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[2]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[2]->slug()
         );
     }
 }
