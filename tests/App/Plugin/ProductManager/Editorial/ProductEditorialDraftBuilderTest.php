@@ -21,11 +21,11 @@ final class ProductEditorialDraftBuilderTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'виллы, отели и курорты',
+            'отели, курорты и виллы',
             $content['ruShort']
         );
         self::assertStringContainsString(
-            'villas, hotels and resorts',
+            'hotels, resorts and villas',
             $content['enShort']
         );
         self::assertStringContainsString(
