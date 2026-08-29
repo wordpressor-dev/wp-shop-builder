@@ -59,7 +59,7 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             $preview['generated']['ruShort']
         );
         self::assertStringContainsString(
-            '<h3>Основные возможности</h3>',
+            '<h3>Основные возможности Edubin</h3>',
             $preview['generated']['ruLong']
         );
         self::assertStringContainsString(
@@ -71,7 +71,15 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             $preview['generated']['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Техническая информация</h3>',
+            '<h3>Онлайн-курсы и LMS</h3>',
+            $preview['generated']['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Кому подходит Edubin?</h3>',
+            $preview['generated']['ruLong']
+        );
+        self::assertStringNotContainsString(
+            'Техническая информация',
             $preview['generated']['ruLong']
         );
 
@@ -86,11 +94,15 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             (string) $post['post_excerpt']
         );
         self::assertStringContainsString(
-            '<h3>Основные возможности</h3>',
+            '<h3>Основные возможности Edubin</h3>',
             (string) $post['post_content']
         );
         self::assertStringContainsString(
-            '<h3>Техническая информация</h3>',
+            '<h3>Кому подходит Edubin?</h3>',
+            (string) $post['post_content']
+        );
+        self::assertStringNotContainsString(
+            'Техническая информация',
             (string) $post['post_content']
         );
         self::assertSame(
