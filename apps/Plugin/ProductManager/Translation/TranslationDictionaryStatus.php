@@ -11,6 +11,7 @@ final readonly class TranslationDictionaryStatus
      *     source: string,
      *     target: string,
      *     row: array<string, mixed>|null,
+     *     rows?: list<array<string, mixed>>,
      *     action: string
      * }> $items
      */
