@@ -161,10 +161,10 @@ final class ProductEditorialDraftBuilder
         return [
             'ruShort' => '<p>' . $this->text($ruShort) . '</p>',
             'ruLong' => $ruLong,
-            'ruMeta' => $this->limit($ruMeta . '.'),
+            'ruMeta' => $this->meta($ruMeta),
             'enShort' => '<p>' . $this->text($enShort) . '</p>',
             'enLong' => $enLong,
-            'enMeta' => $this->limit($enMeta . '.'),
+            'enMeta' => $this->meta($enMeta),
         ];
     }
 
@@ -195,7 +195,16 @@ final class ProductEditorialDraftBuilder
                 ? $this->fallbackDetails($details, $language)
                 : '';
 
-        return '<h2>' . $this->text($title) . '</h2>'
+        return '<h2>' . $this->text(
+            $this->seoHeading(
+                $title,
+                $product,
+                $productType,
+                $topics,
+                $summary . ' ' . $details,
+                $language
+            )
+        ) . '</h2>'
             . '<p>' . $this->text($summary) . '</p>'
             . $this->leadParagraph(
                 $product,
@@ -244,7 +253,16 @@ final class ProductEditorialDraftBuilder
             $language
         );
 
-        return '<h2>' . $this->text($title) . '</h2><p>'
+        return '<h2>' . $this->text(
+            $this->seoHeading(
+                $title,
+                $product,
+                $productType,
+                $topics,
+                '',
+                $language
+            )
+        ) . '</h2><p>'
             . $this->text($intro) . '</p>'
             . $this->editorialSections(
                 $product,
@@ -268,6 +286,47 @@ final class ProductEditorialDraftBuilder
                     : 'Before publishing, verify the ' . $type
                         . ' features against the current developer documentation.'
             ) . '</p>';
+    }
+
+    private function seoHeading(
+        string $title,
+        string $product,
+        string $productType,
+        string $topics,
+        string $content,
+        string $language
+    ): string {
+        $education = $this->isEducation($content, $topics);
+
+        if ($language === 'ru') {
+            if ($education && $productType === CatalogProductType::THEME) {
+                return $product . ' — WordPress-тема для онлайн-обучения и LMS';
+            }
+
+            if ($education && $productType === CatalogProductType::PLUGIN) {
+                return $product . ' — WordPress-плагин для онлайн-обучения и LMS';
+            }
+
+            if ($education && $productType === CatalogProductType::TEMPLATE_KIT) {
+                return $product . ' — шаблоны Elementor для образовательных сайтов';
+            }
+
+            return $title;
+        }
+
+        if ($education && $productType === CatalogProductType::THEME) {
+            return $product . ' — WordPress Theme for Education and LMS';
+        }
+
+        if ($education && $productType === CatalogProductType::PLUGIN) {
+            return $product . ' — WordPress Plugin for Education and LMS';
+        }
+
+        if ($education && $productType === CatalogProductType::TEMPLATE_KIT) {
+            return $product . ' — Elementor Template Kit for Education Websites';
+        }
+
+        return $title;
     }
 
     private function baseIntro(
@@ -312,48 +371,51 @@ final class ProductEditorialDraftBuilder
         string $language
     ): string {
         if ($language === 'ru') {
-            if ($this->matches($content, '/(?:образован|lms|курс|школ)/ui')) {
+            if ($this->isEducation($content, $topics)) {
                 return '<p>' . $this->text(
                     $product
-                    . ' ориентирован на образовательные проекты. '
-                    . 'Карточка товара указывает на сценарии онлайн-обучения, '
-                    . 'работу с учебным контентом и организацию образовательного сайта.'
+                    . ' подходит для создания образовательных сайтов, '
+                    . 'онлайн-курсов и LMS-платформ. Возможности продукта '
+                    . 'помогают организовать учебный контент, страницы курсов '
+                    . 'и другие разделы образовательного проекта.'
                 ) . '</p>';
             }
 
             if ($topics !== '') {
                 return '<p>' . $this->text(
-                    $product . ' можно использовать в проектах по тематике '
-                    . $topics . '. Ниже сохранены и структурированы ключевые '
-                    . 'возможности из существующего описания товара.'
+                    $product . ' подходит для проектов в тематике '
+                    . $topics . '. Ниже собраны основные возможности и сценарии '
+                    . 'использования на основе существующего описания продукта.'
                 ) . '</p>';
             }
 
             return '<p>' . $this->text(
                 $product . ' — ' . $this->ruType($productType)
-                . '. Ниже собраны ключевые возможности из существующего описания.'
+                . '. Ниже собраны основные возможности продукта и практические '
+                . 'сценарии его использования.'
             ) . '</p>';
         }
 
-        if ($this->matches($content, '/(?:education|lms|course|school)/ui')) {
+        if ($this->isEducation($content, $topics)) {
             return '<p>' . $this->text(
                 $product
-                . ' is aimed at education projects. The product information '
-                . 'points to online learning, course content and education-site workflows.'
+                . ' is suitable for education websites, online courses and '
+                . 'LMS platforms. Its features support learning content, course '
+                . 'pages and other parts of an education-focused website.'
             ) . '</p>';
         }
 
         if ($topics !== '') {
             return '<p>' . $this->text(
-                $product . ' can be used for projects focused on '
-                . $topics . '. The existing product facts are preserved and '
-                . 'structured below.'
+                $product . ' is suitable for projects focused on '
+                . $topics . '. The main capabilities and practical use cases '
+                . 'are summarized below from the available product information.'
             ) . '</p>';
         }
 
         return '<p>' . $this->text(
             $product . ' is a ' . $this->enType($productType)
-            . '. The existing product capabilities are preserved below.'
+            . '. Its main capabilities and practical use cases are summarized below.'
         ) . '</p>';
     }
 
@@ -367,15 +429,21 @@ final class ProductEditorialDraftBuilder
         string $language
     ): string {
         $html = '';
-        $isEducation = $this->matches(
-            $details . ' ' . $topics,
-            '/(?:lms|курс|обучен|преподавател|education|course|learning)/ui'
-        ) || $this->hasAnyTag(
-            $sourceTags,
-            ['learndash', 'learnpress', 'lifterlms', 'sensei', 'tutor', 'tutor lms']
-        );
 
-        if ($isEducation) {
+        if (
+            $this->isEducation($details, $topics)
+            || $this->hasAnyTag(
+                $sourceTags,
+                [
+                    'learndash',
+                    'learnpress',
+                    'lifterlms',
+                    'sensei',
+                    'tutor',
+                    'tutor lms',
+                ]
+            )
+        ) {
             $html .= $this->educationSection(
                 $product,
                 $details,
@@ -389,12 +457,12 @@ final class ProductEditorialDraftBuilder
                     ? 'Elementor и настройка страниц'
                     : 'Elementor and page building',
                 $language === 'ru'
-                    ? 'Elementor указан среди связанных технологий продукта. '
-                        . 'Его можно учитывать при визуальной настройке страниц '
-                        . 'и подготовке структуры сайта.'
-                    : 'Elementor is listed among the product-related technologies. '
-                        . 'It can be considered when visually building and '
-                        . 'adjusting the site page structure.'
+                    ? $product . ' поддерживает Elementor для визуальной '
+                        . 'настройки страниц. Это позволяет редактировать структуру '
+                        . 'и содержимое сайта через привычный интерфейс конструктора.'
+                    : $product . ' supports Elementor for visual page building. '
+                        . 'This makes it possible to adjust page structure and '
+                        . 'content through the familiar builder interface.'
             );
         }
 
@@ -404,12 +472,12 @@ final class ProductEditorialDraftBuilder
                     ? 'WooCommerce и коммерческие сценарии'
                     : 'WooCommerce and commerce workflows',
                 $language === 'ru'
-                    ? 'WooCommerce отмечен среди интеграций продукта. '
-                        . $product . ' можно рассматривать для проектов, где '
-                        . 'основной сайт дополняется возможностями интернет-магазина.'
-                    : 'WooCommerce is listed among the product integrations. '
-                        . $product . ' can be considered for projects that '
-                        . 'combine the main site with online-store functionality.'
+                    ? 'Совместимость с WooCommerce позволяет использовать '
+                        . $product . ' в проектах, где сайт дополняется продажей '
+                        . 'курсов, цифровых материалов, услуг или других товаров.'
+                    : 'WooCommerce compatibility makes ' . $product
+                        . ' suitable for projects that combine the main website '
+                        . 'with sales of courses, digital content, services or products.'
             );
         }
 
@@ -424,14 +492,12 @@ final class ProductEditorialDraftBuilder
                     ? 'Многоязычные проекты'
                     : 'Multilingual projects',
                 $language === 'ru'
-                    ? 'В данных товара отмечены возможности, связанные с '
-                        . $this->humanList($languageTags, 'ru')
-                        . '. Это полезно для многоязычных сайтов и '
-                        . 'международной аудитории.'
-                    : 'The product data includes '
-                        . $this->humanList($languageTags, 'en')
-                        . '. This is relevant to multilingual sites and '
-                        . 'international audiences.'
+                    ? 'Поддержка ' . $this->humanList($languageTags, 'ru')
+                        . ' помогает адаптировать ' . $product
+                        . ' для многоязычных сайтов и международной аудитории.'
+                    : 'Support for ' . $this->humanList($languageTags, 'en')
+                        . ' helps adapt ' . $product
+                        . ' for multilingual websites and international audiences.'
             );
         }
 
@@ -440,11 +506,11 @@ final class ProductEditorialDraftBuilder
                 $language === 'ru' ? 'Сценарии использования' : 'Use cases',
                 $language === 'ru'
                     ? $product . ' подходит для проектов в тематике '
-                        . $topics . '. Конкретные сценарии зависят от '
-                        . 'возможностей, описанных в карточке товара.'
+                        . $topics . '. Конкретный набор возможностей зависит от '
+                        . 'функций, заявленных разработчиком для текущей версии.'
                     : $product . ' is suitable for projects focused on '
                         . $topics . '. The exact workflows depend on the '
-                        . 'capabilities described in the product information.'
+                        . 'features provided by the current product version.'
             );
         }
 
@@ -476,29 +542,28 @@ final class ProductEditorialDraftBuilder
 
         if ($language === 'ru') {
             $factSentence = $facts !== []
-                ? 'В существующем описании отмечены '
+                ? 'Среди возможностей: '
                     . $this->humanList($facts, 'ru') . '.'
-                : 'В данных товара отмечена направленность на LMS '
-                    . 'и онлайн-обучение.';
+                : $product . ' ориентирован на LMS и онлайн-обучение.';
 
             return $this->simpleSection(
                 'Онлайн-курсы и LMS',
                 $factSentence . ' Это делает ' . $product
-                . ' подходящей основой для образовательных сайтов, где '
-                . 'важны учебный контент и связанные страницы.'
+                . ' подходящей основой для школ, учебных центров, '
+                . 'онлайн-курсов и других образовательных проектов.'
             );
         }
 
         $factSentence = $facts !== []
-            ? 'The existing description highlights '
+            ? 'Key capabilities include '
                 . $this->humanList($facts, 'en') . '.'
-            : 'The product data indicates an LMS and online-learning focus.';
+            : $product . ' is focused on LMS and online learning.';
 
         return $this->simpleSection(
             'Online courses and LMS',
             $factSentence . ' This makes ' . $product
-            . ' relevant to education websites that need structured learning '
-            . 'content and related pages.'
+            . ' a suitable foundation for schools, training centers, online '
+            . 'courses and other education-focused projects.'
         );
     }
 
@@ -513,8 +578,8 @@ final class ProductEditorialDraftBuilder
             $audience = $this->audienceFromRuSummary($summary);
             $text = $audience !== ''
                 ? $product . ' подходит для ' . $audience
-                    . '. Перед использованием стоит сверить требования проекта '
-                    . 'с актуальной документацией продукта.'
+                    . '. Перед выбором стоит сопоставить необходимые функции '
+                    . 'проекта с возможностями текущей версии продукта.'
                 : $this->ruAudienceFallback($product, $productType, $topics);
 
             return $this->simpleSection(
@@ -526,8 +591,8 @@ final class ProductEditorialDraftBuilder
         $audience = $this->audienceFromEnSummary($summary);
         $text = $audience !== ''
             ? $product . ' is suitable for ' . $audience
-                . '. Check the current documentation against the project '
-                . 'requirements before use.'
+                . '. Before choosing it, compare the project requirements with '
+                . 'the capabilities of the current product version.'
             : $this->enAudienceFallback($product, $productType, $topics);
 
         return $this->simpleSection(
@@ -541,6 +606,13 @@ final class ProductEditorialDraftBuilder
         string $productType,
         string $topics
     ): string {
+        if ($this->matches($topics, '/(?:образован|обучен|lms|школ|университет)/ui')) {
+            return $product
+                . ' подойдёт школам, университетам, учебным центрам, '
+                . 'преподавателям, тренерам и образовательным компаниям, которым '
+                . 'нужен готовый WordPress-проект для онлайн-обучения.';
+        }
+
         if ($topics !== '') {
             return $product . ' можно рассматривать для проектов в тематике '
                 . $topics . '. Выбор зависит от требуемых функций и структуры сайта.';
@@ -556,6 +628,13 @@ final class ProductEditorialDraftBuilder
         string $productType,
         string $topics
     ): string {
+        if ($this->matches($topics, '/(?:education|learning|lms|school|universit)/ui')) {
+            return $product
+                . ' is suitable for schools, universities, training centers, '
+                . 'instructors, coaches and education businesses that need a '
+                . 'WordPress foundation for online learning.';
+        }
+
         if ($topics !== '') {
             return $product . ' can be considered for projects focused on '
                 . $topics . '. The final choice depends on the required '
@@ -600,6 +679,14 @@ final class ProductEditorialDraftBuilder
             CatalogProductType::TEMPLATE_KIT => 'Elementor template kit',
             default => 'WordPress theme',
         };
+    }
+
+    private function isEducation(string $content, string $topics): bool
+    {
+        return $this->matches(
+            $content . ' ' . $topics,
+            '/(?:образован|обучен|lms|курс|школ|университет|education|learning|course|school|university)/ui'
+        );
     }
 
     /** @return list<string> */
@@ -835,6 +922,7 @@ final class ProductEditorialDraftBuilder
         $items = '';
 
         foreach ($features as $feature) {
+            $feature = rtrim($feature, " .;,:!?");
             $items .= '<li>' . $this->text($feature) . '.</li>';
         }
 
@@ -941,6 +1029,19 @@ final class ProductEditorialDraftBuilder
         );
 
         return trim((string) preg_replace('/\s+/u', ' ', $value));
+    }
+
+    private function meta(string $value): string
+    {
+        $value = trim((string) preg_replace('/\s+/u', ' ', $value));
+        $value = rtrim($value, " .;,:!?");
+        $limited = $this->limit($value);
+
+        if ($limited === '' || str_ends_with($limited, '…')) {
+            return $limited;
+        }
+
+        return rtrim($limited, " .;,:!?") . '.';
     }
 
     private function limit(string $value, int $max = 155): string
