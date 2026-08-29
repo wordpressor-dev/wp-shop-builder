@@ -97,7 +97,10 @@ final class ProductEditorialMigrationServiceTest extends TestCase
         return static function (
             string $name,
             mixed ...$arguments
-        ) use (&$post, &$meta): mixed {
+        ) use (
+            &$post,
+            &$meta
+        ): mixed {
             if ($name === 'get_post') {
                 return (object) $post;
             }
