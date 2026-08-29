@@ -11,12 +11,14 @@ final class ProductEditorialMigrationServiceTest extends TestCase
 {
     public function testPreviewsAppliesAndRestoresLegacyEditorialContent(): void
     {
+        $oldShort = '<strong>Edubin – Education WordPress Theme</strong> — это современная тема WordPress для школ, курсов, университетов и онлайн-образования.';
+        $oldLong = '<p>Адаптивный дизайн, интеграция с LMS, расписание занятий, страницы преподавателей, календарь событий, галерея, отзывы и форма обратной связи.</p>';
         $post = [
             'ID' => 4561,
             'post_type' => 'product',
             'post_title' => 'Edubin – Education WordPress Theme 9.6.5',
-            'post_excerpt' => '<p>Old short.</p>',
-            'post_content' => '<p>Old long.</p>',
+            'post_excerpt' => $oldShort,
+            'post_content' => $oldLong,
         ];
         $meta = [
             'attr_version_value' => '9.6.5',
@@ -45,16 +47,35 @@ final class ProductEditorialMigrationServiceTest extends TestCase
         self::assertSame('OLD', $preview['enStatus']);
         self::assertSame('OLD', $preview['metaStatus']);
         self::assertFalse($preview['backupAvailable']);
+        self::assertStringContainsString(
+            'школ, курсов, университетов',
+            $preview['generated']['ruShort']
+        );
+        self::assertStringContainsString(
+            'расписание занятий',
+            $preview['generated']['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Основные сведения</h3>',
+            $preview['generated']['ruLong']
+        );
 
         $logs = $service->apply(4561);
 
         self::assertContains('EDITORIAL BACKUP = CREATED', $logs);
         self::assertContains('TRANSLATEPRESS = NOT TOUCHED', $logs);
         self::assertIsArray($meta['_wp_shop_editorial_backup_v28']);
-        self::assertSame('v27', $meta['_wp_shop_editorial_standard']);
-        self::assertStringContainsString('образование', (string) $post['post_excerpt']);
+        self::assertSame('v28', $meta['_wp_shop_editorial_standard']);
         self::assertStringContainsString(
-            '<h3>Назначение и основные сведения</h3>',
+            'школ, курсов, университетов',
+            (string) $post['post_excerpt']
+        );
+        self::assertStringContainsString(
+            'расписание занятий',
+            (string) $post['post_content']
+        );
+        self::assertStringContainsString(
+            '<h3>Основные сведения</h3>',
             (string) $post['post_content']
         );
         self::assertSame(
@@ -73,8 +94,8 @@ final class ProductEditorialMigrationServiceTest extends TestCase
         $restoreLogs = $service->restore(4561);
 
         self::assertContains('EDITORIAL RESTORE = READY', $restoreLogs);
-        self::assertSame('<p>Old short.</p>', $post['post_excerpt']);
-        self::assertSame('<p>Old long.</p>', $post['post_content']);
+        self::assertSame($oldShort, $post['post_excerpt']);
+        self::assertSame($oldLong, $post['post_content']);
         self::assertSame(
             'Old RU meta.',
             $meta['surerank_settings_general']['page_description']
