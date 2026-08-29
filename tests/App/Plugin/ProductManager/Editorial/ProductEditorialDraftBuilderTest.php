@@ -29,16 +29,12 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['enShort']
         );
         self::assertStringContainsString(
-            '<strong>Разработчик:</strong> kitpixel.',
+            'Elementor и настройка страниц',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<strong>Source update date:</strong> 2026-07-15.',
+            'Elementor and page building',
             $content['enLong']
-        );
-        self::assertStringNotContainsString(
-            'Перед публикацией проверьте описание',
-            $content['ruLong']
         );
     }
 
@@ -67,24 +63,17 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             'education, online learning and LMS',
             $content['enShort']
         );
-
-        $noiseTags = [
-            'learndash',
-            'loco translate',
-            'rtl',
-            'woocommerce',
-            'wpml',
-        ];
-
-        foreach ($noiseTags as $noise) {
-            self::assertStringNotContainsString(
-                $noise,
-                strtolower($content['enLong'])
-            );
-        }
+        self::assertStringContainsString(
+            'WooCommerce и коммерческие сценарии',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            'Многоязычные проекты',
+            $content['ruLong']
+        );
     }
 
-    public function testPreservesLegacyFactsInsideV28Structure(): void
+    public function testPreservesLegacyFactsInsideRichV28Structure(): void
     {
         $legacyRuShort = '<strong>Edubin – Education WordPress Theme</strong>'
             . ' — это современная тема WordPress для школ, курсов,'
@@ -100,7 +89,13 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             'Edubin – Education WordPress Theme',
             'pixelcurve',
             CatalogProductType::THEME,
-            ['education', 'lms'],
+            [
+                'education',
+                'lms',
+                'elementor',
+                'woocommerce',
+                'wpml',
+            ],
             '2026-08-28',
             [
                 'ruShort' => $legacyRuShort,
@@ -115,7 +110,7 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruShort']
         );
         self::assertStringContainsString(
-            '<h3>Основные возможности</h3>',
+            '<h3>Основные возможности Edubin</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
@@ -123,11 +118,27 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruLong']
         );
         self::assertStringContainsString(
-            'календарь событий',
+            '<h3>Онлайн-курсы и LMS</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Техническая информация</h3>',
+            '<h3>Elementor и настройка страниц</h3>',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>WooCommerce и коммерческие сценарии</h3>',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Многоязычные проекты</h3>',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            '<h3>Кому подходит Edubin?</h3>',
+            $content['ruLong']
+        );
+        self::assertStringNotContainsString(
+            'Техническая информация',
             $content['ruLong']
         );
         self::assertStringContainsString(
@@ -135,11 +146,7 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['enLong']
         );
         self::assertStringContainsString(
-            '<h3>Key features</h3>',
-            $content['enLong']
-        );
-        self::assertStringContainsString(
-            '<h3>Technical information</h3>',
+            '<h3>Who is Edubin for?</h3>',
             $content['enLong']
         );
     }
