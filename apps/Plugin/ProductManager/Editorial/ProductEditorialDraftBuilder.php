@@ -29,7 +29,10 @@ final class ProductEditorialDraftBuilder
         $title = trim($title);
         $developer = trim($developer);
         $sourceUpdateDate = trim($sourceUpdateDate);
-        $topics = $this->topics($sourceTags);
+        $topics = $this->topics(array_merge(
+            $this->titleTopics($title),
+            $sourceTags
+        ));
         $ruTopics = $this->ruTopics($topics);
         $enTopics = $this->enTopics($topics);
         $ruType = $this->ruType($productType);
@@ -190,6 +193,61 @@ final class ProductEditorialDraftBuilder
         };
     }
 
+    /** @return list<string> */
+    private function titleTopics(string $title): array
+    {
+        $title = strtolower($title);
+        $rules = [
+            'education' => ['education'],
+            'school' => ['school'],
+            'university' => ['university'],
+            ' lms' => ['lms'],
+            'hotel' => ['hotel'],
+            'resort' => ['resort'],
+            'villa' => ['villa'],
+            'travel' => ['travel'],
+            'tourism' => ['tourism'],
+            'booking' => ['booking'],
+            'business' => ['business'],
+            'corporate' => ['corporate'],
+            'agency' => ['agency'],
+            'marketing' => ['marketing'],
+            'ecommerce' => ['ecommerce'],
+            'e-commerce' => ['ecommerce'],
+            'woocommerce' => ['ecommerce'],
+            ' shop' => ['shop'],
+            ' store' => ['store'],
+            'blog' => ['blog'],
+            'portfolio' => ['portfolio'],
+            'restaurant' => ['restaurant'],
+            'real estate' => ['real estate'],
+            'medical' => ['medical'],
+            'health' => ['health'],
+            'fitness' => ['fitness'],
+            ' gym' => ['gym'],
+            'construction' => ['construction'],
+            'renovation' => ['renovation'],
+            'remodeling' => ['remodeling'],
+            'remodelling' => ['remodeling'],
+            'finance' => ['finance'],
+            'technology' => ['technology'],
+            ' saas' => ['saas'],
+        ];
+        $topics = [];
+
+        foreach ($rules as $needle => $values) {
+            if (! str_contains($title, $needle)) {
+                continue;
+            }
+
+            foreach ($values as $value) {
+                $topics[] = $value;
+            }
+        }
+
+        return array_values(array_unique($topics));
+    }
+
     /**
      * @param list<string> $tags
      * @return list<string>
@@ -201,6 +259,9 @@ final class ProductEditorialDraftBuilder
             'wordpress', 'theme', 'plugin', 'template', 'template kit',
             'elementor', 'elementor pro', 'responsive', 'modern', 'clean',
             'themeforest', 'codecanyon', 'website', 'web', 'design',
+            'learndash', 'learnpress', 'lifterlms', 'sensei', 'tutor',
+            'tutor lms', 'loco translate', 'rtl', 'wpml', 'woocommerce',
+            'translation ready', 'retina ready', 'bootstrap', 'gutenberg',
         ];
 
         foreach ($tags as $tag) {
@@ -236,13 +297,12 @@ final class ProductEditorialDraftBuilder
             'corporate' => 'корпоративные сайты',
             'agency' => 'агентства',
             'marketing' => 'маркетинг',
-            'education' => 'образование',
+            'education' => 'образование и онлайн-обучение',
             'school' => 'школы',
             'university' => 'университеты',
             'lms' => 'LMS',
             'ecommerce' => 'интернет-магазины',
             'e-commerce' => 'интернет-магазины',
-            'woocommerce' => 'WooCommerce',
             'shop' => 'магазины',
             'store' => 'магазины',
             'blog' => 'блоги',
@@ -256,6 +316,8 @@ final class ProductEditorialDraftBuilder
             'fitness' => 'фитнес',
             'gym' => 'спортзалы',
             'construction' => 'строительство',
+            'renovation' => 'ремонт и реконструкция',
+            'remodeling' => 'ремоделирование',
             'seo' => 'SEO',
             'finance' => 'финансы',
             'technology' => 'технологии',
@@ -275,7 +337,54 @@ final class ProductEditorialDraftBuilder
     /** @param list<string> $topics */
     private function enTopics(array $topics): string
     {
-        return $this->humanList($topics, 'en');
+        $map = [
+            'hotel' => 'hotels',
+            'hotels' => 'hotels',
+            'resort' => 'resorts',
+            'villa' => 'villas',
+            'travel' => 'travel',
+            'tourism' => 'tourism',
+            'booking' => 'booking',
+            'vacation' => 'vacation',
+            'business' => 'business',
+            'corporate' => 'corporate websites',
+            'agency' => 'agencies',
+            'marketing' => 'marketing',
+            'education' => 'education and online learning',
+            'school' => 'schools',
+            'university' => 'universities',
+            'lms' => 'LMS',
+            'ecommerce' => 'e-commerce',
+            'e-commerce' => 'e-commerce',
+            'shop' => 'online stores',
+            'store' => 'online stores',
+            'blog' => 'blogs',
+            'portfolio' => 'portfolios',
+            'restaurant' => 'restaurants',
+            'food' => 'food businesses',
+            'real estate' => 'real estate',
+            'realestate' => 'real estate',
+            'medical' => 'medical websites',
+            'health' => 'healthcare',
+            'fitness' => 'fitness',
+            'gym' => 'gyms',
+            'construction' => 'construction',
+            'renovation' => 'home renovation',
+            'remodeling' => 'remodeling',
+            'seo' => 'SEO',
+            'finance' => 'finance',
+            'technology' => 'technology',
+            'saas' => 'SaaS',
+        ];
+        $translated = [];
+
+        foreach ($topics as $topic) {
+            if (isset($map[$topic])) {
+                $translated[] = $map[$topic];
+            }
+        }
+
+        return $this->humanList(array_values(array_unique($translated)), 'en');
     }
 
     /** @param list<string> $values */
