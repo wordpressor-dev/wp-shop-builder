@@ -210,37 +210,6 @@ final class TranslatePressProductTranslator
     private function catalogDisplayTranslation(
         int $productId
     ): ?array {
-        $productType = ($this->call)(
-            'get_post_meta',
-            $productId,
-            '_wp_shop_product_type',
-            true
-        );
-
-        if (is_string($productType)) {
-            $productType = trim($productType);
-
-            $pair = match ($productType) {
-                CatalogProductType::THEME => [
-                    'source' => 'Темы',
-                    'target' => 'Themes',
-                ],
-                CatalogProductType::PLUGIN => [
-                    'source' => 'Плагины',
-                    'target' => 'Plugins',
-                ],
-                CatalogProductType::TEMPLATE_KIT => [
-                    'source' => 'Шаблоны',
-                    'target' => 'Templates',
-                ],
-                default => null,
-            };
-
-            if ($pair !== null) {
-                return $pair;
-            }
-        }
-
         $category = ($this->call)(
             'get_post_meta',
             $productId,
@@ -248,26 +217,51 @@ final class TranslatePressProductTranslator
             true
         );
 
-        if (! is_string($category)) {
+        if (is_string($category)) {
+            $category = trim($category);
+            $english = match ($category) {
+                'Темы' => 'Themes',
+                'Плагины' => 'Plugins',
+                'Шаблоны' => 'Templates',
+                default => '',
+            };
+
+            if ($english !== '') {
+                return [
+                    'source' => $category,
+                    'target' => $english,
+                ];
+            }
+        }
+
+        $productType = ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_product_type',
+            true
+        );
+
+        if (! is_string($productType)) {
             return null;
         }
 
-        $category = trim($category);
-        $english = match ($category) {
-            'Темы' => 'Themes',
-            'Плагины' => 'Plugins',
-            'Шаблоны' => 'Templates',
-            default => '',
+        $productType = trim($productType);
+
+        return match ($productType) {
+            CatalogProductType::THEME => [
+                'source' => 'Темы',
+                'target' => 'Themes',
+            ],
+            CatalogProductType::PLUGIN => [
+                'source' => 'Плагины',
+                'target' => 'Plugins',
+            ],
+            CatalogProductType::TEMPLATE_KIT => [
+                'source' => 'Шаблоны',
+                'target' => 'Templates',
+            ],
+            default => null,
         };
-
-        if ($english === '') {
-            return null;
-        }
-
-        return [
-            'source' => $category,
-            'target' => $english,
-        ];
     }
 
     private function savePreparedEnglish(
