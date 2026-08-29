@@ -20,7 +20,11 @@ final class ProductEditorialOfficialEnrichmentTest extends TestCase
     public function testOfficialFactsEnrichLongContentWithoutReplacingEnglishSummary(): void
     {
         $_REQUEST['preview_id'] = '4561';
-        $summary = '<p>Edubin – Education WordPress Theme — это современная тема WordPress для школ, курсов, университетов и онлайн-образования. Адаптивный дизайн, интеграция с LMS, расписание занятий, страницы преподавателей, календарь событий, галерея, отзывы и форма обратной связи.</p>';
+        $summary = '<p>Edubin – Education WordPress Theme — это современная тема '
+            . 'WordPress для школ, курсов, университетов и онлайн-образования. '
+            . 'Адаптивный дизайн, интеграция с LMS, расписание занятий, страницы '
+            . 'преподавателей, календарь событий, галерея, отзывы и форма '
+            . 'обратной связи.</p>';
         $post = [
             'ID' => 4561,
             'post_type' => 'product',
@@ -47,6 +51,15 @@ final class ProductEditorialOfficialEnrichmentTest extends TestCase
         $envato = new class implements EnvatoClientInterface {
             public function fetch(string $itemUrl, string $token): EnvatoItem
             {
+                $tags = [
+                    'learnpress',
+                    'learndash',
+                    'elementor',
+                    'woocommerce',
+                    'wpml',
+                    'responsive',
+                ];
+
                 return new EnvatoItem(
                     24037792,
                     'Edubin – Education WordPress Theme',
@@ -57,11 +70,9 @@ final class ProductEditorialOfficialEnrichmentTest extends TestCase
                     $itemUrl,
                     1,
                     null,
-                    ['learnpress', 'learndash', 'elementor', 'woocommerce', 'wpml', 'responsive'],
+                    $tags,
                     'edubin.zip',
-                    [
-                        'tags' => ['learnpress', 'learndash', 'elementor', 'woocommerce', 'wpml', 'responsive'],
-                    ]
+                    ['tags' => $tags]
                 );
             }
         };
@@ -111,7 +122,13 @@ final class ProductEditorialOfficialEnrichmentTest extends TestCase
      */
     private function caller(array &$post, array &$meta): \Closure
     {
-        return static function (string $name, mixed ...$arguments) use (&$post, &$meta): mixed {
+        return static function (
+            string $name,
+            mixed ...$arguments
+        ) use (
+            &$post,
+            &$meta
+        ): mixed {
             if ($name === 'get_post') {
                 return (object) $post;
             }
