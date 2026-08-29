@@ -68,10 +68,15 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['enShort']
         );
 
-        foreach (
-            ['learndash', 'loco translate', 'rtl', 'woocommerce', 'wpml']
-            as $noise
-        ) {
+        $noiseTags = [
+            'learndash',
+            'loco translate',
+            'rtl',
+            'woocommerce',
+            'wpml',
+        ];
+
+        foreach ($noiseTags as $noise) {
             self::assertStringNotContainsString(
                 $noise,
                 strtolower($content['enLong'])
