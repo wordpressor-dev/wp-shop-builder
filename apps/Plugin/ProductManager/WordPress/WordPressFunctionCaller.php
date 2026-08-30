@@ -31,11 +31,16 @@ final class WordPressFunctionCaller
         }
 
         $productId = (int) ($arguments[0] ?? 0);
-        if ($productId <= 0 || ! is_callable('get_post')) {
+        if ($productId <= 0) {
             return $result;
         }
 
-        $post = Closure::fromCallable('get_post')($productId);
+        try {
+            $post = $this->__invoke('get_post', $productId);
+        } catch (RuntimeException) {
+            return $result;
+        }
+
         $title = is_object($post) && isset($post->post_title)
             ? trim((string) $post->post_title)
             : '';
