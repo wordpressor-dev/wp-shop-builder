@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Editorial;
 
 use Closure;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Translation\ProductTranslationResult;
+use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 
 final class ProductEditorialMigrationService
 {
@@ -108,6 +110,14 @@ final class ProductEditorialMigrationService
 
         if (is_array($backup) && $backup !== []) {
             $legacy = $backup;
+
+            // Keep the original RU backup immutable, but let a freshly imported
+            // EN Pack v2 override stale EN that was captured in the backup.
+            foreach (['enShort', 'enLong', 'enMeta'] as $field) {
+                if (trim($current[$field]) !== '') {
+                    $legacy[$field] = $current[$field];
+                }
+            }
         } elseif (! $this->sameList(array_values($current), array_values($generic))) {
             $legacy = $current;
         }
@@ -125,8 +135,10 @@ final class ProductEditorialMigrationService
             $generated = $this->preserveRichLegacyRu($legacy, $generated);
         }
 
-        $translationRequired = is_array($legacy)
-            && $this->requiresEnglishTranslation($legacy);
+        $translationIssue = $this->translationIssue($generated);
+        $translationRequired = (is_array($legacy)
+            && $this->requiresEnglishTranslation($legacy))
+            || $translationIssue !== '';
         $ruStatus = $this->status(
             [$current['ruShort'], $current['ruLong']],
             [$generated['ruShort'], $generated['ruLong']]
@@ -167,14 +179,24 @@ final class ProductEditorialMigrationService
     public function apply(int $productId): array
     {
         $preview = $this->preview($productId);
+        $translationIssue = $this->translationIssue($preview['generated']);
+
         if ($preview['status'] === 'STOP') {
-            $reason = $preview['productType'] === 'unknown'
-                ? 'product type is unknown'
-                : 'English editorial translation is incomplete';
+            if ($preview['productType'] === 'unknown') {
+                $reason = 'product type is unknown';
+            } elseif ($translationIssue !== '') {
+                $reason = 'English editorial translation is structurally incompatible: '
+                    . $translationIssue;
+            } else {
+                $reason = 'English editorial translation is incomplete';
+            }
+
             throw new RuntimeException(
                 'Editorial migration stopped: ' . $reason . ' for product ' . $productId
             );
         }
+
+        $this->assertTranslationCompatible($productId, $preview['generated']);
 
         if ($preview['status'] === 'CURRENT') {
             $logs = [
@@ -414,6 +436,43 @@ final class ProductEditorialMigrationService
         }
 
         return false;
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     */
+    private function translationIssue(array $content): string
+    {
+        try {
+            (new TranslationMapBuilder())->build(
+                $content['ruShort'],
+                $content['ruLong'],
+                $content['ruMeta'],
+                $content['enShort'],
+                $content['enLong'],
+                $content['enMeta']
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $exception->getMessage();
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     */
+    private function assertTranslationCompatible(int $productId, array $content): void
+    {
+        $issue = $this->translationIssue($content);
+        if ($issue === '') {
+            return;
+        }
+
+        throw new RuntimeException(
+            'Editorial migration stopped before write: incompatible RU/EN structure for product '
+            . $productId . '. ' . $issue
+        );
     }
 
     /** @param list<string> $facts */
