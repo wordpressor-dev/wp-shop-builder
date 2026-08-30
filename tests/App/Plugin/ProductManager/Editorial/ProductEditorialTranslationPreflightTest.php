@@ -34,7 +34,8 @@ final class ProductEditorialTranslationPreflightTest extends TestCase
             'attr_developer_value' => 'NasaTheme',
             '_wp_shop_en_short_description' => '<p>Old English short.</p>',
             '_wp_shop_en_long_description' => $staleEn,
-            '_wp_shop_en_meta_description' => 'Old English meta description for Elessi WooCommerce theme and store projects.',
+            '_wp_shop_en_meta_description' => 'Old English meta description for Elessi '
+                . 'WooCommerce theme and store projects.',
             'surerank_settings_general' => [
                 'page_description' => 'Современная WooCommerce тема с AJAX-фильтрами и поддержкой RTL.',
             ],
