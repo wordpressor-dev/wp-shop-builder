@@ -31,8 +31,10 @@ final class EnvatoOfficialFactsExtractor
                 $signals[] = $signal;
             }
 
-            $ruFacts[] = $rule['ru'];
-            $enFacts[] = $rule['en'];
+            if ($rule['ru'] !== '' && $rule['en'] !== '') {
+                $ruFacts[] = $rule['ru'];
+                $enFacts[] = $rule['en'];
+            }
         }
 
         foreach ($this->sourceTags($source) as $tag) {
@@ -84,21 +86,21 @@ final class EnvatoOfficialFactsExtractor
             ],
             [
                 'needles' => ['elementor'],
-                'signals' => ['elementor', 'page builder'],
-                'ru' => 'поддержка Elementor для визуальной настройки страниц',
-                'en' => 'Elementor support for visual page building',
+                'signals' => ['page builder'],
+                'ru' => '',
+                'en' => '',
             ],
             [
                 'needles' => ['woocommerce'],
-                'signals' => ['woocommerce', 'ecommerce'],
-                'ru' => 'совместимость с WooCommerce',
-                'en' => 'WooCommerce compatibility',
+                'signals' => ['ecommerce'],
+                'ru' => '',
+                'en' => '',
             ],
             [
                 'needles' => ['wpml'],
                 'signals' => ['wpml'],
-                'ru' => 'поддержка WPML для многоязычных сайтов',
-                'en' => 'WPML support for multilingual sites',
+                'ru' => '',
+                'en' => '',
             ],
             [
                 'needles' => ['"rtl"', 'rtl ready', 'rtl-ready'],
@@ -120,21 +122,21 @@ final class EnvatoOfficialFactsExtractor
             ],
             [
                 'needles' => ['gutenberg optimized', 'gutenberg_optimized'],
-                'signals' => ['gutenberg'],
-                'ru' => 'оптимизация для редактора Gutenberg',
-                'en' => 'Gutenberg editor optimization',
+                'signals' => [],
+                'ru' => '',
+                'en' => '',
             ],
             [
                 'needles' => ['responsive layout', 'responsive design', 'responsive'],
-                'signals' => ['responsive'],
-                'ru' => 'адаптивный дизайн для разных размеров экрана',
-                'en' => 'responsive design for different screen sizes',
+                'signals' => [],
+                'ru' => '',
+                'en' => '',
             ],
             [
                 'needles' => ['contact form 7'],
-                'signals' => ['contact form 7'],
-                'ru' => 'совместимость с Contact Form 7',
-                'en' => 'Contact Form 7 compatibility',
+                'signals' => [],
+                'ru' => '',
+                'en' => '',
             ],
         ];
     }
@@ -164,6 +166,15 @@ final class EnvatoOfficialFactsExtractor
         }
 
         $result = [];
+        $skip = [
+            'elementor',
+            'elementor pro',
+            'gutenberg',
+            'contact form 7',
+            'responsive',
+            'responsive layout',
+            'responsive design',
+        ];
 
         foreach ($tags as $tag) {
             if (! is_scalar($tag)) {
@@ -172,9 +183,21 @@ final class EnvatoOfficialFactsExtractor
 
             $value = strtolower(trim((string) $tag));
 
-            if ($value !== '' && strlen($value) <= 60) {
-                $result[] = $value;
+            if ($value === '' || strlen($value) > 60) {
+                continue;
             }
+
+            if ($value === 'woocommerce') {
+                $result[] = 'ecommerce';
+
+                continue;
+            }
+
+            if (in_array($value, $skip, true)) {
+                continue;
+            }
+
+            $result[] = $value;
         }
 
         return array_values(array_unique($result));
