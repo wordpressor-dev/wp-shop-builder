@@ -122,6 +122,7 @@ final class ProductEditorialMigrationService
                 $this->enrichLegacy($legacy, $official, $generic)
             );
             $generated = $this->preserveQualityMeta($legacy, $generated);
+            $generated = $this->preserveRichLegacyRu($legacy, $generated);
         }
 
         $translationRequired = is_array($legacy)
@@ -347,6 +348,47 @@ final class ProductEditorialMigrationService
         }
 
         return $generated;
+    }
+
+    /**
+     * Preserve an already structured human-written RU editorial page instead
+     * of rebuilding it into a weaker generic v28 template.
+     *
+     * @param array<string,mixed> $legacy
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
+     * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
+     */
+    private function preserveRichLegacyRu(array $legacy, array $generated): array
+    {
+        $ruLong = trim((string) ($legacy['ruLong'] ?? ''));
+        if (! $this->isRichEditorialContent($ruLong)) {
+            return $generated;
+        }
+
+        $ruShort = trim((string) ($legacy['ruShort'] ?? ''));
+        if ($ruShort !== '') {
+            $generated['ruShort'] = $ruShort;
+        }
+        $generated['ruLong'] = $ruLong;
+
+        return $generated;
+    }
+
+    private function isRichEditorialContent(string $content): bool
+    {
+        if (mb_strlen($this->plainEditorialText($content), 'UTF-8') < 350) {
+            return false;
+        }
+
+        if (preg_match('/<h2\b[^>]*>/i', $content) !== 1) {
+            return false;
+        }
+
+        $paragraphs = preg_match_all('/<p\b[^>]*>/i', $content);
+        $sections = preg_match_all('/<(?:h3|ul|ol)\b[^>]*>/i', $content);
+
+        return (is_int($paragraphs) && $paragraphs >= 3)
+            || (is_int($sections) && $sections >= 1);
     }
 
     /** @param array<string,mixed> $legacy */
