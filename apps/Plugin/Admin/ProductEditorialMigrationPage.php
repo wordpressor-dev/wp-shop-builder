@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\Admin;
 
 use Closure;
+use InvalidArgumentException;
+use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
+use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class ProductEditorialMigrationPage implements SubmenuPageInterface
 {
+    private const EN_PACK_VERSION = '1';
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -50,6 +55,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         $previewId = max(0, (int) $this->request('preview_id'));
         $logs = [];
         $success = null;
+        $packCsv = '';
 
         try {
             $applyId = $this->postedInt('editorial_apply_id');
@@ -69,16 +75,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             } elseif ($action === 'apply_selected') {
                 $this->checkNonce();
                 $selected = $this->selectedIds();
-
-                if ($selected === []) {
-                    throw new \RuntimeException('No products selected.');
-                }
-
-                if (count($selected) > 25) {
-                    throw new \RuntimeException(
-                        'Apply selected is limited to 25 products per run.'
-                    );
-                }
+                $this->assertSelectedLimit($selected, 'Apply selected');
 
                 foreach ($selected as $productId) {
                     $logs = array_merge(
@@ -88,6 +85,22 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     );
                 }
 
+                $success = true;
+            } elseif ($action === 'prepare_en_pack') {
+                $this->checkNonce();
+                $selected = $this->selectedIds();
+                $this->assertSelectedLimit($selected, 'EN pack');
+                $packCsv = $this->prepareEnPack($selected);
+                $logs = [
+                    'EDITORIAL EN PACK = READY',
+                    'PRODUCTS = ' . count($selected),
+                    'RU CONTENT = READ ONLY',
+                    'EN COLUMNS = READY FOR TRANSLATION',
+                ];
+                $success = true;
+            } elseif ($action === 'import_en_pack') {
+                $this->checkNonce();
+                $logs = $this->importEnPack();
                 $success = true;
             }
         } catch (Throwable $exception) {
@@ -115,16 +128,22 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Editorial Migration</h1>';
-        echo '<p>Приведение старых товаров к единому v28 editorial-стандарту. Сначала Preview, затем Apply. Перед первой заменой каждого товара автоматически сохраняется исходный RU/EN/Meta backup.</p>';
+        echo '<p>Приведение старых товаров к единому v28 editorial-стандарту. Сначала Preview, затем EN Translation Pack при необходимости, затем повторная проверка. Перед первой заменой каждого товара автоматически сохраняется исходный RU/EN/Meta backup.</p>';
 
         $this->renderLogs($logs, $success);
 
         echo '<div class="notice notice-warning" style="max-width:1500px;padding:10px 14px;">';
-        echo '<p><strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. На этом этапе TranslatePress dictionary также не переписывается; подготавливаются новые EN Short/Long/Meta для отдельной проверки перевода.</p>';
+        echo '<p><strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import EN Pack сохраняет только подготовленные EN Short/Long/Meta после проверки RU fingerprint и HTML-сегментов. TranslatePress dictionary синхронизируется отдельно через Apply для проверенных CURRENT товаров.</p>';
         echo '</div>';
 
         $this->renderBrowseForm($search, $perPage);
         $this->renderTable($rows, $search, $page, $perPage, $hasNext);
+
+        if ($packCsv !== '') {
+            $this->renderPackDownload($packCsv);
+        }
+
+        $this->renderImportForm($search, $page, $perPage);
 
         if ($previewId > 0) {
             try {
@@ -189,7 +208,6 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">Catalog Editorial Queue</h2>';
         echo '<form method="post">';
         $this->nonceField();
-        echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="apply_selected">';
         echo '<input type="hidden" name="editorial_search" value="'
             . $this->escapeAttr($search) . '">';
         echo '<input type="hidden" name="editorial_page" value="'
@@ -217,10 +235,15 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 $id,
                 ''
             );
+            $packEligible = $row['status'] === 'STOP'
+                && $row['enStatus'] === 'REVIEW'
+                && $row['productType'] !== 'unknown';
 
             echo '<tr>';
             echo '<td><input type="checkbox" name="editorial_selected[]" value="'
-                . $this->escapeAttr((string) $id) . '"></td>';
+                . $this->escapeAttr((string) $id) . '"'
+                . ($packEligible || $row['status'] === 'CURRENT' ? '' : ' disabled')
+                . '></td>';
             echo '<td>' . $this->escape((string) $id) . '</td>';
             echo '<td><strong>' . $this->escape($row['title']) . '</strong>';
 
@@ -240,9 +263,9 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 . $this->escapeUrl($previewUrl) . '">Preview</a> ';
             echo '<button class="button button-small button-primary" type="submit" name="editorial_apply_id" value="'
                 . $this->escapeAttr((string) $id)
-                . '" onclick="return confirm(\'Replace RU/EN/Meta for product #'
+                . '" onclick="return confirm(\'Apply/sync editorial state for product #'
                 . $this->escapeAttr((string) $id)
-                . '? Backup will be created first.\');">Apply</button> ';
+                . '?\');">Apply</button> ';
 
             if ($row['backupAvailable']) {
                 echo '<button class="button button-small" type="submit" name="editorial_restore_id" value="'
@@ -257,11 +280,57 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
 
         echo '</tbody></table>';
         echo '<p style="margin-bottom:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
-        echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Apply v28 editorial content to all selected products? Each product is backed up first.\');">Apply selected (max 25)</button>';
-        echo '<span>Выбирай только проверенные строки. CURRENT будет безопасно пропущен без записи.</span></p>';
+        echo '<button type="submit" class="button" name="wp_shop_pm_editorial_action" value="prepare_en_pack">Prepare EN pack (max 25)</button>';
+        echo '<button type="submit" class="button button-primary" name="wp_shop_pm_editorial_action" value="apply_selected" onclick="return confirm(\'Apply/sync all selected products?\');">Apply selected (max 25)</button>';
+        echo '<span>EN pack: выбирай STOP / EN REVIEW. Apply selected: используй после импорта и проверки CURRENT для синхронизации TranslatePress.</span></p>';
         echo '</form>';
         $this->renderPagination($search, $page, $perPage, $hasNext);
         echo '</div>';
+    }
+
+    private function renderPackDownload(string $csv): void
+    {
+        $id = 'wp-shop-editorial-en-pack';
+        $filename = 'wp-shop-editorial-en-pack-'
+            . (string) ($this->call)('current_time', 'Y-m-d-His')
+            . '.csv';
+
+        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px;">';
+        echo '<h2 style="margin-top:0;">EN Translation Pack — READY</h2>';
+        echo '<p>Скачай CSV, заполни только EN Short HTML / EN Long HTML / EN Meta и импортируй файл обратно. RU и fingerprint менять нельзя.</p>';
+        echo '<textarea id="' . $id . '" readonly style="width:100%;height:160px;font-family:monospace;">'
+            . $this->escape($csv)
+            . '</textarea>';
+        echo '<p><button type="button" class="button button-primary" id="'
+            . $id . '-download">Download EN Pack CSV</button></p>';
+        echo '<script>(function(){const b=document.getElementById("'
+            . $id . '-download");if(!b){return;}b.addEventListener("click",function(){const t=document.getElementById("'
+            . $id . '");if(!t){return;}const blob=new Blob([t.value],{type:"text/csv;charset=utf-8"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download="'
+            . $this->escapeAttr($filename)
+            . '";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);});})();</script>';
+        echo '</div>';
+    }
+
+    private function renderImportForm(
+        string $search,
+        int $page,
+        int $perPage
+    ): void {
+        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px;">';
+        echo '<h2 style="margin-top:0;">Import translated EN Pack</h2>';
+        echo '<p>Импорт сначала проверяет все строки: Product ID, тип, неизменность RU fingerprint и совместимость RU/EN HTML-сегментов. Только после полной проверки записываются подготовленные EN meta fields. RU не изменяется.</p>';
+        echo '<form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="import_en_pack">';
+        echo '<input type="hidden" name="editorial_search" value="'
+            . $this->escapeAttr($search) . '">';
+        echo '<input type="hidden" name="editorial_page" value="'
+            . $this->escapeAttr((string) $page) . '">';
+        echo '<input type="hidden" name="editorial_per_page" value="'
+            . $this->escapeAttr((string) $perPage) . '">';
+        echo '<label><strong>Translated CSV</strong><br><input type="file" name="editorial_en_pack" accept=".csv,text/csv" required></label>';
+        echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Import prepared EN Short/Long/Meta for every valid row? RU content will not be changed.\');">Validate + Import EN Pack</button>';
+        echo '</form></div>';
     }
 
     /**
@@ -323,7 +392,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             . $this->escapeAttr((string) $preview['productId']) . '">';
         echo '<button class="button button-primary" type="submit" name="editorial_apply_id" value="'
             . $this->escapeAttr((string) $preview['productId'])
-            . '" onclick="return confirm(\'Apply generated editorial content to this product?\');">Apply this product</button>';
+            . '" onclick="return confirm(\'Apply/sync editorial state for this product?\');">Apply this product</button>';
 
         if ($preview['backupAvailable']) {
             echo '<button class="button" type="submit" name="editorial_restore_id" value="'
@@ -332,6 +401,325 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         }
 
         echo '</form></div>';
+    }
+
+    /** @param list<int> $selected */
+    private function prepareEnPack(array $selected): string
+    {
+        $stream = fopen('php://temp', 'w+b');
+
+        if ($stream === false) {
+            throw new RuntimeException('Unable to create EN pack stream.');
+        }
+
+        fwrite($stream, "\xEF\xBB\xBF");
+        fputcsv($stream, $this->packHeaders(), ';', '"', '');
+
+        foreach ($selected as $productId) {
+            $preview = $this->migration->preview($productId);
+
+            if (
+                $preview['status'] !== 'STOP'
+                || $preview['enStatus'] !== 'REVIEW'
+                || $preview['productType'] === 'unknown'
+            ) {
+                fclose($stream);
+                throw new RuntimeException(
+                    'Product #' . $productId
+                    . ' is not eligible for EN pack. Expected STOP / EN REVIEW with known type.'
+                );
+            }
+
+            $current = $preview['current'];
+            fputcsv(
+                $stream,
+                [
+                    self::EN_PACK_VERSION,
+                    (string) $productId,
+                    $preview['title'],
+                    $preview['productType'],
+                    $preview['developer'],
+                    $this->ruFingerprint($current),
+                    $current['ruShort'],
+                    $current['ruLong'],
+                    $current['ruMeta'],
+                    $current['enShort'],
+                    $current['enLong'],
+                    $current['enMeta'],
+                ],
+                ';',
+                '"',
+                ''
+            );
+        }
+
+        rewind($stream);
+        $csv = stream_get_contents($stream);
+        fclose($stream);
+
+        if (! is_string($csv) || $csv === '') {
+            throw new RuntimeException('EN pack CSV is empty.');
+        }
+
+        return $csv;
+    }
+
+    /** @return list<string> */
+    private function importEnPack(): array
+    {
+        $upload = $_FILES['editorial_en_pack'] ?? null;
+
+        if (! is_array($upload)) {
+            throw new RuntimeException('EN pack CSV was not uploaded.');
+        }
+
+        $error = isset($upload['error']) && is_scalar($upload['error'])
+            ? (int) $upload['error']
+            : UPLOAD_ERR_NO_FILE;
+        $name = isset($upload['name']) && is_scalar($upload['name'])
+            ? (string) $upload['name']
+            : '';
+        $tmpName = isset($upload['tmp_name']) && is_scalar($upload['tmp_name'])
+            ? (string) $upload['tmp_name']
+            : '';
+        $size = isset($upload['size']) && is_scalar($upload['size'])
+            ? (int) $upload['size']
+            : 0;
+
+        if ($error !== UPLOAD_ERR_OK || $tmpName === '') {
+            throw new RuntimeException('EN pack upload failed with code ' . $error . '.');
+        }
+
+        if ($size <= 0 || $size > 8 * 1024 * 1024) {
+            throw new RuntimeException('EN pack must be between 1 byte and 8 MB.');
+        }
+
+        if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'csv') {
+            throw new RuntimeException('EN pack must be a .csv file.');
+        }
+
+        $stream = fopen($tmpName, 'rb');
+
+        if ($stream === false) {
+            throw new RuntimeException('Unable to open uploaded EN pack.');
+        }
+
+        try {
+            $headers = fgetcsv($stream, 0, ';', '"', '');
+
+            if (! is_array($headers)) {
+                throw new RuntimeException('EN pack header is missing.');
+            }
+
+            $headers = array_map(
+                static fn(mixed $value): string => is_scalar($value)
+                    ? trim((string) $value)
+                    : '',
+                $headers
+            );
+            $headers[0] = ltrim($headers[0] ?? '', "\xEF\xBB\xBF");
+
+            if ($headers !== $this->packHeaders()) {
+                throw new RuntimeException(
+                    'EN pack header does not match the expected v1 format.'
+                );
+            }
+
+            $rows = [];
+
+            while (($csvRow = fgetcsv($stream, 0, ';', '"', '')) !== false) {
+                if ($this->csvRowEmpty($csvRow)) {
+                    continue;
+                }
+
+                if (count($csvRow) !== count($headers)) {
+                    throw new RuntimeException('EN pack contains a malformed CSV row.');
+                }
+
+                $combined = array_combine($headers, $csvRow);
+
+                if (! is_array($combined)) {
+                    throw new RuntimeException('EN pack row could not be mapped.');
+                }
+
+                $rows[] = $combined;
+
+                if (count($rows) > 25) {
+                    throw new RuntimeException('EN pack import is limited to 25 products per run.');
+                }
+            }
+        } finally {
+            fclose($stream);
+        }
+
+        if ($rows === []) {
+            throw new RuntimeException('EN pack contains no product rows.');
+        }
+
+        $mapBuilder = new TranslationMapBuilder();
+        $prepared = [];
+        $seen = [];
+
+        foreach ($rows as $row) {
+            $productId = (int) trim((string) ($row['Product ID'] ?? '0'));
+
+            if ($productId <= 0 || isset($seen[$productId])) {
+                throw new RuntimeException('EN pack contains an invalid or duplicate Product ID.');
+            }
+
+            $seen[$productId] = true;
+
+            if (trim((string) ($row['Pack Version'] ?? '')) !== self::EN_PACK_VERSION) {
+                throw new RuntimeException('Unsupported EN pack version for product #' . $productId . '.');
+            }
+
+            $preview = $this->migration->preview($productId);
+
+            if ($preview['productType'] === 'unknown') {
+                throw new RuntimeException('Product #' . $productId . ' has unknown type.');
+            }
+
+            $packedType = trim((string) ($row['Type'] ?? ''));
+
+            if ($packedType !== $preview['productType']) {
+                throw new RuntimeException(
+                    'Product #' . $productId . ' type changed: pack='
+                    . $packedType . ', current=' . $preview['productType'] . '.'
+                );
+            }
+
+            $current = $preview['current'];
+            $fingerprint = trim((string) ($row['RU Fingerprint'] ?? ''));
+
+            if (! hash_equals($this->ruFingerprint($current), $fingerprint)) {
+                throw new RuntimeException(
+                    'Product #' . $productId
+                    . ' RU content changed after export. Re-export the EN pack.'
+                );
+            }
+
+            $enShort = trim((string) ($row['EN Short HTML'] ?? ''));
+            $enLong = trim((string) ($row['EN Long HTML'] ?? ''));
+            $enMeta = trim((string) ($row['EN Meta'] ?? ''));
+
+            try {
+                $mapBuilder->build(
+                    $current['ruShort'],
+                    $current['ruLong'],
+                    $current['ruMeta'],
+                    $enShort,
+                    $enLong,
+                    $enMeta
+                );
+            } catch (InvalidArgumentException $exception) {
+                throw new RuntimeException(
+                    'Product #' . $productId . ' translation validation failed: '
+                    . $exception->getMessage(),
+                    0,
+                    $exception
+                );
+            }
+
+            $prepared[] = [
+                'productId' => $productId,
+                'enShort' => $enShort,
+                'enLong' => $enLong,
+                'enMeta' => $enMeta,
+            ];
+        }
+
+        $logs = [
+            'EDITORIAL EN PACK IMPORT = VALIDATED',
+            'PRODUCTS = ' . count($prepared),
+            'RU CONTENT = PRESERVED',
+        ];
+
+        foreach ($prepared as $item) {
+            $productId = $item['productId'];
+            ($this->call)(
+                'update_post_meta',
+                $productId,
+                '_wp_shop_en_short_description',
+                (string) ($this->call)('wp_kses_post', $item['enShort'])
+            );
+            ($this->call)(
+                'update_post_meta',
+                $productId,
+                '_wp_shop_en_long_description',
+                (string) ($this->call)('wp_kses_post', $item['enLong'])
+            );
+            ($this->call)(
+                'update_post_meta',
+                $productId,
+                '_wp_shop_en_meta_description',
+                (string) ($this->call)('sanitize_textarea_field', $item['enMeta'])
+            );
+
+            $postPreview = $this->migration->preview($productId);
+            $logs[] = 'PRODUCT ' . $productId
+                . ' = EN PREPARED / OVERALL ' . $postPreview['status'];
+        }
+
+        $logs[] = 'TRANSLATEPRESS SYNC = NOT RUN';
+        $logs[] = 'NEXT = REVIEW CURRENT, THEN APPLY SELECTED';
+
+        return $logs;
+    }
+
+    /** @return list<string> */
+    private function packHeaders(): array
+    {
+        return [
+            'Pack Version',
+            'Product ID',
+            'Product',
+            'Type',
+            'Developer',
+            'RU Fingerprint',
+            'RU Short HTML',
+            'RU Long HTML',
+            'RU Meta',
+            'EN Short HTML',
+            'EN Long HTML',
+            'EN Meta',
+        ];
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $current
+     */
+    private function ruFingerprint(array $current): string
+    {
+        return hash(
+            'sha256',
+            $current['ruShort'] . "\0"
+                . $current['ruLong'] . "\0"
+                . $current['ruMeta']
+        );
+    }
+
+    /** @param array<int,mixed> $row */
+    private function csvRowEmpty(array $row): bool
+    {
+        foreach ($row as $value) {
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param list<int> $selected */
+    private function assertSelectedLimit(array $selected, string $label): void
+    {
+        if ($selected === []) {
+            throw new RuntimeException('No products selected.');
+        }
+
+        if (count($selected) > 25) {
+            throw new RuntimeException($label . ' is limited to 25 products per run.');
+        }
     }
 
     private function renderPagination(
