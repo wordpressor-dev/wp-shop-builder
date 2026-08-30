@@ -72,6 +72,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 $this->checkNonce();
                 $selected = $this->selectedIds();
                 $this->limitSelected($selected, 'Apply selected');
+                $this->assertBatchReady($selected);
                 foreach ($selected as $id) {
                     $logs[] = '--- PRODUCT ' . $id . ' ---';
                     $logs = array_merge($logs, $this->migration->apply($id));
@@ -120,7 +121,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '<p>EN Translation Pack v2 переводит целевой Generated v28 RU, а не старый Current RU.</p>';
         $this->renderLogs($logs, $success);
         echo '<div class="notice notice-warning" style="max-width:1500px;padding:10px 14px"><p>';
-        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. TranslatePress синхронизируется через Apply.</p></div>';
+        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. TranslatePress синхронизируется через Apply.</p></div>';
         $this->renderBrowse($search, $perPage);
         $this->renderTable($rows, $search, $page, $perPage, $hasNext);
         if ($csv !== '') {
@@ -197,7 +198,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '</tbody></table><p>';
         echo '<button class="button" name="wp_shop_pm_editorial_action" value="prepare_en_pack">Prepare EN pack v2 (max 25)</button> ';
         echo '<button class="button button-primary" name="wp_shop_pm_editorial_action" value="apply_selected">Apply selected (max 25)</button> ';
-        echo '<span>EN pack v2: STOP / EN REVIEW или MIGRATE. После импорта проверь Preview, затем Apply.</span></p>';
+        echo '<span>EN pack v2: STOP / EN REVIEW или MIGRATE. Apply selected выполняется только если вся выбранная пачка прошла preflight.</span></p>';
         echo '</form>';
         $this->renderPagination($search, $page, $perPage, $hasNext);
         echo '</div>';
@@ -253,6 +254,40 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 . (int) $preview['productId'] . '">Restore backup</button>';
         }
         echo '</form></div>';
+    }
+
+    /** @param list<int> $selected */
+    private function assertBatchReady(array $selected): void
+    {
+        $builder = new TranslationMapBuilder();
+
+        foreach ($selected as $id) {
+            $preview = $this->previewForPack($id);
+            if ($preview['productType'] === 'unknown') {
+                throw new RuntimeException('Batch preflight failed: product #' . $id . ' has unknown type.');
+            }
+            if ($preview['status'] === 'STOP') {
+                throw new RuntimeException('Batch preflight failed: product #' . $id . ' is STOP / EN REVIEW.');
+            }
+
+            $target = $preview['generated'];
+            try {
+                $builder->build(
+                    $target['ruShort'],
+                    $target['ruLong'],
+                    $target['ruMeta'],
+                    $target['enShort'],
+                    $target['enLong'],
+                    $target['enMeta']
+                );
+            } catch (InvalidArgumentException $exception) {
+                throw new RuntimeException(
+                    'Batch preflight failed for product #' . $id . ': ' . $exception->getMessage(),
+                    0,
+                    $exception
+                );
+            }
+        }
     }
 
     /** @param list<int> $selected */
