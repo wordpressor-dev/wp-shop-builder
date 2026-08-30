@@ -351,8 +351,8 @@ final class ProductEditorialMigrationService
     }
 
     /**
-     * Preserve an already structured human-written RU editorial page instead
-     * of rebuilding it into a weaker generic v28 template.
+     * Preserve already structured human-written RU and EN editorial pages
+     * instead of rebuilding them into a weaker generic v28 template.
      *
      * @param array<string,mixed> $legacy
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
@@ -360,16 +360,23 @@ final class ProductEditorialMigrationService
      */
     private function preserveRichLegacyRu(array $legacy, array $generated): array
     {
-        $ruLong = trim((string) ($legacy['ruLong'] ?? ''));
-        if (! $this->isRichEditorialContent($ruLong)) {
-            return $generated;
-        }
+        foreach (
+            [
+                ['ruShort', 'ruLong'],
+                ['enShort', 'enLong'],
+            ] as [$shortField, $longField]
+        ) {
+            $long = trim((string) ($legacy[$longField] ?? ''));
+            if (! $this->isRichEditorialContent($long)) {
+                continue;
+            }
 
-        $ruShort = trim((string) ($legacy['ruShort'] ?? ''));
-        if ($ruShort !== '') {
-            $generated['ruShort'] = $ruShort;
+            $short = trim((string) ($legacy[$shortField] ?? ''));
+            if ($short !== '') {
+                $generated[$shortField] = $short;
+            }
+            $generated[$longField] = $long;
         }
-        $generated['ruLong'] = $ruLong;
 
         return $generated;
     }
