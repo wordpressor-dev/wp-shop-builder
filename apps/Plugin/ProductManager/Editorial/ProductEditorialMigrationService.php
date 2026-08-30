@@ -121,25 +121,33 @@ final class ProductEditorialMigrationService
                 $sourceUpdateDate,
                 $this->enrichLegacy($legacy, $official, $generic)
             );
+            $generated = $this->preserveQualityMeta($legacy, $generated);
         }
 
+        $translationRequired = is_array($legacy)
+            && $this->requiresEnglishTranslation($legacy);
         $ruStatus = $this->status(
             [$current['ruShort'], $current['ruLong']],
             [$generated['ruShort'], $generated['ruLong']]
         );
-        $enStatus = $this->status(
-            [$current['enShort'], $current['enLong'], $current['enMeta']],
-            [$generated['enShort'], $generated['enLong'], $generated['enMeta']]
-        );
+        $enStatus = $translationRequired
+            ? 'REVIEW'
+            : $this->status(
+                [$current['enShort'], $current['enLong'], $current['enMeta']],
+                [$generated['enShort'], $generated['enLong'], $generated['enMeta']]
+            );
         $metaStatus = $this->singleStatus($current['ruMeta'], $generated['ruMeta']);
+        $status = $translationRequired
+            ? 'STOP'
+            : ($ruStatus === 'CURRENT' && $enStatus === 'CURRENT' && $metaStatus === 'CURRENT'
+                ? 'CURRENT'
+                : 'MIGRATE');
 
         return [
             'productId' => $productId,
             'title' => $title,
             'baseTitle' => $baseTitle,
-            'status' => $ruStatus === 'CURRENT' && $enStatus === 'CURRENT' && $metaStatus === 'CURRENT'
-                ? 'CURRENT'
-                : 'MIGRATE',
+            'status' => $status,
             'productType' => $productType,
             'developer' => $developer,
             'sourceUpdateDate' => $sourceUpdateDate,
@@ -159,8 +167,11 @@ final class ProductEditorialMigrationService
     {
         $preview = $this->preview($productId);
         if ($preview['status'] === 'STOP') {
+            $reason = $preview['productType'] === 'unknown'
+                ? 'product type is unknown'
+                : 'English editorial translation is incomplete';
             throw new RuntimeException(
-                'Editorial migration stopped: product type is unknown for product ' . $productId
+                'Editorial migration stopped: ' . $reason . ' for product ' . $productId
             );
         }
 
@@ -316,6 +327,44 @@ final class ProductEditorialMigrationService
         }
 
         return $legacy;
+    }
+
+    /**
+     * Keep an established human-written meta description when it has enough
+     * substance to be safer than a generated summary.
+     *
+     * @param array<string,mixed> $legacy
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
+     * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
+     */
+    private function preserveQualityMeta(array $legacy, array $generated): array
+    {
+        foreach (['ruMeta', 'enMeta'] as $field) {
+            $value = trim((string) ($legacy[$field] ?? ''));
+            if (mb_strlen($this->plainEditorialText($value), 'UTF-8') >= 80) {
+                $generated[$field] = $value;
+            }
+        }
+
+        return $generated;
+    }
+
+    /** @param array<string,mixed> $legacy */
+    private function requiresEnglishTranslation(array $legacy): bool
+    {
+        $hasRuEditorial = trim((string) ($legacy['ruShort'] ?? '')) !== ''
+            || trim((string) ($legacy['ruLong'] ?? '')) !== '';
+        if (! $hasRuEditorial) {
+            return false;
+        }
+
+        foreach (['enShort', 'enLong', 'enMeta'] as $field) {
+            if (trim((string) ($legacy[$field] ?? '')) === '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param list<string> $facts */
