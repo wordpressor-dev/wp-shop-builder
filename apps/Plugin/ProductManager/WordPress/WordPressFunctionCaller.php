@@ -14,6 +14,10 @@ final class WordPressFunctionCaller
         string $name,
         mixed ...$arguments
     ): mixed {
+        $productTypeRead = $name === 'get_post_meta'
+            && ($arguments[1] ?? null) === '_wp_shop_product_type'
+            && ($arguments[2] ?? null) === true;
+
         if (! is_callable($name)) {
             throw new RuntimeException(
                 'WordPress/WooCommerce function is unavailable: ' . $name
@@ -22,11 +26,7 @@ final class WordPressFunctionCaller
 
         $result = Closure::fromCallable($name)(...$arguments);
 
-        if (
-            $name !== 'get_post_meta'
-            || ($arguments[1] ?? null) !== '_wp_shop_product_type'
-            || ($arguments[2] ?? null) !== true
-        ) {
+        if (! $productTypeRead) {
             return $result;
         }
 
