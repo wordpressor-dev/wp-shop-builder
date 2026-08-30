@@ -18,6 +18,12 @@ final class ProductEditorialMigrationServiceTest extends TestCase
         $oldLong = '<p>Адаптивный дизайн, интеграция с LMS,'
             . ' расписание занятий, страницы преподавателей, календарь событий,'
             . ' галерея, отзывы и форма обратной связи.</p>';
+        $oldEnShort = '<strong>Edubin – Education WordPress Theme</strong>'
+            . ' — a modern WordPress theme for schools, courses, universities'
+            . ' and online education.';
+        $oldEnLong = '<p>Responsive design, LMS integration, class schedules,'
+            . ' instructor pages, event calendar, gallery, testimonials and'
+            . ' contact form.</p>';
         $post = [
             'ID' => 4561,
             'post_type' => 'product',
@@ -31,9 +37,9 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             'attr_developer_value' => 'pixelcurve',
             '_wp_shop_source_update_date' => '2026-08-28',
             'sales_page' => 'https://themeforest.net/item/edubin/24037792',
-            '_wp_shop_en_short_description' => 'Old EN short.',
-            '_wp_shop_en_long_description' => 'Old EN long.',
-            '_wp_shop_en_meta_description' => 'Old EN meta.',
+            '_wp_shop_en_short_description' => $oldEnShort,
+            '_wp_shop_en_long_description' => $oldEnLong,
+            '_wp_shop_en_meta_description' => 'Edubin education theme for schools, courses and universities.',
             'surerank_settings_general' => [
                 'page_description' => 'Old RU meta.',
                 'robots' => 'keep',
@@ -157,7 +163,7 @@ final class ProductEditorialMigrationServiceTest extends TestCase
             $meta['surerank_settings_general']['page_description']
         );
         self::assertSame(
-            'Old EN short.',
+            $oldEnShort,
             $meta['_wp_shop_en_short_description']
         );
         self::assertArrayHasKey('_wp_shop_editorial_backup_v28', $meta);
