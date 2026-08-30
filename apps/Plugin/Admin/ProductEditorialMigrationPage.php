@@ -517,7 +517,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     : '',
                 $headers
             );
-            $headers[0] = ltrim($headers[0] ?? '', "\xEF\xBB\xBF");
+            $headers[0] = ltrim($headers[0], "\xEF\xBB\xBF");
 
             if ($headers !== $this->packHeaders()) {
                 throw new RuntimeException(
@@ -536,13 +536,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     throw new RuntimeException('EN pack contains a malformed CSV row.');
                 }
 
-                $combined = array_combine($headers, $csvRow);
-
-                if (! is_array($combined)) {
-                    throw new RuntimeException('EN pack row could not be mapped.');
-                }
-
-                $rows[] = $combined;
+                $rows[] = array_combine($headers, $csvRow);
 
                 if (count($rows) > 25) {
                     throw new RuntimeException('EN pack import is limited to 25 products per run.');
