@@ -51,6 +51,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         $page = max(1, (int) $this->request('editorial_page', '1'));
         $perPage = $this->perPage((int) $this->request('editorial_per_page', '25'));
         $previewId = max(0, (int) $this->request('preview_id'));
+        $manualId = max(0, (int) $this->request('manual_id'));
         $logs = [];
         $success = null;
         $csv = '';
@@ -70,6 +71,36 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 $this->checkNonce();
                 $logs = $this->migration->restore($restoreId);
                 $previewId = $restoreId;
+                $success = true;
+            } elseif ($action === 'save_manual_draft') {
+                $this->checkNonce();
+                $manualId = $this->postedInt('manual_product_id');
+                if ($manualId <= 0) {
+                    throw new RuntimeException('Manual editor requires a valid Product ID.');
+                }
+                $logs = $this->migration->saveManualDraft(
+                    $manualId,
+                    $this->manualPostedContent()
+                );
+                $editor = $this->migration->manualEditor($manualId);
+                $logs = array_merge($logs, $this->manualPreviewLogs($editor));
+                $success = $editor['status'] === 'READY';
+            } elseif ($action === 'apply_manual') {
+                $this->checkNonce();
+                $manualId = $this->postedInt('manual_product_id');
+                if ($manualId <= 0) {
+                    throw new RuntimeException('Manual editor requires a valid Product ID.');
+                }
+                $logs = $this->migration->applyManual($manualId);
+                $previewId = $manualId;
+                $success = in_array('TRANSLATEPRESS SYNC = READY', $logs, true);
+            } elseif ($action === 'discard_manual') {
+                $this->checkNonce();
+                $manualId = $this->postedInt('manual_product_id');
+                if ($manualId <= 0) {
+                    throw new RuntimeException('Manual editor requires a valid Product ID.');
+                }
+                $logs = $this->migration->discardManualDraft($manualId);
                 $success = true;
             } elseif ($action === 'apply_selected') {
                 $this->checkNonce();
@@ -141,7 +172,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '<p>EN Translation Pack v2 переводит целевой Generated v28 RU, а не старый Current RU.</p>';
         $this->renderLogs($logs, $success);
         echo '<div class="notice notice-warning" style="max-width:1500px;padding:10px 14px"><p>';
-        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. TranslatePress синхронизируется через Apply.</p></div>';
+        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. Manual RU+EN хранится как staging draft и не меняет товар до отдельного Apply Manual.</p></div>';
         $this->renderBrowse($search, $perPage);
         $this->renderTable($rows, $search, $page, $perPage, $hasNext);
         if ($csv !== '') {
@@ -151,6 +182,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             $this->renderAuditDownload($auditCsv, $page);
         }
         $this->renderImport($search, $page, $perPage);
+        $this->renderManualEditor($manualId, $search, $page, $perPage);
         if ($previewId > 0) {
             try {
                 $this->renderPreview($this->migration->preview($previewId), $search, $page, $perPage);
@@ -200,6 +232,12 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 'editorial_page' => (string) $page,
                 'editorial_per_page' => (string) $perPage,
             ]);
+            $manualUrl = $this->pageUrl([
+                'manual_id' => (string) $id,
+                'editorial_search' => $search,
+                'editorial_page' => (string) $page,
+                'editorial_per_page' => (string) $perPage,
+            ]);
             echo '<tr><td><input type="checkbox" name="editorial_selected[]" value="' . $id . '"'
                 . ($selectable ? '' : ' disabled') . '></td>';
             echo '<td>' . $id . '</td><td><strong>' . $this->escape((string) $row['title']) . '</strong></td>';
@@ -210,6 +248,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             echo '<td><strong>' . $this->escape((string) $row['status']) . '</strong></td>';
             echo '<td>' . (! empty($row['backupAvailable']) ? 'YES' : '—') . '</td><td>';
             echo '<a class="button button-small" href="' . $this->escapeUrl($previewUrl) . '">Preview</a> ';
+            echo '<a class="button button-small" href="' . $this->escapeUrl($manualUrl) . '">Manual RU+EN</a> ';
             echo '<button class="button button-small button-primary" name="editorial_apply_id" value="' . $id
                 . '">Apply</button> ';
             if (! empty($row['backupAvailable'])) {
@@ -366,6 +405,142 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="import_en_pack">';
         echo '<input type="file" name="editorial_en_pack" accept=".csv,text/csv" required> ';
         echo '<button class="button button-primary">Validate + Import EN Pack v2</button></form></div>';
+    }
+
+    private function renderManualEditor(int $manualId, string $search, int $page, int $perPage): void
+    {
+        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>4. Manual RU+EN Editorial</h2>';
+        echo '<p>Для исключений из генератора: RU Short/Long/Meta + EN Short/Long/Meta сохраняются сначала только как staging draft. Товар меняется исключительно отдельной кнопкой Apply Manual после проверки структуры.</p>';
+        echo '<form method="get" style="margin-bottom:14px">';
+        echo '<input type="hidden" name="page" value="' . $this->escapeAttr($this->slug()) . '">';
+        echo '<input type="hidden" name="editorial_search" value="' . $this->escapeAttr($search) . '">';
+        echo '<input type="hidden" name="editorial_page" value="' . $page . '">';
+        echo '<input type="hidden" name="editorial_per_page" value="' . $perPage . '">';
+        echo '<label><strong>Product ID</strong> <input type="number" min="1" name="manual_id" value="'
+            . ($manualId > 0 ? $manualId : '') . '" required></label> ';
+        echo '<button class="button">Load Manual Editor</button></form>';
+
+        if ($manualId <= 0) {
+            echo '</div>';
+            return;
+        }
+
+        try {
+            $editor = $this->migration->manualEditor($manualId);
+        } catch (Throwable $exception) {
+            echo '<div class="notice notice-error inline"><p>'
+                . $this->escape($exception->getMessage()) . '</p></div></div>';
+            return;
+        }
+
+        echo '<p><strong>#' . $manualId . ' ' . $this->escape((string) $editor['title']) . '</strong>';
+        echo ' &nbsp; Type: <strong>' . $this->escape((string) $editor['productType']) . '</strong>';
+        echo ' &nbsp; Developer: <strong>' . $this->escape((string) $editor['developer']) . '</strong>';
+        echo ' &nbsp; Manual status: <strong>' . $this->escape((string) $editor['status']) . '</strong></p>';
+
+        if ((string) $editor['issue'] !== '') {
+            echo '<div class="notice notice-warning inline"><p><strong>REVIEW:</strong> '
+                . $this->escape((string) $editor['issue']) . '</p></div>';
+        } elseif ($editor['status'] === 'READY') {
+            echo '<div class="notice notice-success inline"><p><strong>MANUAL PREVIEW READY.</strong> Source unchanged, all six fields are present, RU/EN structural map is valid. Product content has not been changed by Preview.</p></div>';
+        }
+
+        echo '<form method="post">';
+        $this->nonceField();
+        $this->hiddenState($search, $page, $perPage);
+        echo '<input type="hidden" name="manual_id" value="' . $manualId . '">';
+        echo '<input type="hidden" name="manual_product_id" value="' . $manualId . '">';
+        echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="save_manual_draft">';
+        echo '<table class="widefat striped"><thead><tr><th>Field</th><th>Current</th><th>Generated v28</th><th>Manual Draft</th></tr></thead><tbody>';
+
+        $fields = [
+            'ruShort' => ['RU Short HTML', 'manual_ru_short'],
+            'ruLong' => ['RU Long HTML', 'manual_ru_long'],
+            'ruMeta' => ['RU Meta', 'manual_ru_meta'],
+            'enShort' => ['EN Short HTML', 'manual_en_short'],
+            'enLong' => ['EN Long HTML', 'manual_en_long'],
+            'enMeta' => ['EN Meta', 'manual_en_meta'],
+        ];
+        foreach ($fields as $key => [$label, $name]) {
+            $height = str_contains($key, 'Long') ? 210 : 100;
+            echo '<tr><th>' . $this->escape($label) . '</th>';
+            echo '<td><textarea readonly style="width:100%;height:' . $height . 'px">'
+                . $this->escape((string) $editor['current'][$key]) . '</textarea></td>';
+            echo '<td><textarea readonly style="width:100%;height:' . $height . 'px">'
+                . $this->escape((string) $editor['generated'][$key]) . '</textarea></td>';
+            echo '<td><textarea name="' . $this->escapeAttr($name) . '" style="width:100%;height:'
+                . $height . 'px" required>' . $this->escape((string) $editor['draft'][$key])
+                . '</textarea></td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '<p><button class="button button-primary">Save + Preview Manual</button> ';
+        echo '<span>Эта кнопка сохраняет только staging draft и проверяет RU/EN structure. WooCommerce content и TranslatePress не изменяются.</span></p>';
+        echo '</form>';
+
+        if (! empty($editor['hasDraft'])) {
+            echo '<p><strong>Apply Manual использует последний сохранённый draft.</strong> Если текст выше был отредактирован после Preview — сначала снова нажми Save + Preview Manual.</p>';
+            if ($editor['status'] === 'READY') {
+                echo '<form method="post" style="display:inline-block;margin-right:8px">';
+                $this->nonceField();
+                $this->hiddenState($search, $page, $perPage);
+                echo '<input type="hidden" name="manual_id" value="' . $manualId . '">';
+                echo '<input type="hidden" name="manual_product_id" value="' . $manualId . '">';
+                echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="apply_manual">';
+                echo '<button class="button button-primary">Apply Manual</button></form>';
+            }
+            echo '<form method="post" style="display:inline-block">';
+            $this->nonceField();
+            $this->hiddenState($search, $page, $perPage);
+            echo '<input type="hidden" name="manual_id" value="' . $manualId . '">';
+            echo '<input type="hidden" name="manual_product_id" value="' . $manualId . '">';
+            echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="discard_manual">';
+            echo '<button class="button">Discard Manual Draft</button></form>';
+        }
+
+        echo '</div>';
+    }
+
+    /** @param array<string, mixed> $editor */
+    private function manualPreviewLogs(array $editor): array
+    {
+        $logs = [
+            'MANUAL EDITORIAL PREVIEW = ' . (string) $editor['status'],
+            'PRODUCT ID = ' . (int) $editor['productId'],
+            'TECHNICAL TYPE = ' . (string) $editor['productType'],
+            'SOURCE UNCHANGED = ' . (! empty($editor['sourceCurrent']) ? 'YES' : 'NO'),
+            'PRODUCT CONTENT WRITES = NO',
+        ];
+        if ((string) $editor['issue'] !== '') {
+            $logs[] = 'REVIEW = ' . (string) $editor['issue'];
+            $logs[] = 'NEXT = FIX MANUAL DRAFT';
+        } else {
+            $logs[] = 'RU / EN STRUCTURE = READY';
+            $logs[] = 'NEXT = APPLY MANUAL';
+        }
+        return $logs;
+    }
+
+    /** @return array<string,string> */
+    private function manualPostedContent(): array
+    {
+        return [
+            'ruShort' => $this->postedManual('manual_ru_short'),
+            'ruLong' => $this->postedManual('manual_ru_long'),
+            'ruMeta' => $this->postedManual('manual_ru_meta'),
+            'enShort' => $this->postedManual('manual_en_short'),
+            'enLong' => $this->postedManual('manual_en_long'),
+            'enMeta' => $this->postedManual('manual_en_meta'),
+        ];
+    }
+
+    private function postedManual(string $key): string
+    {
+        if (! isset($_POST[$key]) || ! is_scalar($_POST[$key])) {
+            return '';
+        }
+        $value = (string) $_POST[$key];
+        $unslashed = ($this->call)('wp_unslash', $value);
+        return is_scalar($unslashed) ? (string) $unslashed : $value;
     }
 
     /** @param array<string, mixed> $preview */
@@ -569,12 +744,12 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 );
             }
             $prepared[] = [
-        'id' => $id,
-        'short' => $enShort,
-        'long' => $enLong,
-        'meta' => $enMeta,
-        'targetFingerprint' => trim((string) ($row['Target RU Fingerprint'] ?? '')),
-    ];
+                'id' => $id,
+                'short' => $enShort,
+                'long' => $enLong,
+                'meta' => $enMeta,
+                'targetFingerprint' => trim((string) ($row['Target RU Fingerprint'] ?? '')),
+            ];
         }
 
         $logs = [
@@ -584,23 +759,23 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             'TARGET GENERATED V28 RU = VERIFIED',
         ];
         foreach ($prepared as $item) {
-        $id = $item['id'];
-        $short = (string) ($this->call)('wp_kses_post', $item['short']);
-        $long = (string) ($this->call)('wp_kses_post', $item['long']);
-        $meta = (string) ($this->call)('sanitize_textarea_field', $item['meta']);
-        ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description', $short);
-        ($this->call)('update_post_meta', $id, '_wp_shop_en_long_description', $long);
-        ($this->call)('update_post_meta', $id, '_wp_shop_en_meta_description', $meta);
-        ($this->call)('update_post_meta', $id, self::EN_TARGET_RU_FINGERPRINT_META, $item['targetFingerprint']);
-        ($this->call)(
-            'update_post_meta',
-            $id,
-            self::EN_CONTENT_FINGERPRINT_META,
-            $this->englishFingerprint($short, $long, $meta)
-        );
-        $post = $this->previewForPack($id);
-        $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
-    }
+            $id = $item['id'];
+            $short = (string) ($this->call)('wp_kses_post', $item['short']);
+            $long = (string) ($this->call)('wp_kses_post', $item['long']);
+            $meta = (string) ($this->call)('sanitize_textarea_field', $item['meta']);
+            ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description', $short);
+            ($this->call)('update_post_meta', $id, '_wp_shop_en_long_description', $long);
+            ($this->call)('update_post_meta', $id, '_wp_shop_en_meta_description', $meta);
+            ($this->call)('update_post_meta', $id, self::EN_TARGET_RU_FINGERPRINT_META, $item['targetFingerprint']);
+            ($this->call)(
+                'update_post_meta',
+                $id,
+                self::EN_CONTENT_FINGERPRINT_META,
+                $this->englishFingerprint($short, $long, $meta)
+            );
+            $post = $this->previewForPack($id);
+            $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
+        }
         $logs[] = 'TRANSLATEPRESS SYNC = NOT RUN';
         $logs[] = 'NEXT = REVIEW PREVIEW, THEN APPLY SELECTED';
         return $logs;
