@@ -22,6 +22,7 @@ final class ProductEditorialMigrationService
     private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
     private const MANUAL_DRAFT_META = '_wp_shop_editorial_manual_draft_v1';
     private const TYPE_OVERRIDE_BACKUP_META = '_wp_shop_product_type_manual_backup_v1';
+    private const TYPE_OVERRIDE_META = '_wp_shop_product_type_manual_override_v1';
 
     public function __construct(
         private readonly Closure $call,
@@ -493,6 +494,7 @@ final class ProductEditorialMigrationService
             $catalogCategory,
             $this->contentFingerprint($preview['current']),
             $this->meta($productId, 'sales_page'),
+            $this->meta($productId, self::TYPE_OVERRIDE_META),
         ]));
 
         return [
@@ -536,7 +538,7 @@ final class ProductEditorialMigrationService
             'catalogCategory' => $editor['catalogCategory'],
             'status' => $issue !== ''
                 ? 'REVIEW'
-                : ($targetType === $editor['storedType'] ? 'CURRENT' : 'READY'),
+                : ($targetType === $editor['resolvedType'] ? 'CURRENT' : 'READY'),
             'issue' => $issue,
             'hasManualDraft' => $editor['hasManualDraft'],
             'backupAvailable' => $editor['backupAvailable'],
@@ -590,11 +592,13 @@ final class ProductEditorialMigrationService
                 'created_at' => $this->now(),
                 'stored_type' => $preview['storedType'],
                 'resolved_type' => $preview['fromType'],
+                'manual_override_type' => $this->meta($productId, self::TYPE_OVERRIDE_META),
             ]);
             $backupLog = 'TECHNICAL TYPE BACKUP = CREATED';
         }
 
         ($this->call)('update_post_meta', $productId, '_wp_shop_product_type', $targetType);
+        ($this->call)('update_post_meta', $productId, self::TYPE_OVERRIDE_META, $targetType);
 
         $after = $this->technicalTypeEditor($productId);
         if (
@@ -613,6 +617,7 @@ final class ProductEditorialMigrationService
             'FROM = ' . $preview['fromType'],
             'TO = ' . $targetType,
             '_wp_shop_product_type = UPDATED',
+            'TECHNICAL TYPE MANUAL OVERRIDE = UPDATED',
             'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
             'PRODUCT CONTENT WRITES = NO',
             'TRANSLATEPRESS SYNC = NOT RUN',
@@ -653,6 +658,19 @@ final class ProductEditorialMigrationService
                 );
             }
             ($this->call)('update_post_meta', $productId, '_wp_shop_product_type', $storedType);
+        }
+
+        $manualOverride = trim((string) ($backup['manual_override_type'] ?? ''));
+        if ($manualOverride === '') {
+            ($this->call)('delete_post_meta', $productId, self::TYPE_OVERRIDE_META);
+        } else {
+            if (! $this->validTechnicalType($manualOverride)) {
+                throw new RuntimeException(
+                    'Technical type backup contains an unsupported manual override for product '
+                    . $productId
+                );
+            }
+            ($this->call)('update_post_meta', $productId, self::TYPE_OVERRIDE_META, $manualOverride);
         }
 
         $after = $this->technicalTypeEditor($productId);
@@ -1283,6 +1301,11 @@ final class ProductEditorialMigrationService
         string $baseTitle,
         string $content = ''
     ): string {
+        $manualOverride = trim($this->meta($productId, self::TYPE_OVERRIDE_META));
+        if ($this->validTechnicalType($manualOverride)) {
+            return $manualOverride;
+        }
+
         $stored = trim($this->meta($productId, '_wp_shop_product_type'));
         if (in_array($stored, [
             CatalogProductType::THEME,

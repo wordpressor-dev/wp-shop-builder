@@ -49,6 +49,7 @@ final class ProductTechnicalTypeOverrideTest extends TestCase
         self::assertContains('CATALOG CATEGORY = PRESERVED / NOT WRITTEN', $logs);
         self::assertContains('PRODUCT CONTENT WRITES = NO', $logs);
         self::assertSame('plugin', $meta['_wp_shop_product_type']);
+        self::assertSame('plugin', $meta['_wp_shop_product_type_manual_override_v1']);
         self::assertArrayHasKey('_wp_shop_product_type_manual_backup_v1', $meta);
         self::assertSame(
             '',
@@ -66,6 +67,7 @@ final class ProductTechnicalTypeOverrideTest extends TestCase
 
         self::assertContains('TECHNICAL TYPE RESTORE = READY', $restoreLogs);
         self::assertArrayNotHasKey('_wp_shop_product_type', $meta);
+        self::assertArrayNotHasKey('_wp_shop_product_type_manual_override_v1', $meta);
         self::assertSame('theme', $service->technicalTypeEditor(3483)['resolvedType']);
         self::assertSame($originalPost, $post);
         self::assertSame($originalCategory, $meta['attr_category_value']);

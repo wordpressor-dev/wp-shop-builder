@@ -35,6 +35,29 @@ final class WordPressFunctionCaller
             return $result;
         }
 
+        // A deliberate manual technical-type override is authoritative.
+        // Read the marker through the ordinary meta path (different key) so
+        // this branch cannot recurse back into product-type inference.
+        try {
+            $manualOverride = $this->__invoke(
+                'get_post_meta',
+                $productId,
+                '_wp_shop_product_type_manual_override_v1',
+                true
+            );
+            $manualOverride = is_scalar($manualOverride)
+                ? trim((string) $manualOverride)
+                : '';
+            if (in_array($manualOverride, [
+                CatalogProductType::THEME,
+                CatalogProductType::PLUGIN,
+                CatalogProductType::TEMPLATE_KIT,
+            ], true)) {
+                return $manualOverride;
+            }
+        } catch (RuntimeException) {
+        }
+
         // Technical type is intentionally independent from the visible catalog
         // category. A theme add-on can be merchandised under Themes while its
         // installable archive is still a WordPress plugin.
