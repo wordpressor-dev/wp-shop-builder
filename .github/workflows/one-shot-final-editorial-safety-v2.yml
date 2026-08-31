@@ -1,0 +1,210 @@
+name: One-shot final editorial safety v2
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-final-editorial-safety-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Apply final editorial safety fix
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php')
+          text = path.read_text()
+
+          topic_pattern = re.compile(
+              r"\$topics\s*=\s*\$this->topics\(array_merge\(\s*"
+              r"\$this->titleTopics\(\$title\),\s*\$sourceTags\s*\)\);",
+              re.S,
+          )
+          topic_replacement = '''$topicCandidates = array_merge(
+              $this->titleTopics($title),
+              $sourceTags
+          );
+          $topics = $this->topics(
+              $this->filterEditionTopics($title, $topicCandidates)
+          );'''
+          text, count = topic_pattern.subn(topic_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'topic replacement count={count}')
+
+          title_marker = 'private function titleTopics(string $title): array'
+          if title_marker not in text:
+              raise SystemExit('titleTopics marker missing')
+          filter_method = '''private function filterEditionTopics(string $title, array $topics): array
+              {
+                  $editionTopics = [];
+                  $rules = [
+                      'business' => '/\\bbusiness\\s*[–—-]\\s*/ui',
+                      'premium' => '/\\bpremium\\s*[–—-]\\s*/ui',
+                      'pro' => '/\\bpro\\s*[–—-]\\s*/ui',
+                  ];
+
+                  foreach ($rules as $topic => $pattern) {
+                      if ($this->matches($title, $pattern)) {
+                          $editionTopics[] = $topic;
+                      }
+                  }
+
+                  if ($editionTopics === []) {
+                      return $topics;
+                  }
+
+                  return array_values(array_filter(
+                      $topics,
+                      static fn (string $topic): bool => ! in_array(
+                          strtolower(trim($topic)),
+                          $editionTopics,
+                          true
+                      )
+                  ));
+              }
+
+              /** @return list<string> */
+              private function titleTopics(string $title): array'''
+          text = text.replace(title_marker, filter_method, 1)
+
+          skip_pattern = re.compile(
+              r"if \(\$skipFirstSentence && count\(\$sentences\) > 1\) \{\s*"
+              r"array_shift\(\$sentences\);\s*\}",
+              re.S,
+          )
+          skip_replacement = '''if ($skipFirstSentence && $sentences !== []) {
+                  array_shift($sentences);
+              }'''
+          text, count = skip_pattern.subn(skip_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'skip replacement count={count}')
+
+          split_pattern = re.compile(
+              r"\$parts\s*=\s*preg_split\('/\\s\*\[,;\]\\s\*/u', \$sentence\) \?: \[\];\s*"
+              r"if \(count\(\$parts\) < 2\) \{\s*continue;\s*\}",
+              re.S,
+          )
+          split_replacement = '''$explicitList = $this->matches(
+                  $sentence,
+                  '/^(?:включает|включены|добавляет|поддерживает|предлагает|содержит|'
+                      . 'includes|adds|supports|offers|contains|features)\\b/ui'
+              );
+              $separator = $explicitList
+                  ? '/\\s*[,;]\\s*/u'
+                  : '/\\s*;\\s*/u';
+              $parts = preg_split($separator, $sentence) ?: [];
+
+              if (count($parts) < 2) {
+                  continue;
+              }'''
+          text, count = split_pattern.subn(split_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'split replacement count={count}')
+
+          path.write_text(text)
+
+          test = Path('tests/App/Plugin/ProductManager/Editorial/ProductEditorialFinalResidualSafetyTest.php')
+          test.write_text(r'''<?php
+
+          declare(strict_types=1);
+
+          namespace WPShop\Tests\App\Plugin\ProductManager\Editorial;
+
+          use PHPUnit\Framework\TestCase;
+          use WPShop\App\Plugin\ProductManager\CatalogProductType;
+          use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
+
+          final class ProductEditorialFinalResidualSafetyTest extends TestCase
+          {
+              public function testBusinessEditionCatalogTagIsNotAProjectTopic(): void
+              {
+                  $draft = (new ProductEditorialDraftBuilder())->build(
+                      'TranslatePress Business – Translate Multilingual sites with AI Translation',
+                      'Cozmoslabs',
+                      CatalogProductType::PLUGIN,
+                      ['business'],
+                      '',
+                      [
+                          'ruShort' => 'TranslatePress Business — профессиональный плагин '
+                              . 'для создания многоязычных сайтов.',
+                      ]
+                  );
+
+                  self::assertStringNotContainsString(
+                      'ориентированных на бизнес',
+                      $draft['ruLong']
+                  );
+                  self::assertStringNotContainsString(
+                      'focused on business',
+                      $draft['enLong']
+                  );
+              }
+
+              public function testSingleIdentitySummaryDoesNotBecomeCommaFeatures(): void
+              {
+                  $summary = 'GeneratePress Premium — лёгкая premium-тема WordPress '
+                      . 'с сотнями настроек, Starter Sites и block-based theme building '
+                      . 'для быстрых бизнес-сайтов, блогов и магазинов.';
+
+                  $draft = (new ProductEditorialDraftBuilder())->build(
+                      'GeneratePress Premium 2.5.6',
+                      'Tom Usborne',
+                      CatalogProductType::PLUGIN,
+                      [],
+                      '',
+                      [
+                          'ruShort' => $summary,
+                          'ruLong' => $summary,
+                      ]
+                  );
+
+                  self::assertStringContainsString(
+                      'премиум-плагин для GeneratePress',
+                      $draft['ruShort']
+                  );
+                  self::assertStringNotContainsString(
+                      '<li>блогов и магазинов.</li>',
+                      $draft['ruLong']
+                  );
+                  self::assertStringNotContainsString(
+                      '<h3>Основные возможности GeneratePress Premium</h3>',
+                      $draft['ruLong']
+                  );
+              }
+          }
+          ''')
+          PY
+
+          vendor/bin/phpcbf apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php \
+            tests/App/Plugin/ProductManager/Editorial/ProductEditorialFinalResidualSafetyTest.php || true
+          php -l apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php
+          php -l tests/App/Plugin/ProductManager/Editorial/ProductEditorialFinalResidualSafetyTest.php
+          composer qa
+
+          git rm .github/workflows/one-shot-final-editorial-safety.yml \
+            .github/workflows/one-shot-final-editorial-safety-v2.yml
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php \
+            tests/App/Plugin/ProductManager/Editorial/ProductEditorialFinalResidualSafetyTest.php
+          git commit -m "fix: harden final editorial topic and feature extraction"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
