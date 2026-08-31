@@ -35,60 +35,42 @@ final class WordPressFunctionCaller
             return $result;
         }
 
-        $title = '';
+        // Technical type is intentionally independent from the visible catalog
+        // category. A theme add-on can be merchandised under Themes while its
+        // installable archive is still a WordPress plugin.
         try {
             $post = $this->__invoke('get_post', $productId);
             $title = is_object($post) && isset($post->post_title)
                 ? trim((string) $post->post_title)
                 : '';
-        } catch (RuntimeException) {
-        }
-
-        if ($title !== '') {
-            $explicitType = CatalogProductType::infer($title, '');
-            if ($explicitType !== '') {
-                return $explicitType;
-            }
-        }
-
-        // Legacy products can carry a stale _wp_shop_product_type value from
-        // earlier catalog tooling. The visible catalog category is stronger
-        // evidence when the current title does not explicitly say theme/plugin.
-        try {
-            $category = $this->__invoke(
-                'get_post_meta',
-                $productId,
-                'attr_category_value',
-                true
-            );
-            $categoryType = $this->categoryType(
-                is_scalar($category) ? (string) $category : ''
-            );
-            if ($categoryType !== '') {
-                return $categoryType;
-            }
-        } catch (RuntimeException) {
-        }
-
-        try {
-            $terms = $this->__invoke(
-                'wp_get_post_terms',
-                $productId,
-                'product_cat',
-                ['fields' => 'names']
-            );
-            if (is_array($terms)) {
-                foreach ($terms as $term) {
-                    $categoryType = $this->categoryType((string) $term);
-                    if ($categoryType !== '') {
-                        return $categoryType;
-                    }
+            if ($title !== '') {
+                $explicitType = CatalogProductType::infer($title, '');
+                if ($explicitType !== '') {
+                    return $explicitType;
                 }
             }
         } catch (RuntimeException) {
         }
 
-        // Envato source host is also stronger evidence than stale legacy meta.
+        // Canonical Envato SKU/archive prefixes are strong technical evidence.
+        // This repairs stale legacy meta without confusing catalog placement
+        // with the actual installable package type.
+        try {
+            $sku = $this->__invoke(
+                'get_post_meta',
+                $productId,
+                '_sku',
+                true
+            );
+            $archiveType = CatalogProductType::inferArchiveName(
+                is_scalar($sku) ? (string) $sku : ''
+            );
+            if ($archiveType !== '') {
+                return $archiveType;
+            }
+        } catch (RuntimeException) {
+        }
+
         try {
             $salesPage = $this->__invoke(
                 'get_post_meta',
@@ -107,17 +89,5 @@ final class WordPressFunctionCaller
         }
 
         return $result;
-    }
-
-    private function categoryType(string $category): string
-    {
-        $category = mb_strtolower(trim($category), 'UTF-8');
-
-        return match ($category) {
-            'темы', 'themes' => CatalogProductType::THEME,
-            'плагины', 'plugins' => CatalogProductType::PLUGIN,
-            'шаблоны', 'templates' => CatalogProductType::TEMPLATE_KIT,
-            default => '',
-        };
     }
 }
