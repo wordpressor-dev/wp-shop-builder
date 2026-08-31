@@ -1,0 +1,119 @@
+name: One-shot final editorial safety v4
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-final-editorial-safety-v4.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+      - name: Patch builder
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          p = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php')
+          s = p.read_text()
+
+          old = '''        $topics = $this->topics(array_merge(
+              $this->titleTopics($title),
+              $sourceTags
+          ));'''
+          new = '''        $topicCandidates = array_merge(
+              $this->titleTopics($title),
+              $sourceTags
+          );
+          $topics = $this->topics(
+              $this->filterEditionTopics($title, $topicCandidates)
+          );'''
+          if old not in s:
+              raise SystemExit('topics anchor missing')
+          s = s.replace(old, new, 1)
+
+          marker = '    /** @return list<string> */\n    private function titleTopics(string $title): array\n'
+          method = '''    /**
+               * @param list<string> $topics
+               * @return list<string>
+               */
+              private function filterEditionTopics(string $title, array $topics): array
+              {
+                  $rules = [
+                      'business' => '/\\bbusiness\\s*[–—-]\\s*/ui',
+                      'premium' => '/\\bpremium\\s*[–—-]\\s*/ui',
+                      'pro' => '/\\bpro\\s*[–—-]\\s*/ui',
+                  ];
+                  $editionTopics = [];
+                  foreach ($rules as $topic => $pattern) {
+                      if ($this->matches($title, $pattern)) {
+                          $editionTopics[] = $topic;
+                      }
+                  }
+                  if ($editionTopics === []) {
+                      return $topics;
+                  }
+                  return array_values(array_filter(
+                      $topics,
+                      static fn (string $topic): bool => ! in_array(
+                          strtolower(trim($topic)),
+                          $editionTopics,
+                          true
+                      )
+                  ));
+              }
+
+              /** @return list<string> */
+              private function titleTopics(string $title): array
+          '''
+          if marker not in s:
+              raise SystemExit('titleTopics marker missing')
+          s = s.replace(marker, method, 1)
+
+          old = '''        if ($skipFirstSentence && count($sentences) > 1) {
+              array_shift($sentences);
+          }'''
+          new = '''        if ($skipFirstSentence && $sentences !== []) {
+              array_shift($sentences);
+          }'''
+          if old not in s:
+              raise SystemExit('skip anchor missing')
+          s = s.replace(old, new, 1)
+
+          old = '''            $parts = preg_split('/\\s*[,;]\\s*/u', $sentence) ?: [];
+
+              if (count($parts) < 2) {
+                  continue;
+              }'''
+          new = '''            $explicitList = $this->matches(
+                  $sentence,
+                  '/^(?:включает|включены|добавляет|поддерживает|предлагает|содержит|'
+                      . 'includes|adds|supports|offers|contains|features)\\b/ui'
+              );
+              $separator = $explicitList ? '/\\s*[,;]\\s*/u' : '/\\s*;\\s*/u';
+              $parts = preg_split($separator, $sentence) ?: [];
+
+              if (count($parts) < 2) {
+                  continue;
+              }'''
+          if old not in s:
+              raise SystemExit('split anchor missing')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          php -l apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php
+          git commit -m "fix: harden editorial topic and feature extraction"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
