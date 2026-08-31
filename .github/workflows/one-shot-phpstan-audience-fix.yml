@@ -1,0 +1,40 @@
+name: One-shot audience PHPStan fix
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-phpstan-audience-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+
+      - name: Remove redundant null coalescing
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php')
+          source = path.read_text()
+          source = source.replace("trim((string) ($matches[1] ?? ''))", "trim((string) $matches[1])")
+          source = source.replace("foreach ((array) ($matches[1] ?? []) as $match)", "foreach ($matches[1] as $match)")
+          path.write_text(source)
+          PY
+
+          git rm .github/workflows/one-shot-phpstan-audience-fix.yml
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php
+          git commit -m "fix: satisfy audience extraction static analysis"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
