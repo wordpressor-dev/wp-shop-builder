@@ -1,0 +1,84 @@
+name: One-shot EN provenance phpdoc cleanup
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-en-provenance-phpdoc.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+      - name: Fix phpdoc placement
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          sp = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php')
+          s = sp.read_text()
+          s = s.replace(
+              """    /**
+               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+               * @return list<string>
+               */
+              /**
+               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+               */
+              private function ruFingerprint(array $content): string
+          """,
+              """    /**
+               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+               */
+              private function ruFingerprint(array $content): string
+          """,
+              1,
+          )
+          s = s.replace(
+              """    private function syncTranslatePress(int $productId, array $content): array
+          """,
+              """    /**
+               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+               * @return list<string>
+               */
+              private function syncTranslatePress(int $productId, array $content): array
+          """,
+              1,
+          )
+          sp.write_text(s)
+
+          pp = Path('apps/Plugin/Admin/ProductEditorialMigrationPage.php')
+          p = pp.read_text()
+          p = p.replace(
+              """    /** @param array<string, mixed> $preview */
+              private function englishFingerprint(string $short, string $long, string $meta): string
+          """,
+              """    private function englishFingerprint(string $short, string $long, string $meta): string
+          """,
+              1,
+          )
+          p = p.replace(
+              """    private function packEligible(array $preview): bool
+          """,
+              """    /** @param array<string, mixed> $preview */
+              private function packEligible(array $preview): bool
+          """,
+              1,
+          )
+          pp.write_text(p)
+          PY
+          git rm .github/workflows/one-shot-en-provenance-phpdoc.yml
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php apps/Plugin/Admin/ProductEditorialMigrationPage.php
+          git commit -m "fix: restore EN provenance phpdoc annotations"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
