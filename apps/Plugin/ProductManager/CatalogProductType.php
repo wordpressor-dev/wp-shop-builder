@@ -54,6 +54,34 @@ final class CatalogProductType
         return self::typeFromText($body);
     }
 
+    public static function inferArchiveName(string $skuOrFilename): string
+    {
+        $value = strtolower(trim($skuOrFilename));
+        if ($value === '') {
+            return '';
+        }
+
+        $value = basename(str_replace('\\', '/', $value));
+
+        if (
+            str_contains($value, 'template-kit')
+            || str_contains($value, 'template_kit')
+            || str_contains($value, 'template kit')
+        ) {
+            return self::TEMPLATE_KIT;
+        }
+
+        if (str_starts_with($value, 'codecanyon-')) {
+            return self::PLUGIN;
+        }
+
+        if (str_starts_with($value, 'themeforest-')) {
+            return self::THEME;
+        }
+
+        return '';
+    }
+
     private static function typeFromText(string $text): string
     {
         if ($text === '') {
