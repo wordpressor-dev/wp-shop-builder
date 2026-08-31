@@ -992,7 +992,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
     {
         $sentences = preg_split('/(?<=[.!?])\s+/u', trim($value)) ?: [];
 
-        if ($skipFirstSentence && $sentences !== []) {
+        if ($skipFirstSentence && count($sentences) > 1) {
             array_shift($sentences);
         }
 
@@ -1007,10 +1007,18 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
 
             $explicitList = $this->matches(
                 $sentence,
-                '/^(?:включает|включены|добавляет|поддерживает|предлагает|содержит|'
-                    . 'includes|adds|supports|offers|contains|features)\b/ui'
+                '/^(?:включает|включены|созда[её]т|добавляет|поддерживает|предлагает|содержит|'
+                    . 'includes|creates|generates|adds|supports|offers|contains|features)\b/ui'
             );
-            $separator = $explicitList ? '/\s*[,;]\s*/u' : '/\s*;\s*/u';
+            $denseCommaList = substr_count($sentence, ',') >= 3
+                && ! $this->matches(
+                    $sentence,
+                    '/\b(?:является|представляет|позволяет|помогает|подходит|ориентирован|'
+                        . 'is|allows|helps|suitable|designed)\b/ui'
+                );
+            $separator = ($explicitList || $denseCommaList)
+                ? '/\s*[,;]\s*/u'
+                : '/\s*;\s*/u';
             $parts = preg_split($separator, $sentence) ?: [];
 
             if (count($parts) < 2) {
