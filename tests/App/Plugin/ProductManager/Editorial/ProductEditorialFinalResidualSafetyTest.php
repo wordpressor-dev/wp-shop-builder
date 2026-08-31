@@ -41,7 +41,7 @@ final class ProductEditorialFinalResidualSafetyTest extends TestCase
             . 'для быстрых бизнес-сайтов, блогов и магазинов.';
 
         $draft = (new ProductEditorialDraftBuilder())->build(
-            'GeneratePress Premium 2.5.6',
+            'GeneratePress Premium',
             'Tom Usborne',
             CatalogProductType::PLUGIN,
             [],
