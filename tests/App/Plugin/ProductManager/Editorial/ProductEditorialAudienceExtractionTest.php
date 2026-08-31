@@ -45,23 +45,25 @@ final class ProductEditorialAudienceExtractionTest extends TestCase
     {
         $builder = new ProductEditorialDraftBuilder();
 
-        foreach ([
+        foreach (
             [
-                'SecuPress Pro with Simple SSL – Simple and Performance Security',
-                'SecuPress Pro — комплексный плагин безопасности для WordPress.',
-                'SecuPress Pro is a security plugin for WordPress.',
-            ],
-            [
-                'Advanced Custom Fields PRO',
-                'Advanced Custom Fields PRO — плагин для создания произвольных полей в WordPress.',
-                'Advanced Custom Fields PRO is a plugin for creating custom fields in WordPress.',
-            ],
-            [
-                'Yoast News SEO',
-                'Yoast News SEO — плагин для оптимизации новостного сайта под Google News.',
-                'Yoast News SEO is a plugin for optimizing news sites for Google News.',
-            ],
-        ] as [$title, $ru, $en]) {
+                [
+                    'SecuPress Pro with Simple SSL – Simple and Performance Security',
+                    'SecuPress Pro — комплексный плагин безопасности для WordPress.',
+                    'SecuPress Pro is a security plugin for WordPress.',
+                ],
+                [
+                    'Advanced Custom Fields PRO',
+                    'Advanced Custom Fields PRO — плагин для создания произвольных полей в WordPress.',
+                    'Advanced Custom Fields PRO is a plugin for creating custom fields in WordPress.',
+                ],
+                [
+                    'Yoast News SEO',
+                    'Yoast News SEO — плагин для оптимизации новостного сайта под Google News.',
+                    'Yoast News SEO is a plugin for optimizing news sites for Google News.',
+                ],
+            ] as [$title, $ru, $en]
+        ) {
             $content = $builder->build(
                 $title,
                 '',
