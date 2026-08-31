@@ -24,42 +24,25 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
-          import textwrap
+          import re, textwrap
 
-          service_path = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php')
-          service = service_path.read_text()
+          sp = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php')
+          s = sp.read_text()
+          if 'EN_TARGET_RU_FINGERPRINT_META' not in s:
+              s = s.replace(
+                  "    private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';\n",
+                  "    private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';\n"
+                  "    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';\n"
+                  "    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';\n",
+                  1,
+              )
 
-          service = service.replace(
-              "    private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';\n",
-              "    private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';\n"
-              "    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';\n"
-              "    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';\n",
-              1,
-          )
-
-          anchor = """            $generated = $this->preserveRichLegacyRu($legacy, $generated);
-              }
-
-              $translationIssue = $this->translationIssue($generated);
-          """
-          replacement = """            $generated = $this->preserveRichLegacyRu($legacy, $generated);
-              }
-
-              $stalePreparedEnglish = false;
-              $preparedTargetFingerprint = $this->meta(
-                  $productId,
-                  self::EN_TARGET_RU_FINGERPRINT_META
-              );
-              $preparedEnglishFingerprint = $this->meta(
-                  $productId,
-                  self::EN_CONTENT_FINGERPRINT_META
-              );
+          stale_block = r'''        $stalePreparedEnglish = false;
+              $preparedTargetFingerprint = $this->meta($productId, self::EN_TARGET_RU_FINGERPRINT_META);
+              $preparedEnglishFingerprint = $this->meta($productId, self::EN_CONTENT_FINGERPRINT_META);
               $preparedEnglishIsCurrent = $preparedTargetFingerprint !== ''
                   && $preparedEnglishFingerprint !== ''
-                  && hash_equals(
-                      $preparedEnglishFingerprint,
-                      $this->englishFingerprint($current)
-                  );
+                  && hash_equals($preparedEnglishFingerprint, $this->englishFingerprint($current));
 
               if (
                   $preparedEnglishIsCurrent
@@ -84,39 +67,34 @@ jobs:
                   }
               }
 
-              $translationIssue = $this->translationIssue($generated);
-          """
-          if anchor not in service:
-              raise SystemExit('Service generation anchor not found')
-          service = service.replace(anchor, replacement, 1)
+          '''
+          if '$stalePreparedEnglish = false;' not in s:
+              needle = '        $translationIssue = $this->translationIssue($generated);\n'
+              if needle not in s:
+                  raise SystemExit('translationIssue anchor missing')
+              s = s.replace(needle, stale_block + needle, 1)
 
-          old_required = """        $translationRequired = (is_array($legacy)
+          old = """        $translationRequired = (is_array($legacy)
                   && $this->requiresEnglishTranslation($legacy))
                   || $translationIssue !== '';
           """
-          new_required = """        $translationRequired = $stalePreparedEnglish
+          new = """        $translationRequired = $stalePreparedEnglish
                   || (is_array($legacy) && $this->requiresEnglishTranslation($legacy))
                   || $translationIssue !== '';
           """
-          if old_required not in service:
-              raise SystemExit('Service translation-required block not found')
-          service = service.replace(old_required, new_required, 1)
+          if old in s:
+              s = s.replace(old, new, 1)
 
-          sync_anchor = """    /**
-               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
-               * @return list<string>
-               */
-              private function syncTranslatePress(int $productId, array $content): array
-          """
-          helpers = """    /**
+          if 'private function ruFingerprint(' not in s:
+              needle = '    private function syncTranslatePress(int $productId, array $content): array\n'
+              if needle not in s:
+                  raise SystemExit('sync function anchor missing')
+              helpers = r'''    /**
                * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
                */
               private function ruFingerprint(array $content): string
               {
-                  return hash(
-                      'sha256',
-                      $content['ruShort'] . "\\0" . $content['ruLong'] . "\\0" . $content['ruMeta']
-                  );
+                  return hash('sha256', $content['ruShort'] . "\0" . $content['ruLong'] . "\0" . $content['ruMeta']);
               }
 
               /**
@@ -124,71 +102,60 @@ jobs:
                */
               private function englishFingerprint(array $content): string
               {
-                  return hash(
-                      'sha256',
-                      $content['enShort'] . "\\0" . $content['enLong'] . "\\0" . $content['enMeta']
-                  );
+                  return hash('sha256', $content['enShort'] . "\0" . $content['enLong'] . "\0" . $content['enMeta']);
               }
 
-              /**
-               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
-               * @return list<string>
-               */
-              private function syncTranslatePress(int $productId, array $content): array
-          """
-          if sync_anchor not in service:
-              raise SystemExit('Service sync anchor not found')
-          service = service.replace(sync_anchor, helpers, 1)
+          '''
+              s = s.replace(needle, helpers + needle, 1)
 
-          restore_anchor = """        ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
-              ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
-          """
-          restore_replacement = """        ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
-              ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
-              ($this->call)('delete_post_meta', $productId, self::EN_TARGET_RU_FINGERPRINT_META);
-              ($this->call)('delete_post_meta', $productId, self::EN_CONTENT_FINGERPRINT_META);
-          """
-          if restore_anchor not in service:
-              raise SystemExit('Service restore anchor not found')
-          service = service.replace(restore_anchor, restore_replacement, 1)
-          service_path.write_text(service)
+          if "delete_post_meta', $productId, self::EN_TARGET_RU_FINGERPRINT_META" not in s:
+              needle = "        ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);\n"
+              if needle not in s:
+                  raise SystemExit('restore anchor missing')
+              s = s.replace(
+                  needle,
+                  needle
+                  + "        ($this->call)('delete_post_meta', $productId, self::EN_TARGET_RU_FINGERPRINT_META);\n"
+                  + "        ($this->call)('delete_post_meta', $productId, self::EN_CONTENT_FINGERPRINT_META);\n",
+                  1,
+              )
+          sp.write_text(s)
 
-          page_path = Path('apps/Plugin/Admin/ProductEditorialMigrationPage.php')
-          page = page_path.read_text()
-          page = page.replace(
-              "    private const PACK_VERSION = '2';\n",
-              "    private const PACK_VERSION = '2';\n"
-              "    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';\n"
-              "    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';\n",
-              1,
-          )
+          pp = Path('apps/Plugin/Admin/ProductEditorialMigrationPage.php')
+          p = pp.read_text()
+          if 'EN_TARGET_RU_FINGERPRINT_META' not in p:
+              p = p.replace(
+                  "    private const PACK_VERSION = '2';\n",
+                  "    private const PACK_VERSION = '2';\n"
+                  "    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';\n"
+                  "    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';\n",
+                  1,
+              )
 
-          prepared_anchor = "            $prepared[] = ['id' => $id, 'short' => $enShort, 'long' => $enLong, 'meta' => $enMeta];\n"
-          prepared_replacement = """            $prepared[] = [
+          old_prepared = "            $prepared[] = ['id' => $id, 'short' => $enShort, 'long' => $enLong, 'meta' => $enMeta];\n"
+          if old_prepared in p:
+              p = p.replace(old_prepared, """            $prepared[] = [
                   'id' => $id,
                   'short' => $enShort,
                   'long' => $enLong,
                   'meta' => $enMeta,
                   'targetFingerprint' => trim((string) ($row['Target RU Fingerprint'] ?? '')),
               ];
-          """
-          if prepared_anchor not in page:
-              raise SystemExit('Page prepared anchor not found')
-          page = page.replace(prepared_anchor, prepared_replacement, 1)
+          """, 1)
 
-          write_start = """        foreach ($prepared as $item) {
-                  $id = $item['id'];
-                  ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description',
-                      (string) ($this->call)('wp_kses_post', $item['short']));
-                  ($this->call)('update_post_meta', $id, '_wp_shop_en_long_description',
-                      (string) ($this->call)('wp_kses_post', $item['long']));
-                  ($this->call)('update_post_meta', $id, '_wp_shop_en_meta_description',
-                      (string) ($this->call)('sanitize_textarea_field', $item['meta']));
-                  $post = $this->previewForPack($id);
-                  $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
-              }
-          """
-          write_replacement = """        foreach ($prepared as $item) {
+          pattern = re.compile(
+              r"        foreach \(\$prepared as \$item\) \{\n"
+              r"            \$id = \$item\['id'\];\n"
+              r"            \(\$this->call\)\('update_post_meta', \$id, '_wp_shop_en_short_description',[\s\S]*?"
+              r"            \$logs\[\] = 'PRODUCT ' \. \$id \. ' = TARGET EN PREPARED / OVERALL ' \. \$post\['status'\];\n"
+              r"        \}\n",
+              re.M,
+          )
+          if 'self::EN_CONTENT_FINGERPRINT_META' not in p:
+              m = pattern.search(p)
+              if not m:
+                  raise SystemExit('import write loop missing')
+              repl = r'''        foreach ($prepared as $item) {
                   $id = $item['id'];
                   $short = (string) ($this->call)('wp_kses_post', $item['short']);
                   $long = (string) ($this->call)('wp_kses_post', $item['long']);
@@ -196,12 +163,7 @@ jobs:
                   ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description', $short);
                   ($this->call)('update_post_meta', $id, '_wp_shop_en_long_description', $long);
                   ($this->call)('update_post_meta', $id, '_wp_shop_en_meta_description', $meta);
-                  ($this->call)(
-                      'update_post_meta',
-                      $id,
-                      self::EN_TARGET_RU_FINGERPRINT_META,
-                      $item['targetFingerprint']
-                  );
+                  ($this->call)('update_post_meta', $id, self::EN_TARGET_RU_FINGERPRINT_META, $item['targetFingerprint']);
                   ($this->call)(
                       'update_post_meta',
                       $id,
@@ -211,35 +173,24 @@ jobs:
                   $post = $this->previewForPack($id);
                   $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
               }
-          """
-          if write_start not in page:
-              raise SystemExit('Page import-write block not found')
-          page = page.replace(write_start, write_replacement, 1)
+          '''
+              p = p[:m.start()] + repl + p[m.end():]
 
-          fp_anchor = """    /** @param array<string, string> $content */
-              private function fingerprint(array $content): string
+          if 'private function englishFingerprint(string $short' not in p:
+              needle = '    private function packEligible(array $preview): bool\n'
+              if needle not in p:
+                  raise SystemExit('packEligible anchor missing')
+              helper = r'''    private function englishFingerprint(string $short, string $long, string $meta): string
               {
-                  return hash('sha256', $content['ruShort'] . "\\0" . $content['ruLong'] . "\\0" . $content['ruMeta']);
-              }
-          """
-          fp_replacement = """    /** @param array<string, string> $content */
-              private function fingerprint(array $content): string
-              {
-                  return hash('sha256', $content['ruShort'] . "\\0" . $content['ruLong'] . "\\0" . $content['ruMeta']);
+                  return hash('sha256', $short . "\0" . $long . "\0" . $meta);
               }
 
-              private function englishFingerprint(string $short, string $long, string $meta): string
-              {
-                  return hash('sha256', $short . "\\0" . $long . "\\0" . $meta);
-              }
-          """
-          if fp_anchor not in page:
-              raise SystemExit('Page fingerprint anchor not found')
-          page = page.replace(fp_anchor, fp_replacement, 1)
-          page_path.write_text(page)
+          '''
+              p = p.replace(needle, helper + needle, 1)
+          pp.write_text(p)
 
-          test_path = Path('tests/App/Plugin/ProductManager/Editorial/ProductEditorialEnTargetProvenanceTest.php')
-          test_path.write_text(textwrap.dedent(r'''<?php
+          tp = Path('tests/App/Plugin/ProductManager/Editorial/ProductEditorialEnTargetProvenanceTest.php')
+          tp.write_text(textwrap.dedent(r'''<?php
 
           declare(strict_types=1);
 
@@ -280,10 +231,8 @@ jobs:
                       ),
                       'surerank_settings_general' => ['page_description' => $ru],
                   ];
-
                   $service = new ProductEditorialMigrationService($this->caller($post, $meta));
                   $preview = $service->preview(2956);
-
                   self::assertSame('STOP', $preview['status']);
                   self::assertSame('REVIEW', $preview['enStatus']);
                   self::assertStringContainsString(
