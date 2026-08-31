@@ -78,7 +78,7 @@ final class ProductEditorialDraftBuilder
         $enShort = $title . ' is a ' . $enType . $enDeveloper . '.';
 
         if ($ruTopics !== '') {
-            $ruShort .= ' Подходит для проектов в тематике: ' . $ruTopics . '.';
+            $ruShort .= ' Подходит для проектов, ориентированных на ' . $ruTopics . '.';
         }
 
         if ($enTopics !== '') {
@@ -112,14 +112,20 @@ final class ProductEditorialDraftBuilder
             $enMeta .= '. For ' . $enTopics;
         }
 
-        $legacyRuShort = $this->legacyText(
-            (string) ($legacy['ruShort'] ?? '')
-        );
-        $legacyRuLong = $this->legacyText(
-            (string) ($legacy['ruLong'] ?? '')
-        );
+        $legacyRuShort = $this->normalizeRuLegacyGrammar($this->legacyText(
+    (string) ($legacy['ruShort'] ?? '')
+));
+$legacyRuLong = $this->normalizeRuLegacyGrammar($this->legacyText(
+    (string) ($legacy['ruLong'] ?? '')
+));
 
-        if ($legacyRuShort !== '' || $legacyRuLong !== '') {
+$ruTypeSource = $legacyRuShort !== '' ? $legacyRuShort : $legacyRuLong;
+if ($this->legacyProductTypeConflict($ruTypeSource, $productType, 'ru')) {
+    $legacyRuShort = $this->typeSafeLegacySummary($title, $ruTypeSource, $productType, 'ru');
+    $legacyRuLong = $legacyRuShort;
+}
+
+if ($legacyRuShort !== '' || $legacyRuLong !== '') {
             $ruSource = $legacyRuShort !== '' ? $legacyRuShort : $legacyRuLong;
             $ruDetails = $legacyRuLong !== '' ? $legacyRuLong : $ruSource;
             $ruShort = $ruSource;
@@ -135,14 +141,16 @@ final class ProductEditorialDraftBuilder
             $ruMeta = $this->limit($ruSource);
         }
 
-        $legacyEnShort = $this->legacyText(
-            (string) ($legacy['enShort'] ?? '')
-        );
-        $legacyEnLong = $this->legacyText(
-            (string) ($legacy['enLong'] ?? '')
-        );
+        $legacyEnShort = $this->legacyText((string) ($legacy['enShort'] ?? ''));
+$legacyEnLong = $this->legacyText((string) ($legacy['enLong'] ?? ''));
 
-        if ($legacyEnShort !== '' || $legacyEnLong !== '') {
+$enTypeSource = $legacyEnShort !== '' ? $legacyEnShort : $legacyEnLong;
+if ($this->legacyProductTypeConflict($enTypeSource, $productType, 'en')) {
+    $legacyEnShort = $this->typeSafeLegacySummary($title, $enTypeSource, $productType, 'en');
+    $legacyEnLong = $legacyEnShort;
+}
+
+if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             $enSource = $legacyEnShort !== '' ? $legacyEnShort : $legacyEnLong;
             $enDetails = $legacyEnLong !== '' ? $legacyEnLong : $enSource;
             $enShort = $enSource;
@@ -344,7 +352,7 @@ final class ProductEditorialDraftBuilder
             }
 
             if ($topics !== '') {
-                $intro .= ' Подходит для проектов в тематике ' . $topics . '.';
+                $intro .= ' Подходит для проектов, ориентированных на ' . $topics . '.';
             }
 
             return $intro;
@@ -383,7 +391,7 @@ final class ProductEditorialDraftBuilder
 
             if ($topics !== '') {
                 return '<p>' . $this->text(
-                    $product . ' подходит для проектов в тематике '
+                    $product . ' подходит для проектов, ориентированных на '
                     . $topics . '. Ниже собраны основные возможности и сценарии '
                     . 'использования на основе существующего описания продукта.'
                 ) . '</p>';
@@ -507,7 +515,7 @@ final class ProductEditorialDraftBuilder
             $html .= $this->simpleSection(
                 $language === 'ru' ? 'Сценарии использования' : 'Use cases',
                 $language === 'ru'
-                    ? $product . ' подходит для проектов в тематике '
+                    ? $product . ' подходит для проектов, ориентированных на '
                         . $topics . '. Конкретный набор возможностей зависит от '
                         . 'функций, заявленных разработчиком для текущей версии.'
                     : $product . ' is suitable for projects focused on '
@@ -616,7 +624,7 @@ final class ProductEditorialDraftBuilder
         }
 
         if ($topics !== '') {
-            return $product . ' можно рассматривать для проектов в тематике '
+            return $product . ' можно рассматривать для проектов, ориентированных на '
                 . $topics . '. Выбор зависит от требуемых функций и структуры сайта.';
         }
 
@@ -706,7 +714,7 @@ final class ProductEditorialDraftBuilder
             'travel' => ['travel'],
             'tourism' => ['tourism'],
             'booking' => ['booking'],
-            'business' => ['business'],
+            'business' => preg_match('/\bbusiness\s*[–—-]\s*/u', $title) === 1 ? [] : ['business'],
             'corporate' => ['corporate'],
             'agency' => ['agency'],
             'marketing' => ['marketing'],
@@ -881,6 +889,69 @@ final class ProductEditorialDraftBuilder
         $joiner = $language === 'ru' ? ' и ' : ' and ';
 
         return implode(', ', $values) . $joiner . $last;
+    }
+
+    private function normalizeRuLegacyGrammar(string $value): string
+    {
+        $normalized = preg_replace(
+            '/\bс\s+помощью\s+расширенн(?:ой|ых)\s+структурированн(?:ой|ых)\s+данных\b/ui',
+            'с помощью расширенных структурированных данных',
+            $value
+        );
+        return is_string($normalized) ? $normalized : $value;
+    }
+
+    private function legacyProductTypeConflict(string $value, string $productType, string $language): bool
+    {
+        if (trim($value) === '') {
+            return false;
+        }
+        $head = mb_substr($value, 0, 220, 'UTF-8');
+        if ($language === 'ru') {
+            $hasTheme = $this->matches($head, '/\b(?:тема|шаблон)\b/ui');
+            $hasPlugin = $this->matches($head, '/\b(?:плагин|расширение)\b/ui');
+        } else {
+            $hasTheme = $this->matches($head, '/\btheme\b/ui');
+            $hasPlugin = $this->matches($head, '/\b(?:plugin|add-on|addon|extension)\b/ui');
+        }
+        if ($productType === CatalogProductType::PLUGIN) {
+            return $hasTheme && ! $hasPlugin;
+        }
+        if ($productType === CatalogProductType::THEME) {
+            return $hasPlugin && ! $hasTheme;
+        }
+        return false;
+    }
+
+    private function typeSafeLegacySummary(string $title, string $value, string $productType, string $language): string
+    {
+        $product = $this->productName($title);
+        $tail = trim($value);
+        if ($productType === CatalogProductType::PLUGIN) {
+            if ($language === 'ru') {
+                $tail = (string) preg_replace('/^.*?\b(?:тема|шаблон)\s*(?:WordPress)?\b/ui', '', $tail, 1);
+                $base = preg_match('/^(.+?)\s+Premium$/ui', $product, $match) === 1
+                    ? trim((string) $match[1])
+                    : '';
+                $type = $base !== '' ? 'премиум-плагин для ' . $base : 'плагин WordPress';
+            } else {
+                $tail = (string) preg_replace('/^.*?\btheme\b/ui', '', $tail, 1);
+                $base = preg_match('/^(.+?)\s+Premium$/ui', $product, $match) === 1
+                    ? trim((string) $match[1])
+                    : '';
+                $type = $base !== '' ? 'premium plugin for ' . $base : 'WordPress plugin';
+            }
+        } else {
+            if ($language === 'ru') {
+                $tail = (string) preg_replace('/^.*?\b(?:плагин|расширение)\s*(?:WordPress)?\b/ui', '', $tail, 1);
+                $type = 'тема WordPress';
+            } else {
+                $tail = (string) preg_replace('/^.*?\b(?:plugin|add-on|addon|extension)\b/ui', '', $tail, 1);
+                $type = 'WordPress theme';
+            }
+        }
+        $tail = ltrim(trim($tail), "—-:,. ");
+        return $product . ' — ' . $type . ($tail !== '' ? ' ' . $tail : '.');
     }
 
     /** @return list<string> */

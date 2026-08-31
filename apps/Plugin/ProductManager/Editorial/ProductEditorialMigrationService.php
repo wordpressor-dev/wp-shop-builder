@@ -133,8 +133,8 @@ final class ProductEditorialMigrationService
                 $sourceUpdateDate,
                 $this->enrichLegacy($legacy, $official, $generic)
             );
-            $generated = $this->preserveQualityMeta($legacy, $generated);
-            $generated = $this->preserveRichLegacyRu($legacy, $generated);
+            $generated = $this->preserveQualityMeta($legacy, $generated, $productType);
+            $generated = $this->preserveRichLegacyRu($legacy, $generated, $productType);
         }
 
         $stalePreparedEnglish = false;
@@ -162,8 +162,8 @@ final class ProductEditorialMigrationService
                 $sourceUpdateDate,
                 $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
             );
-            $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated);
-            $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated);
+            $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
+            $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
         }
     }
 
@@ -410,15 +410,22 @@ final class ProductEditorialMigrationService
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
      * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
      */
-    private function preserveQualityMeta(array $legacy, array $generated): array
+    private function preserveQualityMeta(array $legacy, array $generated, string $productType): array
     {
         foreach (['ruMeta', 'enMeta'] as $field) {
             $value = trim((string) ($legacy[$field] ?? ''));
+            $language = $field === 'ruMeta' ? 'ru' : 'en';
+            $shortField = $language === 'ru' ? 'ruShort' : 'enShort';
+            $longField = $language === 'ru' ? 'ruLong' : 'enLong';
+            $typeSource = trim((string) ($legacy[$shortField] ?? '')) . ' '
+                . trim((string) ($legacy[$longField] ?? ''));
+            if ($this->legacyTypeConflict($typeSource, $productType, $language)) {
+                continue;
+            }
             if (mb_strlen($this->plainEditorialText($value), 'UTF-8') >= 80) {
                 $generated[$field] = $value;
             }
         }
-
         return $generated;
     }
 
@@ -430,27 +437,47 @@ final class ProductEditorialMigrationService
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
      * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
      */
-    private function preserveRichLegacyRu(array $legacy, array $generated): array
+    private function preserveRichLegacyRu(array $legacy, array $generated, string $productType): array
     {
-        foreach (
-            [
-                ['ruShort', 'ruLong'],
-                ['enShort', 'enLong'],
-            ] as [$shortField, $longField]
-        ) {
+        foreach ([['ruShort', 'ruLong'], ['enShort', 'enLong']] as [$shortField, $longField]) {
             $long = trim((string) ($legacy[$longField] ?? ''));
             if (! $this->isRichEditorialContent($long)) {
                 continue;
             }
-
             $short = trim((string) ($legacy[$shortField] ?? ''));
+            $language = $shortField === 'ruShort' ? 'ru' : 'en';
+            if ($this->legacyTypeConflict($short . ' ' . $long, $productType, $language)) {
+                continue;
+            }
             if ($short !== '') {
                 $generated[$shortField] = $short;
             }
             $generated[$longField] = $long;
         }
-
         return $generated;
+    }
+
+    private function legacyTypeConflict(string $content, string $productType, string $language): bool
+    {
+        $plain = $this->plainEditorialText($content);
+        if ($plain === '') {
+            return false;
+        }
+        $head = mb_substr($plain, 0, 260, 'UTF-8');
+        if ($language === 'ru') {
+            $hasTheme = preg_match('/\b(?:тема|шаблон)\b/ui', $head) === 1;
+            $hasPlugin = preg_match('/\b(?:плагин|расширение)\b/ui', $head) === 1;
+        } else {
+            $hasTheme = preg_match('/\btheme\b/ui', $head) === 1;
+            $hasPlugin = preg_match('/\b(?:plugin|add-on|addon|extension)\b/ui', $head) === 1;
+        }
+        if ($productType === CatalogProductType::PLUGIN) {
+            return $hasTheme && ! $hasPlugin;
+        }
+        if ($productType === CatalogProductType::THEME) {
+            return $hasPlugin && ! $hasTheme;
+        }
+        return false;
     }
 
     private function isRichEditorialContent(string $content): bool
