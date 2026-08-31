@@ -83,7 +83,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     $this->manualPostedContent()
                 );
                 $editor = $this->migration->manualEditor($manualId);
-                $logs = array_merge($logs, $this->manualPreviewLogs($editor));
+                $logs = array_values(array_merge($logs, $this->manualPreviewLogs($editor)));
                 $success = $editor['status'] === 'READY';
             } elseif ($action === 'apply_manual') {
                 $this->checkNonce();
@@ -500,7 +500,10 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '</div>';
     }
 
-    /** @param array<string, mixed> $editor */
+    /**
+     * @param array<string, mixed> $editor
+     * @return list<string>
+     */
     private function manualPreviewLogs(array $editor): array
     {
         $logs = [
