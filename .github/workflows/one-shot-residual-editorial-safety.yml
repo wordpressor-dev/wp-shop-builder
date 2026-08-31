@@ -1,0 +1,491 @@
+name: One-shot residual editorial safety fixes
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-residual-editorial-safety.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+
+      - name: Patch remaining editorial safety issues
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          builder_path = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php')
+          builder = builder_path.read_text()
+
+          old_ru = """        $legacyRuShort = $this->legacyText(
+              (string) ($legacy['ruShort'] ?? '')
+          );
+          $legacyRuLong = $this->legacyText(
+              (string) ($legacy['ruLong'] ?? '')
+          );
+
+          if ($legacyRuShort !== '' || $legacyRuLong !== '') {
+          """
+          new_ru = """        $legacyRuShort = $this->normalizeRuLegacyGrammar($this->legacyText(
+              (string) ($legacy['ruShort'] ?? '')
+          ));
+          $legacyRuLong = $this->normalizeRuLegacyGrammar($this->legacyText(
+              (string) ($legacy['ruLong'] ?? '')
+          ));
+
+          $ruTypeSource = $legacyRuShort !== '' ? $legacyRuShort : $legacyRuLong;
+          if ($this->legacyProductTypeConflict($ruTypeSource, $productType, 'ru')) {
+              $legacyRuShort = $this->typeSafeLegacySummary(
+                  $title,
+                  $ruTypeSource,
+                  $productType,
+                  'ru'
+              );
+              $legacyRuLong = $legacyRuShort;
+          }
+
+          if ($legacyRuShort !== '' || $legacyRuLong !== '') {
+          """
+          if old_ru not in builder:
+              raise SystemExit('builder RU legacy anchor missing')
+          builder = builder.replace(old_ru, new_ru, 1)
+
+          old_en = """        $legacyEnShort = $this->legacyText(
+              (string) ($legacy['enShort'] ?? '')
+          );
+          $legacyEnLong = $this->legacyText(
+              (string) ($legacy['enLong'] ?? '')
+          );
+
+          if ($legacyEnShort !== '' || $legacyEnLong !== '') {
+          """
+          new_en = """        $legacyEnShort = $this->legacyText(
+              (string) ($legacy['enShort'] ?? '')
+          );
+          $legacyEnLong = $this->legacyText(
+              (string) ($legacy['enLong'] ?? '')
+          );
+
+          $enTypeSource = $legacyEnShort !== '' ? $legacyEnShort : $legacyEnLong;
+          if ($this->legacyProductTypeConflict($enTypeSource, $productType, 'en')) {
+              $legacyEnShort = $this->typeSafeLegacySummary(
+                  $title,
+                  $enTypeSource,
+                  $productType,
+                  'en'
+              );
+              $legacyEnLong = $legacyEnShort;
+          }
+
+          if ($legacyEnShort !== '' || $legacyEnLong !== '') {
+          """
+          if old_en not in builder:
+              raise SystemExit('builder EN legacy anchor missing')
+          builder = builder.replace(old_en, new_en, 1)
+
+          replacements = {
+              "' Подходит для проектов в тематике: '": "' Подходит для проектов, ориентированных на '",
+              "' Подходит для проектов в тематике '": "' Подходит для проектов, ориентированных на '",
+              "' подходит для проектов в тематике '": "' подходит для проектов, ориентированных на '",
+              "' можно рассматривать для проектов в тематике '": "' можно рассматривать для проектов, ориентированных на '",
+          }
+          for old, new in replacements.items():
+              builder = builder.replace(old, new)
+
+          business_anchor = """        foreach ($rules as $needle => $values) {
+              if (! str_contains($title, $needle)) {
+                  continue;
+              }
+
+              foreach ($values as $value) {
+          """
+          business_repl = """        foreach ($rules as $needle => $values) {
+              if (! str_contains($title, $needle)) {
+                  continue;
+              }
+
+              // A tier/edition label immediately before an explanatory dash is
+              // not a storefront topic (for example, TranslatePress Business – ...).
+              if (
+                  $needle === 'business'
+                  && preg_match('/\\bbusiness\\s*[–—-]\\s*/u', $title) === 1
+              ) {
+                  continue;
+              }
+
+              foreach ($values as $value) {
+          """
+          if business_anchor not in builder:
+              raise SystemExit('builder business-topic anchor missing')
+          builder = builder.replace(business_anchor, business_repl, 1)
+
+          helper_anchor = """    /** @return list<string> */
+          private function legacyFeatures(string $value, bool $skipFirstSentence): array
+          """
+          helpers = r'''    private function normalizeRuLegacyGrammar(string $value): string
+              {
+                  $normalized = preg_replace(
+                      '/\bс\s+помощью\s+расширенн(?:ой|ых)\s+структурированн(?:ой|ых)\s+данных\b/ui',
+                      'с помощью расширенных структурированных данных',
+                      $value
+                  );
+
+                  return is_string($normalized) ? $normalized : $value;
+              }
+
+              private function legacyProductTypeConflict(
+                  string $value,
+                  string $productType,
+                  string $language
+              ): bool {
+                  if (trim($value) === '') {
+                      return false;
+                  }
+
+                  $head = mb_substr($value, 0, 220, 'UTF-8');
+                  if ($language === 'ru') {
+                      $hasTheme = $this->matches($head, '/\b(?:тема|шаблон)\b/ui');
+                      $hasPlugin = $this->matches($head, '/\b(?:плагин|расширение)\b/ui');
+                  } else {
+                      $hasTheme = $this->matches($head, '/\btheme\b/ui');
+                      $hasPlugin = $this->matches($head, '/\b(?:plugin|add-on|addon|extension)\b/ui');
+                  }
+
+                  if ($productType === CatalogProductType::PLUGIN) {
+                      return $hasTheme && ! $hasPlugin;
+                  }
+
+                  if ($productType === CatalogProductType::THEME) {
+                      return $hasPlugin && ! $hasTheme;
+                  }
+
+                  return false;
+              }
+
+              private function typeSafeLegacySummary(
+                  string $title,
+                  string $value,
+                  string $productType,
+                  string $language
+              ): string {
+                  $product = $this->productName($title);
+                  $tail = trim($value);
+
+                  if ($productType === CatalogProductType::PLUGIN) {
+                      if ($language === 'ru') {
+                          $tail = (string) preg_replace(
+                              '/^.*?\b(?:тема|шаблон)\s*(?:WordPress)?\b/ui',
+                              '',
+                              $tail,
+                              1
+                          );
+                          $base = '';
+                          if (preg_match('/^(.+?)\s+Premium$/ui', $product, $match) === 1) {
+                              $base = trim((string) $match[1]);
+                          }
+                          $type = $base !== ''
+                              ? 'премиум-плагин для ' . $base
+                              : 'плагин WordPress';
+                      } else {
+                          $tail = (string) preg_replace(
+                              '/^.*?\btheme\b/ui',
+                              '',
+                              $tail,
+                              1
+                          );
+                          $base = '';
+                          if (preg_match('/^(.+?)\s+Premium$/ui', $product, $match) === 1) {
+                              $base = trim((string) $match[1]);
+                          }
+                          $type = $base !== ''
+                              ? 'premium plugin for ' . $base
+                              : 'WordPress plugin';
+                      }
+                  } else {
+                      if ($language === 'ru') {
+                          $tail = (string) preg_replace(
+                              '/^.*?\b(?:плагин|расширение)\s*(?:WordPress)?\b/ui',
+                              '',
+                              $tail,
+                              1
+                          );
+                          $type = 'тема WordPress';
+                      } else {
+                          $tail = (string) preg_replace(
+                              '/^.*?\b(?:plugin|add-on|addon|extension)\b/ui',
+                              '',
+                              $tail,
+                              1
+                          );
+                          $type = 'WordPress theme';
+                      }
+                  }
+
+                  $tail = ltrim(trim($tail), "—-:,. ");
+                  return $product . ' — ' . $type . ($tail !== '' ? ' ' . $tail : '.');
+              }
+
+              /** @return list<string> */
+              private function legacyFeatures(string $value, bool $skipFirstSentence): array
+          '''
+          if helper_anchor not in builder:
+              raise SystemExit('builder helper anchor missing')
+          builder = builder.replace(helper_anchor, helpers, 1)
+          builder_path.write_text(builder)
+
+          service_path = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php')
+          service = service_path.read_text()
+
+          service = service.replace(
+              '$generated = $this->preserveQualityMeta($legacy, $generated);',
+              '$generated = $this->preserveQualityMeta($legacy, $generated, $productType);'
+          )
+          service = service.replace(
+              '$generated = $this->preserveRichLegacyRu($legacy, $generated);',
+              '$generated = $this->preserveRichLegacyRu($legacy, $generated, $productType);'
+          )
+          service = service.replace(
+              '$generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated);',
+              '$generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);'
+          )
+          service = service.replace(
+              '$generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated);',
+              '$generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);'
+          )
+
+          old_quality_sig = '    private function preserveQualityMeta(array $legacy, array $generated): array\n'
+          new_quality_sig = '    private function preserveQualityMeta(array $legacy, array $generated, string $productType): array\n'
+          if old_quality_sig not in service:
+              raise SystemExit('service quality-meta signature missing')
+          service = service.replace(old_quality_sig, new_quality_sig, 1)
+
+          old_quality_loop = """        foreach (['ruMeta', 'enMeta'] as $field) {
+              $value = trim((string) ($legacy[$field] ?? ''));
+              if (mb_strlen($this->plainEditorialText($value), 'UTF-8') >= 80) {
+                  $generated[$field] = $value;
+              }
+          }
+          """
+          new_quality_loop = """        foreach (['ruMeta', 'enMeta'] as $field) {
+              $value = trim((string) ($legacy[$field] ?? ''));
+              $language = $field === 'ruMeta' ? 'ru' : 'en';
+              $shortField = $language === 'ru' ? 'ruShort' : 'enShort';
+              $longField = $language === 'ru' ? 'ruLong' : 'enLong';
+              $typeSource = trim((string) ($legacy[$shortField] ?? '')) . ' '
+                  . trim((string) ($legacy[$longField] ?? ''));
+              if ($this->legacyTypeConflict($typeSource, $productType, $language)) {
+                  continue;
+              }
+              if (mb_strlen($this->plainEditorialText($value), 'UTF-8') >= 80) {
+                  $generated[$field] = $value;
+              }
+          }
+          """
+          if old_quality_loop not in service:
+              raise SystemExit('service quality-meta loop missing')
+          service = service.replace(old_quality_loop, new_quality_loop, 1)
+
+          old_rich_sig = '    private function preserveRichLegacyRu(array $legacy, array $generated): array\n'
+          new_rich_sig = '    private function preserveRichLegacyRu(array $legacy, array $generated, string $productType): array\n'
+          if old_rich_sig not in service:
+              raise SystemExit('service rich signature missing')
+          service = service.replace(old_rich_sig, new_rich_sig, 1)
+
+          old_rich_body = """            $long = trim((string) ($legacy[$longField] ?? ''));
+              if (! $this->isRichEditorialContent($long)) {
+                  continue;
+              }
+
+              $short = trim((string) ($legacy[$shortField] ?? ''));
+              if ($short !== '') {
+                  $generated[$shortField] = $short;
+              }
+              $generated[$longField] = $long;
+          """
+          new_rich_body = """            $long = trim((string) ($legacy[$longField] ?? ''));
+              if (! $this->isRichEditorialContent($long)) {
+                  continue;
+              }
+
+              $short = trim((string) ($legacy[$shortField] ?? ''));
+              $language = $shortField === 'ruShort' ? 'ru' : 'en';
+              if ($this->legacyTypeConflict($short . ' ' . $long, $productType, $language)) {
+                  continue;
+              }
+              if ($short !== '') {
+                  $generated[$shortField] = $short;
+              }
+              $generated[$longField] = $long;
+          """
+          if old_rich_body not in service:
+              raise SystemExit('service rich body missing')
+          service = service.replace(old_rich_body, new_rich_body, 1)
+
+          rich_helper_anchor = '    private function isRichEditorialContent(string $content): bool\n'
+          rich_helper = r'''    private function legacyTypeConflict(
+                  string $content,
+                  string $productType,
+                  string $language
+              ): bool {
+                  $plain = $this->plainEditorialText($content);
+                  if ($plain === '') {
+                      return false;
+                  }
+                  $head = mb_substr($plain, 0, 260, 'UTF-8');
+                  if ($language === 'ru') {
+                      $hasTheme = preg_match('/\b(?:тема|шаблон)\b/ui', $head) === 1;
+                      $hasPlugin = preg_match('/\b(?:плагин|расширение)\b/ui', $head) === 1;
+                  } else {
+                      $hasTheme = preg_match('/\btheme\b/ui', $head) === 1;
+                      $hasPlugin = preg_match('/\b(?:plugin|add-on|addon|extension)\b/ui', $head) === 1;
+                  }
+
+                  if ($productType === CatalogProductType::PLUGIN) {
+                      return $hasTheme && ! $hasPlugin;
+                  }
+                  if ($productType === CatalogProductType::THEME) {
+                      return $hasPlugin && ! $hasTheme;
+                  }
+                  return false;
+              }
+
+              private function isRichEditorialContent(string $content): bool
+          '''
+          if rich_helper_anchor not in service:
+              raise SystemExit('service rich helper anchor missing')
+          service = service.replace(rich_helper_anchor, rich_helper, 1)
+          service_path.write_text(service)
+
+          test_path = Path('tests/App/Plugin/ProductManager/Editorial/ProductEditorialResidualSafetyTest.php')
+          test_path.write_text(textwrap.dedent(r'''<?php
+
+          declare(strict_types=1);
+
+          namespace WPShop\Tests\App\Plugin\ProductManager\Editorial;
+
+          use PHPUnit\Framework\TestCase;
+          use WPShop\App\Plugin\ProductManager\CatalogProductType;
+          use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
+          use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
+
+          final class ProductEditorialResidualSafetyTest extends TestCase
+          {
+              public function testTranslatePressBusinessEditionIsNotAProjectTopic(): void
+              {
+                  $builder = new ProductEditorialDraftBuilder();
+                  $draft = $builder->build(
+                      'TranslatePress Business – Translate Multilingual sites with AI Translation',
+                      'Cozmoslabs',
+                      CatalogProductType::PLUGIN,
+                      [],
+                      '',
+                      [
+                          'ruShort' => 'TranslatePress Business – Translate Multilingual sites with AI Translation — профессиональный плагин для создания многоязычных сайтов. Позволяет переводить весь контент, включая динамический, с визуальным редактором. Поддержка SEO и 3+ языков.',
+                      ]
+                  );
+
+                  self::assertStringNotContainsString('тематике бизнес', $draft['ruLong']);
+                  self::assertStringNotContainsString('ориентированных на бизнес', $draft['ruLong']);
+                  self::assertStringNotContainsString('focused on business', $draft['enLong']);
+              }
+
+              public function testWooCommerceSeoLegacyGrammarIsNormalized(): void
+              {
+                  $builder = new ProductEditorialDraftBuilder();
+                  $draft = $builder->build(
+                      'Yoast WooCommerce SEO',
+                      'Yoast',
+                      CatalogProductType::PLUGIN,
+                      ['woocommerce'],
+                      '',
+                      [
+                          'ruShort' => 'Yoast WooCommerce SEO — это специализированный плагин, который улучшает видимость интернет-магазина в поиске с помощью расширенной структурированной данных, AI-генерации метатегов и точечного SEO-анализа товарных страниц.',
+                      ]
+                  );
+
+                  self::assertStringContainsString('расширенных структурированных данных', $draft['ruShort']);
+                  self::assertStringNotContainsString('расширенной структурированной данных', $draft['ruShort']);
+                  self::assertStringContainsString('ориентированных на интернет-магазины', $draft['ruLong']);
+                  self::assertStringNotContainsString('в тематике интернет-магазины', $draft['ruLong']);
+              }
+
+              public function testRichThemeLegacyCannotOverridePluginTechnicalType(): void
+              {
+                  $short = 'Лёгкая premium-тема WordPress с сотнями настроек, Starter Sites и block-based theme building для быстрых бизнес-сайтов, блогов и магазинов.';
+                  $long = '<h2>GeneratePress Premium — лёгкая и гибкая WordPress-тема</h2>'
+                      . '<p>GeneratePress Premium расширяет бесплатную тему GeneratePress сотнями настроек дизайна и layout.</p>'
+                      . '<p>Тема ориентирована на производительность и подходит для бизнес-сайтов, блогов и WooCommerce-магазинов.</p>'
+                      . '<h3>Основные возможности</h3><ul><li>сотни design и layout controls;</li><li>готовые Starter Sites;</li></ul>'
+                      . '<p>GeneratePress Premium особенно подходит разработчикам и владельцам сайтов, которым нужна минималистичная база без лишнего bloat.</p>';
+                  $post = [
+                      'ID' => 2827,
+                      'post_type' => 'product',
+                      'post_title' => 'GeneratePress Premium 2.5.6',
+                      'post_excerpt' => $short,
+                      'post_content' => $long,
+                  ];
+                  $meta = [
+                      'attr_version_value' => '2.5.6',
+                      '_wp_shop_product_type' => 'plugin',
+                      'attr_developer_value' => 'Tom Usborne',
+                      '_wp_shop_source_update_date' => '',
+                      'surerank_settings_general' => [
+                          'page_description' => 'Быстрый и легкий WordPress-шаблон с модульной структурой. Идеален для SEO и адаптивен. Предлагает кастомизацию без потери производительности.',
+                      ],
+                  ];
+
+                  $service = new ProductEditorialMigrationService($this->caller($post, $meta));
+                  $preview = $service->preview(2827);
+
+                  self::assertSame('plugin', $preview['productType']);
+                  self::assertStringContainsString('премиум-плагин для GeneratePress', $preview['generated']['ruShort']);
+                  self::assertStringNotContainsString('premium-тема', $preview['generated']['ruShort']);
+                  self::assertStringNotContainsString('WordPress-шаблон', $preview['generated']['ruMeta']);
+                  self::assertNotSame($long, $preview['generated']['ruLong']);
+              }
+
+              /**
+               * @param array<string,mixed> $post
+               * @param array<string,mixed> $meta
+               * @return \Closure(string,mixed...): mixed
+               */
+              private function caller(array &$post, array &$meta): \Closure
+              {
+                  return static function (string $name, mixed ...$arguments) use (&$post, &$meta): mixed {
+                      if ($name === 'get_post') {
+                          return (object) $post;
+                      }
+                      if ($name === 'get_post_meta') {
+                          return $meta[(string) $arguments[1]] ?? '';
+                      }
+                      if ($name === 'wp_get_post_terms') {
+                          return [];
+                      }
+                      if ($name === 'current_time') {
+                          return '2026-08-31 13:45:00';
+                      }
+                      return null;
+                  };
+              }
+          }
+          '''))
+          PY
+
+          git rm .github/workflows/one-shot-residual-editorial-safety.yml
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php tests/App/Plugin/ProductManager/Editorial/ProductEditorialResidualSafetyTest.php
+          git commit -m "fix: resolve remaining editorial target safety issues"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
