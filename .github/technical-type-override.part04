@@ -1,0 +1,100 @@
++            $editor = $this->migration->technicalTypeEditor($typeId);
++        } catch (Throwable $exception) {
++            echo '<div class="notice notice-error inline"><p>'
++                . $this->escape($exception->getMessage()) . '</p></div></div>';
++            return;
++        }
++
++        echo '<p><strong>#' . $typeId . ' ' . $this->escape((string) $editor['title']) . '</strong>';
++        echo ' &nbsp; Resolved technical type: <strong>'
++            . $this->escape((string) $editor['resolvedType']) . '</strong>';
++        echo ' &nbsp; Stored _wp_shop_product_type: <strong>'
++            . $this->escape((string) $editor['storedType'] !== '' ? (string) $editor['storedType'] : 'EMPTY')
++            . '</strong></p>';
++        echo '<p><strong>Catalog category snapshot:</strong> '
++            . $this->escape((string) $editor['catalogCategory'])
++            . ' &nbsp; <strong>will be preserved.</strong></p>';
++
++        if (! empty($editor['hasManualDraft'])) {
++            echo '<div class="notice notice-warning inline"><p><strong>REVIEW:</strong> Manual RU+EN draft exists. Changing technical type is blocked until that draft is discarded.</p></div>';
++        }
++
++        $allowed = [
++            CatalogProductType::THEME => 'theme',
++            CatalogProductType::PLUGIN => 'plugin',
++            CatalogProductType::TEMPLATE_KIT => 'template_kit',
++        ];
++        $selectedType = array_key_exists($typeTarget, $allowed)
++            ? $typeTarget
++            : (string) $editor['resolvedType'];
++
++        echo '<form method="post">';
++        $this->nonceField();
++        $this->hiddenState($search, $page, $perPage);
++        echo '<input type="hidden" name="type_id" value="' . $typeId . '">';
++        echo '<input type="hidden" name="type_product_id" value="' . $typeId . '">';
++        echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="preview_type_override">';
++        echo '<label><strong>Target technical type</strong> <select name="type_target">';
++        foreach ($allowed as $value => $label) {
++            echo '<option value="' . $this->escapeAttr($value) . '"'
++                . ($selectedType === $value ? ' selected' : '') . '>'
++                . $this->escape($label) . '</option>';
++        }
++        echo '</select></label> ';
++        echo '<button class="button button-primary">Preview Type Override — no writes</button></form>';
++
++        if (
++            is_array($overridePreview)
++            && (int) ($overridePreview['productId'] ?? 0) === $typeId
++        ) {
++            $status = (string) ($overridePreview['status'] ?? 'REVIEW');
++            $issue = (string) ($overridePreview['issue'] ?? '');
++            $class = $status === 'REVIEW' ? 'notice-warning' : 'notice-success';
++            echo '<div class="notice ' . $class . ' inline" style="margin-top:14px"><p>';
++            echo '<strong>TYPE OVERRIDE PREVIEW = ' . $this->escape($status) . '</strong><br>';
++            echo 'From: <strong>' . $this->escape((string) $overridePreview['fromType'])
++                . '</strong> → To: <strong>' . $this->escape((string) $overridePreview['toType'])
++                . '</strong><br>';
++            echo 'Catalog category: <strong>PRESERVED / NOT WRITTEN</strong><br>';
++            echo 'Product content writes: <strong>NO</strong>';
++            if ($issue !== '') {
++                echo '<br>Review: ' . $this->escape($issue);
++            }
++            echo '</p></div>';
++
++            if ($status === 'READY') {
++                echo '<form method="post" style="margin-top:10px">';
++                $this->nonceField();
++                $this->hiddenState($search, $page, $perPage);
++                echo '<input type="hidden" name="type_id" value="' . $typeId . '">';
++                echo '<input type="hidden" name="type_product_id" value="' . $typeId . '">';
++                echo '<input type="hidden" name="type_target" value="'
++                    . $this->escapeAttr((string) $overridePreview['toType']) . '">';
++                echo '<input type="hidden" name="type_source_fingerprint" value="'
++                    . $this->escapeAttr((string) $overridePreview['sourceFingerprint']) . '">';
++                echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="apply_type_override">';
++                echo '<button class="button button-primary">Apply Technical Type</button> ';
++                echo '<span>Пишет только _wp_shop_product_type. Если источник изменился после Preview, Apply будет остановлен.</span></form>';
++            }
++        }
++
++        if (! empty($editor['backupAvailable'])) {
++            echo '<form method="post" style="margin-top:10px">';
++            $this->nonceField();
++            $this->hiddenState($search, $page, $perPage);
++            echo '<input type="hidden" name="type_id" value="' . $typeId . '">';
++            echo '<input type="hidden" name="type_product_id" value="' . $typeId . '">';
++            echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="restore_type_override">';
++            echo '<button class="button">Restore Technical Type Backup</button> ';
++            echo '<span>Категории и контент не затрагиваются.</span></form>';
++        }
++
++        echo '</div>';
++    }
++
++    /**
++     * @param array<string,mixed> $preview
++     * @return list<string>
++     */
++    private function typeOverridePreviewLogs(array $preview): array
++    {
