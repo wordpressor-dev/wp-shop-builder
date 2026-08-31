@@ -84,7 +84,15 @@ final class ProductEditorialAudienceExtractionTest extends TestCase
                 $content['ruLong']
             );
             self::assertStringNotContainsString(
+                'подходит для создания',
+                $content['ruLong']
+            );
+            self::assertStringNotContainsString(
                 'is suitable for WordPress',
+                $content['enLong']
+            );
+            self::assertStringNotContainsString(
+                'is suitable for creating',
                 $content['enLong']
             );
         }
