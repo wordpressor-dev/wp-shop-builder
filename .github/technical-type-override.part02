@@ -1,0 +1,100 @@
++        if ($expectedResolved !== '' && $after['resolvedType'] !== $expectedResolved) {
++            throw new RuntimeException(
++                'Technical type restore verification failed for product ' . $productId
++            );
++        }
++
++        return [
++            'TECHNICAL TYPE RESTORE = READY',
++            'PRODUCT ID = ' . $productId,
++            'STORED TYPE = ' . ($storedType !== '' ? $storedType : 'EMPTY / INFERRED'),
++            'RESOLVED TYPE = ' . $after['resolvedType'],
++            'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
++            'PRODUCT CONTENT WRITES = NO',
++            'BACKUP = PRESERVED',
++        ];
++    }
++
++    private function validTechnicalType(string $type): bool
++    {
++        return in_array($type, [
++            CatalogProductType::THEME,
++            CatalogProductType::PLUGIN,
++            CatalogProductType::TEMPLATE_KIT,
++        ], true);
++    }
++
++    private function technicalTypeCatalogSnapshot(int $productId): string
++    {
++        $parts = [];
++        $attribute = trim($this->meta($productId, 'attr_category_value'));
++        if ($attribute !== '') {
++            $parts[] = 'attr_category_value: ' . $attribute;
++        }
++
++        $terms = ($this->call)(
++            'wp_get_post_terms',
++            $productId,
++            'product_cat',
++            ['fields' => 'names']
++        );
++        if (is_array($terms)) {
++            $names = [];
++            foreach ($terms as $term) {
++                if (is_scalar($term) && trim((string) $term) !== '') {
++                    $names[] = trim((string) $term);
++                }
++            }
++            $names = array_values(array_unique($names));
++            if ($names !== []) {
++                $parts[] = 'product_cat: ' . implode(', ', $names);
++            }
++        }
++
++        return $parts === [] ? '—' : implode(' | ', $parts);
++    }
++
++    /**
+      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+      */
+     private function ruFingerprint(array $content): string
+--- a/apps/Plugin/Admin/ProductEditorialMigrationPage.php
++++ b/apps/Plugin/Admin/ProductEditorialMigrationPage.php
+@@ -8,6 +8,7 @@
+ use InvalidArgumentException;
+ use RuntimeException;
+ use Throwable;
++use WPShop\App\Plugin\ProductManager\CatalogProductType;
+ use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
+ use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
+ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
+@@ -52,6 +53,9 @@
+         $perPage = $this->perPage((int) $this->request('editorial_per_page', '25'));
+         $previewId = max(0, (int) $this->request('preview_id'));
+         $manualId = max(0, (int) $this->request('manual_id'));
++        $typeId = max(0, (int) $this->request('type_id'));
++        $typeTarget = trim($this->request('type_target'));
++        $typeOverridePreview = null;
+         $logs = [];
+         $success = null;
+         $csv = '';
+@@ -102,6 +106,42 @@
+                 }
+                 $logs = $this->migration->discardManualDraft($manualId);
+                 $success = true;
++            } elseif ($action === 'preview_type_override') {
++                $this->checkNonce();
++                $typeId = $this->postedInt('type_product_id');
++                $typeTarget = $this->posted('type_target');
++                if ($typeId <= 0) {
++                    throw new RuntimeException('Technical Type Override requires a valid Product ID.');
++                }
++                $typeOverridePreview = $this->migration->previewTechnicalTypeOverride(
++                    $typeId,
++                    $typeTarget
++                );
++                $logs = $this->typeOverridePreviewLogs($typeOverridePreview);
++                $success = $typeOverridePreview['status'] !== 'REVIEW';
++            } elseif ($action === 'apply_type_override') {
++                $this->checkNonce();
++                $typeId = $this->postedInt('type_product_id');
