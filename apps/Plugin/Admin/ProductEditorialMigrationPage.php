@@ -15,6 +15,8 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 final class ProductEditorialMigrationPage implements SubmenuPageInterface
 {
     private const PACK_VERSION = '2';
+    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';
+    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
 
     /** @param Closure(string, mixed...): mixed $call */
     public function __construct(
@@ -426,7 +428,13 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     $exception
                 );
             }
-            $prepared[] = ['id' => $id, 'short' => $enShort, 'long' => $enLong, 'meta' => $enMeta];
+            $prepared[] = [
+        'id' => $id,
+        'short' => $enShort,
+        'long' => $enLong,
+        'meta' => $enMeta,
+        'targetFingerprint' => trim((string) ($row['Target RU Fingerprint'] ?? '')),
+    ];
         }
 
         $logs = [
@@ -436,16 +444,23 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             'TARGET GENERATED V28 RU = VERIFIED',
         ];
         foreach ($prepared as $item) {
-            $id = $item['id'];
-            ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description',
-                (string) ($this->call)('wp_kses_post', $item['short']));
-            ($this->call)('update_post_meta', $id, '_wp_shop_en_long_description',
-                (string) ($this->call)('wp_kses_post', $item['long']));
-            ($this->call)('update_post_meta', $id, '_wp_shop_en_meta_description',
-                (string) ($this->call)('sanitize_textarea_field', $item['meta']));
-            $post = $this->previewForPack($id);
-            $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
-        }
+        $id = $item['id'];
+        $short = (string) ($this->call)('wp_kses_post', $item['short']);
+        $long = (string) ($this->call)('wp_kses_post', $item['long']);
+        $meta = (string) ($this->call)('sanitize_textarea_field', $item['meta']);
+        ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description', $short);
+        ($this->call)('update_post_meta', $id, '_wp_shop_en_long_description', $long);
+        ($this->call)('update_post_meta', $id, '_wp_shop_en_meta_description', $meta);
+        ($this->call)('update_post_meta', $id, self::EN_TARGET_RU_FINGERPRINT_META, $item['targetFingerprint']);
+        ($this->call)(
+            'update_post_meta',
+            $id,
+            self::EN_CONTENT_FINGERPRINT_META,
+            $this->englishFingerprint($short, $long, $meta)
+        );
+        $post = $this->previewForPack($id);
+        $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
+    }
         $logs[] = 'TRANSLATEPRESS SYNC = NOT RUN';
         $logs[] = 'NEXT = REVIEW PREVIEW, THEN APPLY SELECTED';
         return $logs;
@@ -468,6 +483,11 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
     }
 
     /** @param array<string, mixed> $preview */
+    private function englishFingerprint(string $short, string $long, string $meta): string
+    {
+        return hash('sha256', $short . "\0" . $long . "\0" . $meta);
+    }
+
     private function packEligible(array $preview): bool
     {
         return $preview['productType'] !== 'unknown'

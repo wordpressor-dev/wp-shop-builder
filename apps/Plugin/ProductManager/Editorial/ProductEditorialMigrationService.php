@@ -18,6 +18,8 @@ final class ProductEditorialMigrationService
     private const BACKUP_META = '_wp_shop_editorial_backup_v28';
     private const STANDARD_META = '_wp_shop_editorial_standard';
     private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';
+    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';
+    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
 
     public function __construct(
         private readonly Closure $call,
@@ -135,6 +137,36 @@ final class ProductEditorialMigrationService
             $generated = $this->preserveRichLegacyRu($legacy, $generated);
         }
 
+        $stalePreparedEnglish = false;
+    $preparedTargetFingerprint = $this->meta($productId, self::EN_TARGET_RU_FINGERPRINT_META);
+    $preparedEnglishFingerprint = $this->meta($productId, self::EN_CONTENT_FINGERPRINT_META);
+    $preparedEnglishIsCurrent = $preparedTargetFingerprint !== ''
+        && $preparedEnglishFingerprint !== ''
+        && hash_equals($preparedEnglishFingerprint, $this->englishFingerprint($current));
+
+    if (
+        $preparedEnglishIsCurrent
+        && ! hash_equals($preparedTargetFingerprint, $this->ruFingerprint($generated))
+    ) {
+        $stalePreparedEnglish = true;
+        if (is_array($legacy)) {
+            $legacyWithoutEnglish = $legacy;
+            foreach (['enShort', 'enLong', 'enMeta'] as $field) {
+                $legacyWithoutEnglish[$field] = '';
+            }
+            $generated = $this->builder->build(
+                $baseTitle,
+                $developer,
+                $productType,
+                $signals,
+                $sourceUpdateDate,
+                $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
+            );
+            $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated);
+            $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated);
+        }
+    }
+
         $translationIssue = $this->translationIssue($generated);
         $translationRequired = (is_array($legacy)
             && $this->requiresEnglishTranslation($legacy))
@@ -244,6 +276,22 @@ final class ProductEditorialMigrationService
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
      * @return list<string>
      */
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     */
+    private function ruFingerprint(array $content): string
+    {
+        return hash('sha256', $content['ruShort'] . "\0" . $content['ruLong'] . "\0" . $content['ruMeta']);
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     */
+    private function englishFingerprint(array $content): string
+    {
+        return hash('sha256', $content['enShort'] . "\0" . $content['enLong'] . "\0" . $content['enMeta']);
+    }
+
     private function syncTranslatePress(int $productId, array $content): array
     {
         if ($this->translate === null) {
@@ -299,6 +347,8 @@ final class ProductEditorialMigrationService
         ]);
         ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
         ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
+        ($this->call)('delete_post_meta', $productId, self::EN_TARGET_RU_FINGERPRINT_META);
+        ($this->call)('delete_post_meta', $productId, self::EN_CONTENT_FINGERPRINT_META);
 
         return [
             'EDITORIAL RESTORE = READY',
