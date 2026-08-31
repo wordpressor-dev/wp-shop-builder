@@ -43,6 +43,7 @@ final class ProductEditorialEnTargetProvenanceTest extends TestCase
         $preview = $service->preview(2956);
         self::assertSame('STOP', $preview['status']);
         self::assertSame('REVIEW', $preview['enStatus']);
+        self::assertNotSame($enLong, $preview['generated']['enLong']);
         self::assertStringContainsString(
             'WP Reset PRO подходит для разработчиков и тестировщиков.',
             $preview['generated']['ruLong']
