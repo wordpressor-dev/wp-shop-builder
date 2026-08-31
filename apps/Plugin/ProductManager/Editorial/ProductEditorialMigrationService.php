@@ -20,6 +20,7 @@ final class ProductEditorialMigrationService
     private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';
     private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';
     private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
+    private const MANUAL_DRAFT_META = '_wp_shop_editorial_manual_draft_v1';
 
     public function __construct(
         private readonly Closure $call,
@@ -94,6 +95,29 @@ final class ProductEditorialMigrationService
         }
 
         $backup = ($this->call)('get_post_meta', $productId, self::BACKUP_META, true);
+        if (
+            $this->meta($productId, self::STANDARD_META) === 'v28-manual'
+            && $this->manualContentIssue($current) === ''
+        ) {
+            return [
+                'productId' => $productId,
+                'title' => $title,
+                'baseTitle' => $baseTitle,
+                'status' => 'CURRENT',
+                'productType' => $productType,
+                'developer' => $developer,
+                'sourceUpdateDate' => $sourceUpdateDate,
+                'ruStatus' => 'CURRENT',
+                'enStatus' => 'CURRENT',
+                'metaStatus' => 'CURRENT',
+                'backupAvailable' => is_array($backup) && $backup !== [],
+                'officialStatus' => 'MANUAL EDITORIAL',
+                'officialFacts' => 0,
+                'current' => $current,
+                'generated' => $current,
+            ];
+        }
+
         $signals = $this->signals($productId, $baseTitle);
         $official = $this->officialFacts($productId);
         $signals = str_starts_with($official['status'], 'READY')
@@ -138,34 +162,34 @@ final class ProductEditorialMigrationService
         }
 
         $stalePreparedEnglish = false;
-    $preparedTargetFingerprint = $this->meta($productId, self::EN_TARGET_RU_FINGERPRINT_META);
-    $preparedEnglishFingerprint = $this->meta($productId, self::EN_CONTENT_FINGERPRINT_META);
-    $preparedEnglishIsCurrent = $preparedTargetFingerprint !== ''
-        && $preparedEnglishFingerprint !== ''
-        && hash_equals($preparedEnglishFingerprint, $this->englishFingerprint($current));
+        $preparedTargetFingerprint = $this->meta($productId, self::EN_TARGET_RU_FINGERPRINT_META);
+        $preparedEnglishFingerprint = $this->meta($productId, self::EN_CONTENT_FINGERPRINT_META);
+        $preparedEnglishIsCurrent = $preparedTargetFingerprint !== ''
+            && $preparedEnglishFingerprint !== ''
+            && hash_equals($preparedEnglishFingerprint, $this->englishFingerprint($current));
 
-    if (
-        $preparedEnglishIsCurrent
-        && ! hash_equals($preparedTargetFingerprint, $this->ruFingerprint($generated))
-    ) {
-        $stalePreparedEnglish = true;
-        if (is_array($legacy)) {
-            $legacyWithoutEnglish = $legacy;
-            foreach (['enShort', 'enLong', 'enMeta'] as $field) {
-                $legacyWithoutEnglish[$field] = '';
+        if (
+            $preparedEnglishIsCurrent
+            && ! hash_equals($preparedTargetFingerprint, $this->ruFingerprint($generated))
+        ) {
+            $stalePreparedEnglish = true;
+            if (is_array($legacy)) {
+                $legacyWithoutEnglish = $legacy;
+                foreach (['enShort', 'enLong', 'enMeta'] as $field) {
+                    $legacyWithoutEnglish[$field] = '';
+                }
+                $generated = $this->builder->build(
+                    $baseTitle,
+                    $developer,
+                    $productType,
+                    $signals,
+                    $sourceUpdateDate,
+                    $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
+                );
+                $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
+                $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
             }
-            $generated = $this->builder->build(
-                $baseTitle,
-                $developer,
-                $productType,
-                $signals,
-                $sourceUpdateDate,
-                $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
-            );
-            $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
-            $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
         }
-    }
 
         $translationIssue = $this->translationIssue($generated);
         $translationRequired = (is_array($legacy)
@@ -273,6 +297,179 @@ final class ProductEditorialMigrationService
     }
 
     /**
+     * @param array<string,string> $content
+     * @return list<string>
+     */
+    public function saveManualDraft(int $productId, array $content): array
+    {
+        $preview = $this->preview($productId);
+        if ($preview['productType'] === 'unknown') {
+            throw new RuntimeException(
+                'Manual editorial draft stopped: technical product type is unknown for product '
+                . $productId
+            );
+        }
+
+        $safe = $this->sanitizeManualContent($content);
+        $issue = $this->manualContentIssue($safe);
+        if ($issue !== '') {
+            throw new RuntimeException('Manual editorial draft stopped: ' . $issue);
+        }
+
+        ($this->call)('update_post_meta', $productId, self::MANUAL_DRAFT_META, [
+            'version' => '1',
+            'saved_at' => $this->now(),
+            'product_type' => $preview['productType'],
+            'source_fingerprint' => $this->contentFingerprint($preview['current']),
+            'content' => $safe,
+        ]);
+
+        return [
+            'MANUAL EDITORIAL DRAFT = SAVED',
+            'PRODUCT ID = ' . $productId,
+            'TECHNICAL TYPE = ' . $preview['productType'],
+            'RU / EN STRUCTURE = READY',
+            'PRODUCT CONTENT WRITES = NO',
+            'NEXT = REVIEW MANUAL PREVIEW, THEN APPLY MANUAL',
+        ];
+    }
+
+    /**
+     * @return array{
+     * productId:int,title:string,productType:string,developer:string,
+     * status:string,issue:string,hasDraft:bool,sourceCurrent:bool,backupAvailable:bool,
+     * current:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
+     * generated:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
+     * draft:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
+     * }
+     */
+    public function manualEditor(int $productId): array
+    {
+        $preview = $this->preview($productId);
+        $stored = ($this->call)('get_post_meta', $productId, self::MANUAL_DRAFT_META, true);
+        $hasDraft = is_array($stored)
+            && ($stored['version'] ?? '') === '1'
+            && is_array($stored['content'] ?? null);
+        $draft = $hasDraft
+            ? $this->sanitizeManualContent($stored['content'])
+            : $preview['current'];
+        $sourceFingerprint = $hasDraft
+            ? trim((string) ($stored['source_fingerprint'] ?? ''))
+            : '';
+        $sourceCurrent = ! $hasDraft
+            || ($sourceFingerprint !== ''
+                && hash_equals($sourceFingerprint, $this->contentFingerprint($preview['current'])));
+
+        $issue = '';
+        if ($preview['productType'] === 'unknown') {
+            $issue = 'Technical product type is unknown.';
+        } elseif ($hasDraft && (string) ($stored['product_type'] ?? '') !== $preview['productType']) {
+            $issue = 'Technical product type changed after the manual draft was saved.';
+        } elseif ($hasDraft && ! $sourceCurrent) {
+            $issue = 'Current product content changed after the manual draft was saved. Reload and save the draft again.';
+        } elseif ($hasDraft) {
+            $issue = $this->manualContentIssue($draft);
+        }
+
+        return [
+            'productId' => $productId,
+            'title' => (string) $preview['title'],
+            'productType' => (string) $preview['productType'],
+            'developer' => (string) $preview['developer'],
+            'status' => ! $hasDraft ? 'EMPTY' : ($issue === '' ? 'READY' : 'REVIEW'),
+            'issue' => $issue,
+            'hasDraft' => $hasDraft,
+            'sourceCurrent' => $sourceCurrent,
+            'backupAvailable' => ! empty($preview['backupAvailable']),
+            'current' => $preview['current'],
+            'generated' => $preview['generated'],
+            'draft' => $draft,
+        ];
+    }
+
+    /** @return list<string> */
+    public function applyManual(int $productId): array
+    {
+        $editor = $this->manualEditor($productId);
+        if ($editor['status'] !== 'READY') {
+            $reason = $editor['issue'] !== '' ? $editor['issue'] : 'manual draft is not ready';
+            throw new RuntimeException(
+                'Manual editorial apply stopped before write for product '
+                . $productId . ': ' . $reason
+            );
+        }
+
+        $content = $editor['draft'];
+        $this->assertTranslationCompatible($productId, $content);
+
+        $backup = ($this->call)('get_post_meta', $productId, self::BACKUP_META, true);
+        $backupLog = 'EDITORIAL BACKUP = REUSED';
+        if (! is_array($backup) || $backup === []) {
+            $backup = array_merge(['created_at' => $this->now()], $editor['current']);
+            ($this->call)('update_post_meta', $productId, self::BACKUP_META, $backup);
+            $backupLog = 'EDITORIAL BACKUP = CREATED';
+        }
+
+        $this->writeContent($productId, $content);
+        ($this->call)('update_post_meta', $productId, self::STANDARD_META, 'v28-manual');
+        ($this->call)('update_post_meta', $productId, self::MIGRATED_AT_META, $this->now());
+        ($this->call)(
+            'update_post_meta',
+            $productId,
+            self::EN_TARGET_RU_FINGERPRINT_META,
+            $this->ruFingerprint($content)
+        );
+        ($this->call)(
+            'update_post_meta',
+            $productId,
+            self::EN_CONTENT_FINGERPRINT_META,
+            $this->englishFingerprint($content)
+        );
+
+        $logs = [
+            'MANUAL EDITORIAL = READY',
+            'PRODUCT ID = ' . $productId,
+            $backupLog,
+            'TECHNICAL TYPE = ' . $editor['productType'],
+            'RU SHORT / LONG = UPDATED',
+            'SURERANK META DESCRIPTION = UPDATED',
+            'EN SHORT / LONG / META = UPDATED',
+            'EN TARGET PROVENANCE = UPDATED',
+        ];
+        $syncLogs = $this->syncTranslatePress($productId, $content);
+        $logs = array_merge($logs, $syncLogs);
+
+        if (in_array('TRANSLATEPRESS SYNC = READY', $syncLogs, true)) {
+            ($this->call)('delete_post_meta', $productId, self::MANUAL_DRAFT_META);
+            $logs[] = 'MANUAL DRAFT = CLEARED';
+        } else {
+            ($this->call)('update_post_meta', $productId, self::MANUAL_DRAFT_META, [
+                'version' => '1',
+                'saved_at' => $this->now(),
+                'product_type' => $editor['productType'],
+                'source_fingerprint' => $this->contentFingerprint($content),
+                'content' => $content,
+            ]);
+            $logs[] = 'MANUAL DRAFT = PRESERVED FOR TRANSLATEPRESS RETRY';
+        }
+        $logs[] = 'EDITORIAL STANDARD = v28-manual';
+
+        return $logs;
+    }
+
+    /** @return list<string> */
+    public function discardManualDraft(int $productId): array
+    {
+        ($this->call)('delete_post_meta', $productId, self::MANUAL_DRAFT_META);
+
+        return [
+            'MANUAL EDITORIAL DRAFT = DISCARDED',
+            'PRODUCT ID = ' . $productId,
+            'PRODUCT CONTENT WRITES = NO',
+        ];
+    }
+
+    /**
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
      */
     private function ruFingerprint(array $content): string
@@ -286,6 +483,71 @@ final class ProductEditorialMigrationService
     private function englishFingerprint(array $content): string
     {
         return hash('sha256', $content['enShort'] . "\0" . $content['enLong'] . "\0" . $content['enMeta']);
+    }
+
+    /**
+     * @param array<string,mixed> $content
+     * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
+     */
+    private function sanitizeManualContent(array $content): array
+    {
+        return [
+            'ruShort' => (string) ($this->call)('wp_kses_post', (string) ($content['ruShort'] ?? '')),
+            'ruLong' => (string) ($this->call)('wp_kses_post', (string) ($content['ruLong'] ?? '')),
+            'ruMeta' => (string) ($this->call)(
+                'sanitize_textarea_field',
+                (string) ($content['ruMeta'] ?? '')
+            ),
+            'enShort' => (string) ($this->call)('wp_kses_post', (string) ($content['enShort'] ?? '')),
+            'enLong' => (string) ($this->call)('wp_kses_post', (string) ($content['enLong'] ?? '')),
+            'enMeta' => (string) ($this->call)(
+                'sanitize_textarea_field',
+                (string) ($content['enMeta'] ?? '')
+            ),
+        ];
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     */
+    private function manualContentIssue(array $content): string
+    {
+        foreach ([
+            'ruShort' => 'RU Short',
+            'ruLong' => 'RU Long',
+            'ruMeta' => 'RU Meta',
+            'enShort' => 'EN Short',
+            'enLong' => 'EN Long',
+            'enMeta' => 'EN Meta',
+        ] as $field => $label) {
+            if (trim($content[$field]) === '') {
+                return $label . ' is empty.';
+            }
+        }
+
+        foreach (['ruShort', 'ruLong', 'enShort', 'enLong'] as $field) {
+            if (preg_match('/<(p|h[1-6])\b[^>]*>\s*<\1\b/i', $content[$field]) === 1) {
+                return $field . ' contains nested duplicate block tags.';
+            }
+        }
+
+        $issue = $this->translationIssue($content);
+        return $issue === '' ? '' : 'RU/EN structure mismatch: ' . $issue;
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     */
+    private function contentFingerprint(array $content): string
+    {
+        return hash('sha256', implode("\0", [
+            $content['ruShort'],
+            $content['ruLong'],
+            $content['ruMeta'],
+            $content['enShort'],
+            $content['enLong'],
+            $content['enMeta'],
+        ]));
     }
 
     /**
@@ -349,6 +611,7 @@ final class ProductEditorialMigrationService
         ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
         ($this->call)('delete_post_meta', $productId, self::EN_TARGET_RU_FINGERPRINT_META);
         ($this->call)('delete_post_meta', $productId, self::EN_CONTENT_FINGERPRINT_META);
+        ($this->call)('delete_post_meta', $productId, self::MANUAL_DRAFT_META);
 
         return [
             'EDITORIAL RESTORE = READY',
