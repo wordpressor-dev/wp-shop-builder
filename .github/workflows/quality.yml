@@ -7,44 +7,34 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  qa:
+  quality:
     name: PHP ${{ matrix.php }}
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         php: ['8.3', '8.4', '8.5']
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           coverage: none
           tools: composer:v2
-
+          ini-file: production
       - name: Validate Composer files
         run: composer validate --strict
-
       - name: Cache Composer packages
         uses: actions/cache@v4
         with:
           path: ~/.cache/composer/files
-          key: ${{ runner.os }}-php-${{ matrix.php }}-composer-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-${{ matrix.php }}-composer-${{ hashFiles('composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-php-${{ matrix.php }}-composer-
-
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
-
       - name: Run quality checks
         run: composer qa
