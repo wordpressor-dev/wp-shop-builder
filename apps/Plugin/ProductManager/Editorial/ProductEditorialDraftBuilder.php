@@ -1010,20 +1010,100 @@ final class ProductEditorialDraftBuilder
 
     private function audienceFromRuSummary(string $summary): string
     {
-        if (preg_match('/\bдля\s+([^.!?]+)/ui', $summary, $matches) !== 1) {
-            return '';
+        $explicit = [
+            '/\b(?:идеал(?:ен|ьна|ьно|ьны)|подходит|подойд[её]т|предназначен(?:а|о|ы)?|ориентирован(?:а|о|ы)?)\s+для\s+([^.!?]+)/ui',
+        ];
+
+        foreach ($explicit as $pattern) {
+            if (preg_match($pattern, $summary, $matches) !== 1) {
+                continue;
+            }
+
+            $candidate = trim((string) ($matches[1] ?? ''));
+            if ($this->isRuAudienceCandidate($candidate)) {
+                return $candidate;
+            }
         }
 
-        return trim((string) $matches[1]);
+        if (preg_match_all('/\bдля\s+([^.!?]+)/ui', $summary, $matches) !== false) {
+            foreach ((array) ($matches[1] ?? []) as $match) {
+                $candidate = trim((string) $match);
+                if ($this->isRuAudienceCandidate($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
     }
 
     private function audienceFromEnSummary(string $summary): string
     {
-        if (preg_match('/\bfor\s+([^.!?]+)/ui', $summary, $matches) !== 1) {
-            return '';
+        $explicit = [
+            '/\b(?:ideal|suitable|designed|built|intended|best\s+suited)\s+for\s+([^.!?]+)/ui',
+        ];
+
+        foreach ($explicit as $pattern) {
+            if (preg_match($pattern, $summary, $matches) !== 1) {
+                continue;
+            }
+
+            $candidate = trim((string) ($matches[1] ?? ''));
+            if ($this->isEnAudienceCandidate($candidate)) {
+                return $candidate;
+            }
         }
 
-        return trim((string) $matches[1]);
+        if (preg_match_all('/\bfor\s+([^.!?]+)/ui', $summary, $matches) !== false) {
+            foreach ((array) ($matches[1] ?? []) as $match) {
+                $candidate = trim((string) $match);
+                if ($this->isEnAudienceCandidate($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function isRuAudienceCandidate(string $candidate): bool
+    {
+        if ($candidate === '') {
+            return false;
+        }
+
+        if ($this->matches(
+            $candidate,
+            '/^(?:wordpress|woocommerce|elementor|wpml|rtl)\b'
+                . '|^(?:создани|оптимизац|продвижени|сброс|настройк|управлен|защит|перевод|интеграц|работ|улучшени|добавлен|отображен|построен|восстановлен|сканирован|автоматизац)[а-яё]*\b/ui'
+        )) {
+            return false;
+        }
+
+        return $this->matches(
+            $candidate,
+            '/(?:пользовател|разработчик|тестировщик|дизайнер|маркетолог|агентств|компан|команд|бизнес|бренд|магазин|салон|спа|spa|ресторан|кафе|отел|гостиниц|школ|университет|преподавател|тренер|студи|фриланс|блогер|фотограф|клиент)/ui'
+        );
+    }
+
+    private function isEnAudienceCandidate(string $candidate): bool
+    {
+        if ($candidate === '') {
+            return false;
+        }
+
+        if ($this->matches(
+            $candidate,
+            '/^(?:wordpress|woocommerce|elementor|wpml|rtl)\b'
+                . '|^(?:creating|building|optimizing|optimization|promoting|promotion|resetting|reset|configuring|configuration|managing|management|protecting|protection|translating|translation|integrating|integration|improving|adding|displaying|restoring|scanning|automation)\b/ui'
+        )) {
+            return false;
+        }
+
+        return $this->matches(
+            $candidate,
+            '/(?:users?|developers?|testers?|designers?|marketers?|agencies|companies|teams|business(?:es)?|brands?|stores?|shops?|salons?|spas?|restaurants?|cafes?|hotels?|schools?|universities|instructors?|coaches|studios?|freelancers?|bloggers?|photographers?|clients?)/ui'
+        );
     }
 
     private function productName(string $title): string
