@@ -79,6 +79,14 @@ final class ProductEditorialAudienceExtractionTest extends TestCase
                 'is suitable for users who need a WordPress plugin',
                 $content['enLong']
             );
+            self::assertStringNotContainsString(
+                'подходит для WordPress',
+                $content['ruLong']
+            );
+            self::assertStringNotContainsString(
+                'is suitable for WordPress',
+                $content['enLong']
+            );
         }
     }
 
