@@ -1,0 +1,61 @@
+name: One-shot final editorial safety v5
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-final-editorial-safety-v5.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+      - name: Patch builder
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          p = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php')
+          s = p.read_text()
+
+          old = "        $topics = $this->topics(array_merge(\n            $this->titleTopics($title),\n            $sourceTags\n        ));"
+          new = "        $topicCandidates = array_merge(\n            $this->titleTopics($title),\n            $sourceTags\n        );\n        $topics = $this->topics(\n            $this->filterEditionTopics($title, $topicCandidates)\n        );"
+          if old not in s:
+              raise SystemExit('topics anchor missing')
+          s = s.replace(old, new, 1)
+
+          marker = "    /** @return list<string> */\n    private function titleTopics(string $title): array\n"
+          method = "    /**\n     * @param list<string> $topics\n     * @return list<string>\n     */\n    private function filterEditionTopics(string $title, array $topics): array\n    {\n        $rules = [\n            'business' => '/\\bbusiness\\s*[–—-]\\s*/ui',\n            'premium' => '/\\bpremium\\s*[–—-]\\s*/ui',\n            'pro' => '/\\bpro\\s*[–—-]\\s*/ui',\n        ];\n        $editionTopics = [];\n        foreach ($rules as $topic => $pattern) {\n            if ($this->matches($title, $pattern)) {\n                $editionTopics[] = $topic;\n            }\n        }\n        if ($editionTopics === []) {\n            return $topics;\n        }\n        return array_values(array_filter(\n            $topics,\n            static fn (string $topic): bool => ! in_array(\n                strtolower(trim($topic)),\n                $editionTopics,\n                true\n            )\n        ));\n    }\n\n    /** @return list<string> */\n    private function titleTopics(string $title): array\n"
+          if marker not in s:
+              raise SystemExit('titleTopics marker missing')
+          s = s.replace(marker, method, 1)
+
+          old = "        if ($skipFirstSentence && count($sentences) > 1) {\n            array_shift($sentences);\n        }"
+          new = "        if ($skipFirstSentence && $sentences !== []) {\n            array_shift($sentences);\n        }"
+          if old not in s:
+              raise SystemExit('skip anchor missing')
+          s = s.replace(old, new, 1)
+
+          old = "            $parts = preg_split('/\\s*[,;]\\s*/u', $sentence) ?: [];\n\n            if (count($parts) < 2) {\n                continue;\n            }"
+          new = "            $explicitList = $this->matches(\n                $sentence,\n                '/^(?:включает|включены|добавляет|поддерживает|предлагает|содержит|'\n                    . 'includes|adds|supports|offers|contains|features)\\b/ui'\n            );\n            $separator = $explicitList ? '/\\s*[,;]\\s*/u' : '/\\s*;\\s*/u';\n            $parts = preg_split($separator, $sentence) ?: [];\n\n            if (count($parts) < 2) {\n                continue;\n            }"
+          if old not in s:
+              raise SystemExit('split anchor missing')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+          php -l apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/Plugin/ProductManager/Editorial/ProductEditorialDraftBuilder.php
+          git commit -m "fix: harden editorial topic and feature extraction"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
