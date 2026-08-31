@@ -1,0 +1,100 @@
++                $typeTarget = $this->posted('type_target');
++                if ($typeId <= 0) {
++                    throw new RuntimeException('Technical Type Override requires a valid Product ID.');
++                }
++                $logs = $this->migration->applyTechnicalTypeOverride(
++                    $typeId,
++                    $typeTarget,
++                    $this->posted('type_source_fingerprint')
++                );
++                $previewId = $typeId;
++                $success = true;
++            } elseif ($action === 'restore_type_override') {
++                $this->checkNonce();
++                $typeId = $this->postedInt('type_product_id');
++                if ($typeId <= 0) {
++                    throw new RuntimeException('Technical Type Override requires a valid Product ID.');
++                }
++                $logs = $this->migration->restoreTechnicalTypeOverride($typeId);
++                $previewId = $typeId;
++                $success = true;
+             } elseif ($action === 'apply_selected') {
+                 $this->checkNonce();
+                 $selected = $this->selectedIds();
+@@ -172,7 +212,7 @@
+         echo '<p>EN Translation Pack v2 переводит целевой Generated v28 RU, а не старый Current RU.</p>';
+         $this->renderLogs($logs, $success);
+         echo '<div class="notice notice-warning" style="max-width:1500px;padding:10px 14px"><p>';
+-        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. Manual RU+EN хранится как staging draft и не меняет товар до отдельного Apply Manual.</p></div>';
++        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. Technical Type Override меняет только _wp_shop_product_type после отдельного Preview; каталог/категории не меняются. Manual RU+EN хранится как staging draft и не меняет товар до отдельного Apply Manual.</p></div>';
+         $this->renderBrowse($search, $perPage);
+         $this->renderTable($rows, $search, $page, $perPage, $hasNext);
+         if ($csv !== '') {
+@@ -182,6 +222,14 @@
+             $this->renderAuditDownload($auditCsv, $page);
+         }
+         $this->renderImport($search, $page, $perPage);
++        $this->renderTechnicalTypeOverride(
++            $typeId,
++            $typeTarget,
++            $typeOverridePreview,
++            $search,
++            $page,
++            $perPage
++        );
+         $this->renderManualEditor($manualId, $search, $page, $perPage);
+         if ($previewId > 0) {
+             try {
+@@ -238,6 +286,12 @@
+                 'editorial_page' => (string) $page,
+                 'editorial_per_page' => (string) $perPage,
+             ]);
++            $typeUrl = $this->pageUrl([
++                'type_id' => (string) $id,
++                'editorial_search' => $search,
++                'editorial_page' => (string) $page,
++                'editorial_per_page' => (string) $perPage,
++            ]);
+             echo '<tr><td><input type="checkbox" name="editorial_selected[]" value="' . $id . '"'
+                 . ($selectable ? '' : ' disabled') . '></td>';
+             echo '<td>' . $id . '</td><td><strong>' . $this->escape((string) $row['title']) . '</strong></td>';
+@@ -248,6 +302,7 @@
+             echo '<td><strong>' . $this->escape((string) $row['status']) . '</strong></td>';
+             echo '<td>' . (! empty($row['backupAvailable']) ? 'YES' : '—') . '</td><td>';
+             echo '<a class="button button-small" href="' . $this->escapeUrl($previewUrl) . '">Preview</a> ';
++            echo '<a class="button button-small" href="' . $this->escapeUrl($typeUrl) . '">Type Override</a> ';
+             echo '<a class="button button-small" href="' . $this->escapeUrl($manualUrl) . '">Manual RU+EN</a> ';
+             echo '<button class="button button-small button-primary" name="editorial_apply_id" value="' . $id
+                 . '">Apply</button> ';
+@@ -407,9 +462,158 @@
+         echo '<button class="button button-primary">Validate + Import EN Pack v2</button></form></div>';
+     }
+ 
++    /**
++     * @param array<string,mixed>|null $overridePreview
++     */
++    private function renderTechnicalTypeOverride(
++        int $typeId,
++        string $typeTarget,
++        ?array $overridePreview,
++        string $search,
++        int $page,
++        int $perPage
++    ): void {
++        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>4. Technical Type Override</h2>';
++        echo '<p>Исправляет только технический тип товара: theme / plugin / template_kit. Категории WooCommerce, attr_category_value, контент, EN и TranslatePress не изменяются. Сначала обязательный Preview, затем отдельное Apply.</p>';
++        echo '<form method="get" style="margin-bottom:14px">';
++        echo '<input type="hidden" name="page" value="' . $this->escapeAttr($this->slug()) . '">';
++        echo '<input type="hidden" name="editorial_search" value="' . $this->escapeAttr($search) . '">';
++        echo '<input type="hidden" name="editorial_page" value="' . $page . '">';
++        echo '<input type="hidden" name="editorial_per_page" value="' . $perPage . '">';
++        echo '<label><strong>Product ID</strong> <input type="number" min="1" name="type_id" value="'
++            . ($typeId > 0 ? $typeId : '') . '" required></label> ';
++        echo '<button class="button">Load Type Editor</button></form>';
++
++        if ($typeId <= 0) {
++            echo '</div>';
++            return;
++        }
++
++        try {
