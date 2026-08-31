@@ -1008,7 +1008,9 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             $explicitList = $this->matches(
                 $sentence,
                 '/^(?:включает|включены|созда[её]т|добавляет|поддерживает|предлагает|содержит|'
-                    . 'includes|creates|generates|adds|supports|offers|contains|features)\b/ui'
+                    . 'интеграция\s+с|совместимость\s+с|поддержка(?:\s+для)?|'
+                    . 'includes|creates|generates|adds|supports|offers|contains|features|'
+                    . 'integration\s+with|compatibility\s+with|support\s+for)\b/ui'
             );
             $denseCommaList = substr_count($sentence, ',') >= 3
                 && ! $this->matches(
