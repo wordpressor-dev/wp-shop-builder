@@ -1,0 +1,100 @@
++        $logs = [
++            'TECHNICAL TYPE OVERRIDE PREVIEW = ' . (string) $preview['status'],
++            'PRODUCT ID = ' . (int) $preview['productId'],
++            'FROM = ' . (string) $preview['fromType'],
++            'TO = ' . (string) $preview['toType'],
++            'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
++            'PRODUCT CONTENT WRITES = NO',
++            'TRANSLATEPRESS SYNC = NOT RUN',
++        ];
++        if ((string) $preview['issue'] !== '') {
++            $logs[] = 'REVIEW = ' . (string) $preview['issue'];
++            $logs[] = 'NEXT = FIX REVIEW CONDITION';
++        } elseif ($preview['status'] === 'CURRENT') {
++            $logs[] = 'NEXT = NO CHANGE REQUIRED';
++        } else {
++            $logs[] = 'NEXT = APPLY TECHNICAL TYPE';
++        }
++
++        return $logs;
++    }
++
+     private function renderManualEditor(int $manualId, string $search, int $page, int $perPage): void
+     {
+-        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>4. Manual RU+EN Editorial</h2>';
++        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>5. Manual RU+EN Editorial</h2>';
+         echo '<p>Для исключений из генератора: RU Short/Long/Meta + EN Short/Long/Meta сохраняются сначала только как staging draft. Товар меняется исключительно отдельной кнопкой Apply Manual после проверки структуры.</p>';
+         echo '<form method="get" style="margin-bottom:14px">';
+         echo '<input type="hidden" name="page" value="' . $this->escapeAttr($this->slug()) . '">';
+--- /dev/null
++++ b/tests/App/Plugin/ProductManager/Editorial/ProductTechnicalTypeOverrideTest.php
+@@ -0,0 +1,192 @@
++<?php
++
++declare(strict_types=1);
++
++namespace WPShop\Tests\App\Plugin\ProductManager\Editorial;
++
++use PHPUnit\Framework\TestCase;
++use RuntimeException;
++use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
++
++final class ProductTechnicalTypeOverrideTest extends TestCase
++{
++    public function testTechnicalTypeOverridePreviewsAppliesAndRestoresWithoutTouchingCatalogOrContent(): void
++    {
++        $post = $this->post();
++        $meta = $this->meta();
++        $originalPost = $post;
++        $originalCategory = $meta['attr_category_value'];
++
++        $service = new ProductEditorialMigrationService(
++            $this->caller($post, $meta)
++        );
++
++        $editor = $service->technicalTypeEditor(3483);
++
++        self::assertSame('theme', $editor['resolvedType']);
++        self::assertSame('', $editor['storedType']);
++        self::assertStringContainsString('Темы', $editor['catalogCategory']);
++        self::assertFalse($editor['backupAvailable']);
++        self::assertFalse($editor['hasManualDraft']);
++
++        $preview = $service->previewTechnicalTypeOverride(3483, 'plugin');
++
++        self::assertSame('READY', $preview['status']);
++        self::assertSame('theme', $preview['fromType']);
++        self::assertSame('plugin', $preview['toType']);
++        self::assertArrayNotHasKey('_wp_shop_product_type', $meta);
++        self::assertSame($originalPost, $post);
++        self::assertSame($originalCategory, $meta['attr_category_value']);
++
++        $logs = $service->applyTechnicalTypeOverride(
++            3483,
++            'plugin',
++            $preview['sourceFingerprint']
++        );
++
++        self::assertContains('TECHNICAL TYPE OVERRIDE = READY', $logs);
++        self::assertContains('TECHNICAL TYPE BACKUP = CREATED', $logs);
++        self::assertContains('CATALOG CATEGORY = PRESERVED / NOT WRITTEN', $logs);
++        self::assertContains('PRODUCT CONTENT WRITES = NO', $logs);
++        self::assertSame('plugin', $meta['_wp_shop_product_type']);
++        self::assertArrayHasKey('_wp_shop_product_type_manual_backup_v1', $meta);
++        self::assertSame(
++            '',
++            $meta['_wp_shop_product_type_manual_backup_v1']['stored_type']
++        );
++        self::assertSame($originalPost, $post);
++        self::assertSame($originalCategory, $meta['attr_category_value']);
++
++        $after = $service->technicalTypeEditor(3483);
++        self::assertSame('plugin', $after['resolvedType']);
++        self::assertSame('plugin', $after['storedType']);
++        self::assertTrue($after['backupAvailable']);
++
++        $restoreLogs = $service->restoreTechnicalTypeOverride(3483);
++
++        self::assertContains('TECHNICAL TYPE RESTORE = READY', $restoreLogs);
++        self::assertArrayNotHasKey('_wp_shop_product_type', $meta);
++        self::assertSame('theme', $service->technicalTypeEditor(3483)['resolvedType']);
