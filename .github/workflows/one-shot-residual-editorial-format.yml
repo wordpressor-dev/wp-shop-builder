@@ -1,0 +1,38 @@
+name: One-shot residual editorial formatting
+
+on:
+  push:
+    branches:
+      - feature/product-manager-v28-catalog-editorial-migration
+    paths:
+      - .github/workflows/one-shot-residual-editorial-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/product-manager-v28-catalog-editorial-migration
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Format regression test
+        shell: bash
+        run: |
+          vendor/bin/phpcbf tests/App/Plugin/ProductManager/Editorial/ProductEditorialResidualSafetyTest.php || true
+          vendor/bin/phpcs tests/App/Plugin/ProductManager/Editorial/ProductEditorialResidualSafetyTest.php
+          php -l tests/App/Plugin/ProductManager/Editorial/ProductEditorialResidualSafetyTest.php
+          git rm .github/workflows/one-shot-residual-editorial-format.yml
+          git config user.name "wp-shop-builder-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add tests/App/Plugin/ProductManager/Editorial/ProductEditorialResidualSafetyTest.php
+          git commit -m "style: format residual editorial regression tests"
+          git push origin HEAD:feature/product-manager-v28-catalog-editorial-migration
