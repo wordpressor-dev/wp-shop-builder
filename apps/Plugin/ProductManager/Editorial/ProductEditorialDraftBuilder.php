@@ -473,11 +473,13 @@ final class ProductEditorialDraftBuilder
                     : 'WooCommerce and commerce workflows',
                 $language === 'ru'
                     ? 'Совместимость с WooCommerce позволяет использовать '
-                        . $product . ' в проектах, где сайт дополняется продажей '
-                        . 'курсов, цифровых материалов, услуг или других товаров.'
+                        . $product . ' в интернет-магазинах и других e-commerce '
+                        . 'проектах. Конкретные возможности интеграции зависят от '
+                        . 'функций, заявленных разработчиком для текущей версии.'
                     : 'WooCommerce compatibility makes ' . $product
-                        . ' suitable for projects that combine the main website '
-                        . 'with sales of courses, digital content, services or products.'
+                        . ' suitable for online stores and other e-commerce '
+                        . 'projects. The exact integration capabilities depend '
+                        . 'on the features provided by the current version.'
             );
         }
 
@@ -908,7 +910,11 @@ final class ProductEditorialDraftBuilder
             foreach ($parts as $part) {
                 $part = trim((string) $part, " \t\n\r\0\x0B.!?");
 
-                if ($part !== '' && $this->textLength($part) >= 3) {
+                if (
+                    $part !== ''
+                    && $this->textLength($part) >= 3
+                    && ! $this->isFeatureFragment($part)
+                ) {
                     $features[] = $part;
                 }
             }
@@ -926,10 +932,25 @@ final class ProductEditorialDraftBuilder
         );
     }
 
+    private function isFeatureFragment(string $part): bool
+    {
+        $part = trim($part);
+
+        return $this->matches(
+            $part,
+            '/^(?:котор(?:ый|ая|ое|ые)|что|включая|с\s+|где|при\s+этом|поэтому)\b'
+                . '|^(?:which|that|including|with|where|while|therefore|so\s+that)\b/ui'
+        ) || $this->matches(
+            $part,
+            '/(?:—|-)\s*это\s+.*\b(?:плагин|тема|шаблон)\b'
+                . '|\bis\s+(?:a|an)\s+.*\b(?:plugin|theme|template(?:\s+kit)?)\b/ui'
+        );
+    }
+
     /** @param list<string> $features */
     private function featureSection(string $heading, array $features): string
     {
-        if ($features === []) {
+        if (count($features) < 2) {
             return '';
         }
 
