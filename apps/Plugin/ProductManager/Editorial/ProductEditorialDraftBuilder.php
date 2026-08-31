@@ -1019,14 +1019,14 @@ final class ProductEditorialDraftBuilder
                 continue;
             }
 
-            $candidate = trim((string) ($matches[1] ?? ''));
+            $candidate = trim((string) $matches[1]);
             if ($this->isRuAudienceCandidate($candidate)) {
                 return $candidate;
             }
         }
 
         if (preg_match_all('/\bдля\s+([^.!?]+)/ui', $summary, $matches) !== false) {
-            foreach ((array) ($matches[1] ?? []) as $match) {
+            foreach ($matches[1] as $match) {
                 $candidate = trim((string) $match);
                 if ($this->isRuAudienceCandidate($candidate)) {
                     return $candidate;
@@ -1048,14 +1048,14 @@ final class ProductEditorialDraftBuilder
                 continue;
             }
 
-            $candidate = trim((string) ($matches[1] ?? ''));
+            $candidate = trim((string) $matches[1]);
             if ($this->isEnAudienceCandidate($candidate)) {
                 return $candidate;
             }
         }
 
         if (preg_match_all('/\bfor\s+([^.!?]+)/ui', $summary, $matches) !== false) {
-            foreach ((array) ($matches[1] ?? []) as $match) {
+            foreach ($matches[1] as $match) {
                 $candidate = trim((string) $match);
                 if ($this->isEnAudienceCandidate($candidate)) {
                     return $candidate;
