@@ -8,6 +8,7 @@ use Closure;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
@@ -52,6 +53,9 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         $perPage = $this->perPage((int) $this->request('editorial_per_page', '25'));
         $previewId = max(0, (int) $this->request('preview_id'));
         $manualId = max(0, (int) $this->request('manual_id'));
+        $typeId = max(0, (int) $this->request('type_id'));
+        $typeTarget = trim($this->request('type_target'));
+        $typeOverridePreview = null;
         $logs = [];
         $success = null;
         $csv = '';
@@ -101,6 +105,42 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     throw new RuntimeException('Manual editor requires a valid Product ID.');
                 }
                 $logs = $this->migration->discardManualDraft($manualId);
+                $success = true;
+            } elseif ($action === 'preview_type_override') {
+                $this->checkNonce();
+                $typeId = $this->postedInt('type_product_id');
+                $typeTarget = $this->posted('type_target');
+                if ($typeId <= 0) {
+                    throw new RuntimeException('Technical Type Override requires a valid Product ID.');
+                }
+                $typeOverridePreview = $this->migration->previewTechnicalTypeOverride(
+                    $typeId,
+                    $typeTarget
+                );
+                $logs = $this->typeOverridePreviewLogs($typeOverridePreview);
+                $success = $typeOverridePreview['status'] !== 'REVIEW';
+            } elseif ($action === 'apply_type_override') {
+                $this->checkNonce();
+                $typeId = $this->postedInt('type_product_id');
+                $typeTarget = $this->posted('type_target');
+                if ($typeId <= 0) {
+                    throw new RuntimeException('Technical Type Override requires a valid Product ID.');
+                }
+                $logs = $this->migration->applyTechnicalTypeOverride(
+                    $typeId,
+                    $typeTarget,
+                    $this->posted('type_source_fingerprint')
+                );
+                $previewId = $typeId;
+                $success = true;
+            } elseif ($action === 'restore_type_override') {
+                $this->checkNonce();
+                $typeId = $this->postedInt('type_product_id');
+                if ($typeId <= 0) {
+                    throw new RuntimeException('Technical Type Override requires a valid Product ID.');
+                }
+                $logs = $this->migration->restoreTechnicalTypeOverride($typeId);
+                $previewId = $typeId;
                 $success = true;
             } elseif ($action === 'apply_selected') {
                 $this->checkNonce();
@@ -172,7 +212,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '<p>EN Translation Pack v2 переводит целевой Generated v28 RU, а не старый Current RU.</p>';
         $this->renderLogs($logs, $success);
         echo '<div class="notice notice-warning" style="max-width:1500px;padding:10px 14px"><p>';
-        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. Manual RU+EN хранится как staging draft и не меняет товар до отдельного Apply Manual.</p></div>';
+        echo '<strong>SAFE MODE:</strong> ZIP, SKU, Download URL, изображения, категории, теги, атрибуты и Advanced Labels не изменяются. Import v2 проверяет Source RU и Target v28 fingerprints и пишет только EN Short/Long/Meta. Apply selected сначала проверяет всю пачку и ничего не пишет, если хотя бы один товар не готов. Technical Type Override меняет только _wp_shop_product_type после отдельного Preview; каталог/категории не меняются. Manual RU+EN хранится как staging draft и не меняет товар до отдельного Apply Manual.</p></div>';
         $this->renderBrowse($search, $perPage);
         $this->renderTable($rows, $search, $page, $perPage, $hasNext);
         if ($csv !== '') {
@@ -182,6 +222,14 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             $this->renderAuditDownload($auditCsv, $page);
         }
         $this->renderImport($search, $page, $perPage);
+        $this->renderTechnicalTypeOverride(
+            $typeId,
+            $typeTarget,
+            $typeOverridePreview,
+            $search,
+            $page,
+            $perPage
+        );
         $this->renderManualEditor($manualId, $search, $page, $perPage);
         if ($previewId > 0) {
             try {
@@ -238,6 +286,12 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 'editorial_page' => (string) $page,
                 'editorial_per_page' => (string) $perPage,
             ]);
+            $typeUrl = $this->pageUrl([
+                'type_id' => (string) $id,
+                'editorial_search' => $search,
+                'editorial_page' => (string) $page,
+                'editorial_per_page' => (string) $perPage,
+            ]);
             echo '<tr><td><input type="checkbox" name="editorial_selected[]" value="' . $id . '"'
                 . ($selectable ? '' : ' disabled') . '></td>';
             echo '<td>' . $id . '</td><td><strong>' . $this->escape((string) $row['title']) . '</strong></td>';
@@ -248,6 +302,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             echo '<td><strong>' . $this->escape((string) $row['status']) . '</strong></td>';
             echo '<td>' . (! empty($row['backupAvailable']) ? 'YES' : '—') . '</td><td>';
             echo '<a class="button button-small" href="' . $this->escapeUrl($previewUrl) . '">Preview</a> ';
+            echo '<a class="button button-small" href="' . $this->escapeUrl($typeUrl) . '">Type Override</a> ';
             echo '<a class="button button-small" href="' . $this->escapeUrl($manualUrl) . '">Manual RU+EN</a> ';
             echo '<button class="button button-small button-primary" name="editorial_apply_id" value="' . $id
                 . '">Apply</button> ';
@@ -407,9 +462,158 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         echo '<button class="button button-primary">Validate + Import EN Pack v2</button></form></div>';
     }
 
+    /**
+     * @param array<string,mixed>|null $overridePreview
+     */
+    private function renderTechnicalTypeOverride(
+        int $typeId,
+        string $typeTarget,
+        ?array $overridePreview,
+        string $search,
+        int $page,
+        int $perPage
+    ): void {
+        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>4. Technical Type Override</h2>';
+        echo '<p>Исправляет только технический тип товара: theme / plugin / template_kit. Категории WooCommerce, attr_category_value, контент, EN и TranslatePress не изменяются. Сначала обязательный Preview, затем отдельное Apply.</p>';
+        echo '<form method="get" style="margin-bottom:14px">';
+        echo '<input type="hidden" name="page" value="' . $this->escapeAttr($this->slug()) . '">';
+        echo '<input type="hidden" name="editorial_search" value="' . $this->escapeAttr($search) . '">';
+        echo '<input type="hidden" name="editorial_page" value="' . $page . '">';
+        echo '<input type="hidden" name="editorial_per_page" value="' . $perPage . '">';
+        echo '<label><strong>Product ID</strong> <input type="number" min="1" name="type_id" value="'
+            . ($typeId > 0 ? $typeId : '') . '" required></label> ';
+        echo '<button class="button">Load Type Editor</button></form>';
+
+        if ($typeId <= 0) {
+            echo '</div>';
+            return;
+        }
+
+        try {
+            $editor = $this->migration->technicalTypeEditor($typeId);
+        } catch (Throwable $exception) {
+            echo '<div class="notice notice-error inline"><p>'
+                . $this->escape($exception->getMessage()) . '</p></div></div>';
+            return;
+        }
+
+        echo '<p><strong>#' . $typeId . ' ' . $this->escape((string) $editor['title']) . '</strong>';
+        echo ' &nbsp; Resolved technical type: <strong>'
+            . $this->escape((string) $editor['resolvedType']) . '</strong>';
+        echo ' &nbsp; Stored _wp_shop_product_type: <strong>'
+            . $this->escape((string) $editor['storedType'] !== '' ? (string) $editor['storedType'] : 'EMPTY')
+            . '</strong></p>';
+        echo '<p><strong>Catalog category snapshot:</strong> '
+            . $this->escape((string) $editor['catalogCategory'])
+            . ' &nbsp; <strong>will be preserved.</strong></p>';
+
+        if (! empty($editor['hasManualDraft'])) {
+            echo '<div class="notice notice-warning inline"><p><strong>REVIEW:</strong> Manual RU+EN draft exists. Changing technical type is blocked until that draft is discarded.</p></div>';
+        }
+
+        $allowed = [
+            CatalogProductType::THEME => 'theme',
+            CatalogProductType::PLUGIN => 'plugin',
+            CatalogProductType::TEMPLATE_KIT => 'template_kit',
+        ];
+        $selectedType = array_key_exists($typeTarget, $allowed)
+            ? $typeTarget
+            : (string) $editor['resolvedType'];
+
+        echo '<form method="post">';
+        $this->nonceField();
+        $this->hiddenState($search, $page, $perPage);
+        echo '<input type="hidden" name="type_id" value="' . $typeId . '">';
+        echo '<input type="hidden" name="type_product_id" value="' . $typeId . '">';
+        echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="preview_type_override">';
+        echo '<label><strong>Target technical type</strong> <select name="type_target">';
+        foreach ($allowed as $value => $label) {
+            echo '<option value="' . $this->escapeAttr($value) . '"'
+                . ($selectedType === $value ? ' selected' : '') . '>'
+                . $this->escape($label) . '</option>';
+        }
+        echo '</select></label> ';
+        echo '<button class="button button-primary">Preview Type Override — no writes</button></form>';
+
+        if (
+            is_array($overridePreview)
+            && (int) ($overridePreview['productId'] ?? 0) === $typeId
+        ) {
+            $status = (string) ($overridePreview['status'] ?? 'REVIEW');
+            $issue = (string) ($overridePreview['issue'] ?? '');
+            $class = $status === 'REVIEW' ? 'notice-warning' : 'notice-success';
+            echo '<div class="notice ' . $class . ' inline" style="margin-top:14px"><p>';
+            echo '<strong>TYPE OVERRIDE PREVIEW = ' . $this->escape($status) . '</strong><br>';
+            echo 'From: <strong>' . $this->escape((string) $overridePreview['fromType'])
+                . '</strong> → To: <strong>' . $this->escape((string) $overridePreview['toType'])
+                . '</strong><br>';
+            echo 'Catalog category: <strong>PRESERVED / NOT WRITTEN</strong><br>';
+            echo 'Product content writes: <strong>NO</strong>';
+            if ($issue !== '') {
+                echo '<br>Review: ' . $this->escape($issue);
+            }
+            echo '</p></div>';
+
+            if ($status === 'READY') {
+                echo '<form method="post" style="margin-top:10px">';
+                $this->nonceField();
+                $this->hiddenState($search, $page, $perPage);
+                echo '<input type="hidden" name="type_id" value="' . $typeId . '">';
+                echo '<input type="hidden" name="type_product_id" value="' . $typeId . '">';
+                echo '<input type="hidden" name="type_target" value="'
+                    . $this->escapeAttr((string) $overridePreview['toType']) . '">';
+                echo '<input type="hidden" name="type_source_fingerprint" value="'
+                    . $this->escapeAttr((string) $overridePreview['sourceFingerprint']) . '">';
+                echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="apply_type_override">';
+                echo '<button class="button button-primary">Apply Technical Type</button> ';
+                echo '<span>Пишет только _wp_shop_product_type. Если источник изменился после Preview, Apply будет остановлен.</span></form>';
+            }
+        }
+
+        if (! empty($editor['backupAvailable'])) {
+            echo '<form method="post" style="margin-top:10px">';
+            $this->nonceField();
+            $this->hiddenState($search, $page, $perPage);
+            echo '<input type="hidden" name="type_id" value="' . $typeId . '">';
+            echo '<input type="hidden" name="type_product_id" value="' . $typeId . '">';
+            echo '<input type="hidden" name="wp_shop_pm_editorial_action" value="restore_type_override">';
+            echo '<button class="button">Restore Technical Type Backup</button> ';
+            echo '<span>Категории и контент не затрагиваются.</span></form>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * @param array<string,mixed> $preview
+     * @return list<string>
+     */
+    private function typeOverridePreviewLogs(array $preview): array
+    {
+        $logs = [
+            'TECHNICAL TYPE OVERRIDE PREVIEW = ' . (string) $preview['status'],
+            'PRODUCT ID = ' . (int) $preview['productId'],
+            'FROM = ' . (string) $preview['fromType'],
+            'TO = ' . (string) $preview['toType'],
+            'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
+            'PRODUCT CONTENT WRITES = NO',
+            'TRANSLATEPRESS SYNC = NOT RUN',
+        ];
+        if ((string) $preview['issue'] !== '') {
+            $logs[] = 'REVIEW = ' . (string) $preview['issue'];
+            $logs[] = 'NEXT = FIX REVIEW CONDITION';
+        } elseif ($preview['status'] === 'CURRENT') {
+            $logs[] = 'NEXT = NO CHANGE REQUIRED';
+        } else {
+            $logs[] = 'NEXT = APPLY TECHNICAL TYPE';
+        }
+
+        return $logs;
+    }
+
     private function renderManualEditor(int $manualId, string $search, int $page, int $perPage): void
     {
-        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>4. Manual RU+EN Editorial</h2>';
+        echo '<div class="postbox" style="max-width:1500px;padding:16px 18px"><h2>5. Manual RU+EN Editorial</h2>';
         echo '<p>Для исключений из генератора: RU Short/Long/Meta + EN Short/Long/Meta сохраняются сначала только как staging draft. Товар меняется исключительно отдельной кнопкой Apply Manual после проверки структуры.</p>';
         echo '<form method="get" style="margin-bottom:14px">';
         echo '<input type="hidden" name="page" value="' . $this->escapeAttr($this->slug()) . '">';

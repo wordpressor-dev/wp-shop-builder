@@ -21,6 +21,7 @@ final class ProductEditorialMigrationService
     private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';
     private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
     private const MANUAL_DRAFT_META = '_wp_shop_editorial_manual_draft_v1';
+    private const TYPE_OVERRIDE_BACKUP_META = '_wp_shop_product_type_manual_backup_v1';
 
     public function __construct(
         private readonly Closure $call,
@@ -467,6 +468,249 @@ final class ProductEditorialMigrationService
             'PRODUCT ID = ' . $productId,
             'PRODUCT CONTENT WRITES = NO',
         ];
+    }
+
+    /**
+     * @return array{
+     * productId:int,title:string,resolvedType:string,storedType:string,
+     * catalogCategory:string,hasManualDraft:bool,backupAvailable:bool,
+     * sourceFingerprint:string
+     * }
+     */
+    public function technicalTypeEditor(int $productId): array
+    {
+        $preview = $this->preview($productId);
+        $storedType = trim($this->meta($productId, '_wp_shop_product_type'));
+        $catalogCategory = $this->technicalTypeCatalogSnapshot($productId);
+        $manualDraft = ($this->call)('get_post_meta', $productId, self::MANUAL_DRAFT_META, true);
+        $backup = ($this->call)('get_post_meta', $productId, self::TYPE_OVERRIDE_BACKUP_META, true);
+
+        $sourceFingerprint = hash('sha256', implode("\0", [
+            (string) $productId,
+            (string) $preview['title'],
+            (string) $preview['productType'],
+            $storedType,
+            $catalogCategory,
+            $this->contentFingerprint($preview['current']),
+            $this->meta($productId, 'sales_page'),
+        ]));
+
+        return [
+            'productId' => $productId,
+            'title' => (string) $preview['title'],
+            'resolvedType' => (string) $preview['productType'],
+            'storedType' => $storedType,
+            'catalogCategory' => $catalogCategory,
+            'hasManualDraft' => is_array($manualDraft) && $manualDraft !== [],
+            'backupAvailable' => is_array($backup) && $backup !== [],
+            'sourceFingerprint' => $sourceFingerprint,
+        ];
+    }
+
+    /**
+     * @return array{
+     * productId:int,title:string,fromType:string,toType:string,storedType:string,
+     * catalogCategory:string,status:string,issue:string,hasManualDraft:bool,
+     * backupAvailable:bool,sourceFingerprint:string
+     * }
+     */
+    public function previewTechnicalTypeOverride(int $productId, string $targetType): array
+    {
+        $targetType = trim($targetType);
+        if (! $this->validTechnicalType($targetType)) {
+            throw new RuntimeException('Unsupported technical product type: ' . $targetType);
+        }
+
+        $editor = $this->technicalTypeEditor($productId);
+        $issue = '';
+        if ($editor['hasManualDraft'] && $targetType !== $editor['resolvedType']) {
+            $issue = 'Manual RU+EN draft exists. Discard it before changing technical type.';
+        }
+
+        return [
+            'productId' => $productId,
+            'title' => $editor['title'],
+            'fromType' => $editor['resolvedType'],
+            'toType' => $targetType,
+            'storedType' => $editor['storedType'],
+            'catalogCategory' => $editor['catalogCategory'],
+            'status' => $issue !== ''
+                ? 'REVIEW'
+                : ($targetType === $editor['storedType'] ? 'CURRENT' : 'READY'),
+            'issue' => $issue,
+            'hasManualDraft' => $editor['hasManualDraft'],
+            'backupAvailable' => $editor['backupAvailable'],
+            'sourceFingerprint' => $editor['sourceFingerprint'],
+        ];
+    }
+
+    /** @return list<string> */
+    public function applyTechnicalTypeOverride(
+        int $productId,
+        string $targetType,
+        string $sourceFingerprint
+    ): array {
+        $preview = $this->previewTechnicalTypeOverride($productId, $targetType);
+        if ($preview['status'] === 'REVIEW') {
+            throw new RuntimeException(
+                'Technical type override stopped before write for product '
+                . $productId . ': ' . $preview['issue']
+            );
+        }
+        if (
+            $sourceFingerprint === ''
+            || ! hash_equals($preview['sourceFingerprint'], trim($sourceFingerprint))
+        ) {
+            throw new RuntimeException(
+                'Technical type override stopped before write for product '
+                . $productId . ': source changed after Preview. Preview again.'
+            );
+        }
+
+        if ($preview['status'] === 'CURRENT') {
+            return [
+                'TECHNICAL TYPE OVERRIDE = NO CHANGE',
+                'PRODUCT ID = ' . $productId,
+                'TECHNICAL TYPE = ' . $targetType,
+                'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
+                'PRODUCT CONTENT WRITES = NO',
+            ];
+        }
+
+        $backup = ($this->call)(
+            'get_post_meta',
+            $productId,
+            self::TYPE_OVERRIDE_BACKUP_META,
+            true
+        );
+        $backupLog = 'TECHNICAL TYPE BACKUP = REUSED';
+        if (! is_array($backup) || $backup === []) {
+            ($this->call)('update_post_meta', $productId, self::TYPE_OVERRIDE_BACKUP_META, [
+                'version' => '1',
+                'created_at' => $this->now(),
+                'stored_type' => $preview['storedType'],
+                'resolved_type' => $preview['fromType'],
+            ]);
+            $backupLog = 'TECHNICAL TYPE BACKUP = CREATED';
+        }
+
+        ($this->call)('update_post_meta', $productId, '_wp_shop_product_type', $targetType);
+
+        $after = $this->technicalTypeEditor($productId);
+        if (
+            $after['storedType'] !== $targetType
+            || $after['resolvedType'] !== $targetType
+        ) {
+            throw new RuntimeException(
+                'Technical type override verification failed for product ' . $productId
+            );
+        }
+
+        return [
+            'TECHNICAL TYPE OVERRIDE = READY',
+            'PRODUCT ID = ' . $productId,
+            $backupLog,
+            'FROM = ' . $preview['fromType'],
+            'TO = ' . $targetType,
+            '_wp_shop_product_type = UPDATED',
+            'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
+            'PRODUCT CONTENT WRITES = NO',
+            'TRANSLATEPRESS SYNC = NOT RUN',
+            'NEXT = REVIEW EDITORIAL PREVIEW',
+        ];
+    }
+
+    /** @return list<string> */
+    public function restoreTechnicalTypeOverride(int $productId): array
+    {
+        $editor = $this->technicalTypeEditor($productId);
+        if ($editor['hasManualDraft']) {
+            throw new RuntimeException(
+                'Technical type restore stopped: discard the Manual RU+EN draft first.'
+            );
+        }
+
+        $backup = ($this->call)(
+            'get_post_meta',
+            $productId,
+            self::TYPE_OVERRIDE_BACKUP_META,
+            true
+        );
+        if (! is_array($backup) || ($backup['version'] ?? '') !== '1') {
+            throw new RuntimeException(
+                'Technical type backup not found for product ' . $productId
+            );
+        }
+
+        $storedType = trim((string) ($backup['stored_type'] ?? ''));
+        if ($storedType === '') {
+            ($this->call)('delete_post_meta', $productId, '_wp_shop_product_type');
+        } else {
+            if (! $this->validTechnicalType($storedType)) {
+                throw new RuntimeException(
+                    'Technical type backup contains an unsupported value for product '
+                    . $productId
+                );
+            }
+            ($this->call)('update_post_meta', $productId, '_wp_shop_product_type', $storedType);
+        }
+
+        $after = $this->technicalTypeEditor($productId);
+        $expectedResolved = trim((string) ($backup['resolved_type'] ?? ''));
+        if ($expectedResolved !== '' && $after['resolvedType'] !== $expectedResolved) {
+            throw new RuntimeException(
+                'Technical type restore verification failed for product ' . $productId
+            );
+        }
+
+        return [
+            'TECHNICAL TYPE RESTORE = READY',
+            'PRODUCT ID = ' . $productId,
+            'STORED TYPE = ' . ($storedType !== '' ? $storedType : 'EMPTY / INFERRED'),
+            'RESOLVED TYPE = ' . $after['resolvedType'],
+            'CATALOG CATEGORY = PRESERVED / NOT WRITTEN',
+            'PRODUCT CONTENT WRITES = NO',
+            'BACKUP = PRESERVED',
+        ];
+    }
+
+    private function validTechnicalType(string $type): bool
+    {
+        return in_array($type, [
+            CatalogProductType::THEME,
+            CatalogProductType::PLUGIN,
+            CatalogProductType::TEMPLATE_KIT,
+        ], true);
+    }
+
+    private function technicalTypeCatalogSnapshot(int $productId): string
+    {
+        $parts = [];
+        $attribute = trim($this->meta($productId, 'attr_category_value'));
+        if ($attribute !== '') {
+            $parts[] = 'attr_category_value: ' . $attribute;
+        }
+
+        $terms = ($this->call)(
+            'wp_get_post_terms',
+            $productId,
+            'product_cat',
+            ['fields' => 'names']
+        );
+        if (is_array($terms)) {
+            $names = [];
+            foreach ($terms as $term) {
+                if (is_scalar($term) && trim((string) $term) !== '') {
+                    $names[] = trim((string) $term);
+                }
+            }
+            $names = array_values(array_unique($names));
+            if ($names !== []) {
+                $parts[] = 'product_cat: ' . implode(', ', $names);
+            }
+        }
+
+        return $parts === [] ? '—' : implode(' | ', $parts);
     }
 
     /**
