@@ -894,6 +894,11 @@ final class ProductEditorialDraftBuilder
 
         foreach ($sentences as $sentence) {
             $sentence = trim((string) $sentence, " \t\n\r\0\x0B.!?");
+
+            if ($this->isAudienceSentence($sentence)) {
+                continue;
+            }
+
             $parts = preg_split('/\s*[,;]\s*/u', $sentence) ?: [];
 
             if (count($parts) < 2) {
@@ -910,6 +915,15 @@ final class ProductEditorialDraftBuilder
         }
 
         return array_values(array_unique(array_slice($features, 0, 12)));
+    }
+
+    private function isAudienceSentence(string $sentence): bool
+    {
+        return $this->matches(
+            trim($sentence),
+            '/^(?:(?:идеально\s+)?подходит|подойд[её]т|предназначен(?:а|о|ы)?)\s+для\b'
+                . '|^(?:ideal|suitable|designed)\s+for\b/ui'
+        );
     }
 
     /** @param list<string> $features */
