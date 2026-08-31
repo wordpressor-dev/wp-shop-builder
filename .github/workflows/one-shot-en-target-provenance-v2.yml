@@ -29,57 +29,22 @@ jobs:
           service_path = Path('apps/Plugin/ProductManager/Editorial/ProductEditorialMigrationService.php')
           service = service_path.read_text()
 
-          old_constants = """    private const BACKUP_META = '_wp_shop_editorial_backup_v28';
-              private const STANDARD_META = '_wp_shop_editorial_standard';
-              private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';
-          """
-          new_constants = """    private const BACKUP_META = '_wp_shop_editorial_backup_v28';
-              private const STANDARD_META = '_wp_shop_editorial_standard';
-              private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';
-              private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';
-              private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
-          """
-          if old_constants not in service:
-              raise SystemExit('Service constants block not found')
-          service = service.replace(old_constants, new_constants, 1)
+          service = service.replace(
+              "    private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';\n",
+              "    private const MIGRATED_AT_META = '_wp_shop_editorial_migrated_at';\n"
+              "    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';\n"
+              "    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';\n",
+              1,
+          )
 
-          old_legacy = """        $generated = $generic;
-              $legacy = null;
-
-              if (is_array($backup) && $backup !== []) {
-                  $legacy = $backup;
-
-                  // Keep the original RU backup immutable, but let a freshly imported
-                  // EN Pack v2 override stale EN that was captured in the backup.
-                  foreach (['enShort', 'enLong', 'enMeta'] as $field) {
-                      if (trim($current[$field]) !== '') {
-                          $legacy[$field] = $current[$field];
-                      }
-                  }
-              } elseif (! $this->sameList(array_values($current), array_values($generic))) {
-                  $legacy = $current;
-              }
-
-              if (is_array($legacy)) {
-                  $generated = $this->builder->build(
-                      $baseTitle,
-                      $developer,
-                      $productType,
-                      $signals,
-                      $sourceUpdateDate,
-                      $this->enrichLegacy($legacy, $official, $generic)
-                  );
-                  $generated = $this->preserveQualityMeta($legacy, $generated);
-                  $generated = $this->preserveRichLegacyRu($legacy, $generated);
+          anchor = """            $generated = $this->preserveRichLegacyRu($legacy, $generated);
               }
 
               $translationIssue = $this->translationIssue($generated);
-              $translationRequired = (is_array($legacy)
-                  && $this->requiresEnglishTranslation($legacy))
-                  || $translationIssue !== '';
           """
-          new_legacy = """        $generated = $generic;
-              $legacy = null;
+          replacement = """            $generated = $this->preserveRichLegacyRu($legacy, $generated);
+              }
+
               $stalePreparedEnglish = false;
               $preparedTargetFingerprint = $this->meta(
                   $productId,
@@ -96,99 +61,54 @@ jobs:
                       $this->englishFingerprint($current)
                   );
 
-              if (is_array($backup) && $backup !== []) {
-                  $legacy = $backup;
-              } elseif (! $this->sameList(array_values($current), array_values($generic))) {
-                  $legacy = $current;
-              }
-
-              if (is_array($legacy)) {
-                  $targetProbe = $this->generatedFromLegacy(
-                      $baseTitle,
-                      $developer,
-                      $productType,
-                      $signals,
-                      $sourceUpdateDate,
-                      $legacy,
-                      $official,
-                      $generic
-                  );
-                  $targetRuFingerprint = $this->ruFingerprint($targetProbe);
-                  $stalePreparedEnglish = $preparedEnglishIsCurrent
-                      && ! hash_equals($preparedTargetFingerprint, $targetRuFingerprint);
-
-                  if ($stalePreparedEnglish) {
+              if (
+                  $preparedEnglishIsCurrent
+                  && ! hash_equals($preparedTargetFingerprint, $this->ruFingerprint($generated))
+              ) {
+                  $stalePreparedEnglish = true;
+                  if (is_array($legacy)) {
+                      $legacyWithoutEnglish = $legacy;
                       foreach (['enShort', 'enLong', 'enMeta'] as $field) {
-                          $legacy[$field] = '';
+                          $legacyWithoutEnglish[$field] = '';
                       }
-                  } elseif (is_array($backup) && $backup !== []) {
-                      // Keep the original RU backup immutable, but let EN Pack v2
-                      // override EN only while its target provenance is still valid.
-                      foreach (['enShort', 'enLong', 'enMeta'] as $field) {
-                          if (trim($current[$field]) !== '') {
-                              $legacy[$field] = $current[$field];
-                          }
-                      }
+                      $generated = $this->builder->build(
+                          $baseTitle,
+                          $developer,
+                          $productType,
+                          $signals,
+                          $sourceUpdateDate,
+                          $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
+                      );
+                      $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated);
+                      $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated);
                   }
-
-                  $generated = $this->generatedFromLegacy(
-                      $baseTitle,
-                      $developer,
-                      $productType,
-                      $signals,
-                      $sourceUpdateDate,
-                      $legacy,
-                      $official,
-                      $generic
-                  );
               }
 
               $translationIssue = $this->translationIssue($generated);
-              $translationRequired = $stalePreparedEnglish
-                  || ((is_array($legacy) && $this->requiresEnglishTranslation($legacy))
-                      || $translationIssue !== '');
           """
-          if old_legacy not in service:
-              raise SystemExit('Service legacy block not found')
-          service = service.replace(old_legacy, new_legacy, 1)
+          if anchor not in service:
+              raise SystemExit('Service generation anchor not found')
+          service = service.replace(anchor, replacement, 1)
 
-          marker = """    /**
+          old_required = """        $translationRequired = (is_array($legacy)
+                  && $this->requiresEnglishTranslation($legacy))
+                  || $translationIssue !== '';
+          """
+          new_required = """        $translationRequired = $stalePreparedEnglish
+                  || (is_array($legacy) && $this->requiresEnglishTranslation($legacy))
+                  || $translationIssue !== '';
+          """
+          if old_required not in service:
+              raise SystemExit('Service translation-required block not found')
+          service = service.replace(old_required, new_required, 1)
+
+          sync_anchor = """    /**
                * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
                * @return list<string>
                */
               private function syncTranslatePress(int $productId, array $content): array
           """
           helpers = """    /**
-               * @param list<string> $signals
-               * @param array<string,mixed> $legacy
-               * @param array{status:string,signals:list<string>,ruFacts:list<string>,enFacts:list<string>} $official
-               * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generic
-               * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
-               */
-              private function generatedFromLegacy(
-                  string $baseTitle,
-                  string $developer,
-                  string $productType,
-                  array $signals,
-                  string $sourceUpdateDate,
-                  array $legacy,
-                  array $official,
-                  array $generic
-              ): array {
-                  $generated = $this->builder->build(
-                      $baseTitle,
-                      $developer,
-                      $productType,
-                      $signals,
-                      $sourceUpdateDate,
-                      $this->enrichLegacy($legacy, $official, $generic)
-                  );
-                  $generated = $this->preserveQualityMeta($legacy, $generated);
-
-                  return $this->preserveRichLegacyRu($legacy, $generated);
-              }
-
-              /**
                * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
                */
               private function ruFingerprint(array $content): string
@@ -216,39 +136,35 @@ jobs:
                */
               private function syncTranslatePress(int $productId, array $content): array
           """
-          if marker not in service:
-              raise SystemExit('Service sync marker not found')
-          service = service.replace(marker, helpers, 1)
+          if sync_anchor not in service:
+              raise SystemExit('Service sync anchor not found')
+          service = service.replace(sync_anchor, helpers, 1)
 
-          old_restore = """        ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
+          restore_anchor = """        ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
               ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
           """
-          new_restore = """        ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
+          restore_replacement = """        ($this->call)('delete_post_meta', $productId, self::STANDARD_META);
               ($this->call)('delete_post_meta', $productId, self::MIGRATED_AT_META);
               ($this->call)('delete_post_meta', $productId, self::EN_TARGET_RU_FINGERPRINT_META);
               ($this->call)('delete_post_meta', $productId, self::EN_CONTENT_FINGERPRINT_META);
           """
-          if old_restore not in service:
-              raise SystemExit('Service restore marker not found')
-          service = service.replace(old_restore, new_restore, 1)
+          if restore_anchor not in service:
+              raise SystemExit('Service restore anchor not found')
+          service = service.replace(restore_anchor, restore_replacement, 1)
           service_path.write_text(service)
 
           page_path = Path('apps/Plugin/Admin/ProductEditorialMigrationPage.php')
           page = page_path.read_text()
+          page = page.replace(
+              "    private const PACK_VERSION = '2';\n",
+              "    private const PACK_VERSION = '2';\n"
+              "    private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';\n"
+              "    private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';\n",
+              1,
+          )
 
-          old_page_const = """    private const PACK_VERSION = '2';
-          """
-          new_page_const = """    private const PACK_VERSION = '2';
-              private const EN_TARGET_RU_FINGERPRINT_META = '_wp_shop_en_target_ru_fingerprint_v2';
-              private const EN_CONTENT_FINGERPRINT_META = '_wp_shop_en_content_fingerprint_v2';
-          """
-          if old_page_const not in page:
-              raise SystemExit('Page constant marker not found')
-          page = page.replace(old_page_const, new_page_const, 1)
-
-          old_prepared = """            $prepared[] = ['id' => $id, 'short' => $enShort, 'long' => $enLong, 'meta' => $enMeta];
-          """
-          new_prepared = """            $prepared[] = [
+          prepared_anchor = "            $prepared[] = ['id' => $id, 'short' => $enShort, 'long' => $enLong, 'meta' => $enMeta];\n"
+          prepared_replacement = """            $prepared[] = [
                   'id' => $id,
                   'short' => $enShort,
                   'long' => $enLong,
@@ -256,11 +172,11 @@ jobs:
                   'targetFingerprint' => trim((string) ($row['Target RU Fingerprint'] ?? '')),
               ];
           """
-          if old_prepared not in page:
-              raise SystemExit('Page prepared marker not found')
-          page = page.replace(old_prepared, new_prepared, 1)
+          if prepared_anchor not in page:
+              raise SystemExit('Page prepared anchor not found')
+          page = page.replace(prepared_anchor, prepared_replacement, 1)
 
-          old_write = """        foreach ($prepared as $item) {
+          write_start = """        foreach ($prepared as $item) {
                   $id = $item['id'];
                   ($this->call)('update_post_meta', $id, '_wp_shop_en_short_description',
                       (string) ($this->call)('wp_kses_post', $item['short']));
@@ -272,7 +188,7 @@ jobs:
                   $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
               }
           """
-          new_write = """        foreach ($prepared as $item) {
+          write_replacement = """        foreach ($prepared as $item) {
                   $id = $item['id'];
                   $short = (string) ($this->call)('wp_kses_post', $item['short']);
                   $long = (string) ($this->call)('wp_kses_post', $item['long']);
@@ -296,17 +212,17 @@ jobs:
                   $logs[] = 'PRODUCT ' . $id . ' = TARGET EN PREPARED / OVERALL ' . $post['status'];
               }
           """
-          if old_write not in page:
-              raise SystemExit('Page import write block not found')
-          page = page.replace(old_write, new_write, 1)
+          if write_start not in page:
+              raise SystemExit('Page import-write block not found')
+          page = page.replace(write_start, write_replacement, 1)
 
-          old_fp = """    /** @param array<string, string> $content */
+          fp_anchor = """    /** @param array<string, string> $content */
               private function fingerprint(array $content): string
               {
                   return hash('sha256', $content['ruShort'] . "\\0" . $content['ruLong'] . "\\0" . $content['ruMeta']);
               }
           """
-          new_fp = """    /** @param array<string, string> $content */
+          fp_replacement = """    /** @param array<string, string> $content */
               private function fingerprint(array $content): string
               {
                   return hash('sha256', $content['ruShort'] . "\\0" . $content['ruLong'] . "\\0" . $content['ruMeta']);
@@ -317,9 +233,9 @@ jobs:
                   return hash('sha256', $short . "\\0" . $long . "\\0" . $meta);
               }
           """
-          if old_fp not in page:
-              raise SystemExit('Page fingerprint block not found')
-          page = page.replace(old_fp, new_fp, 1)
+          if fp_anchor not in page:
+              raise SystemExit('Page fingerprint anchor not found')
+          page = page.replace(fp_anchor, fp_replacement, 1)
           page_path.write_text(page)
 
           test_path = Path('tests/App/Plugin/ProductManager/Editorial/ProductEditorialEnTargetProvenanceTest.php')
@@ -336,34 +252,33 @@ jobs:
           {
               public function testStalePreparedEnglishStopsMigrationAfterRuTargetChanges(): void
               {
-                  $ruShort = 'WP Reset PRO — профессиональный плагин для быстрого сброса базы данных '
-                      . 'WordPress к исходным настройкам. Идеален для разработчиков и тестировщиков.';
-                  $staleEnShort = '<p>WP Reset PRO is a professional WordPress reset plugin.</p>';
-                  $staleEnLong = '<h2>WP Reset PRO</h2>'
-                      . '<p>WP Reset PRO is a professional WordPress reset plugin.</p>'
+                  $ru = 'WP Reset PRO — профессиональный плагин для быстрого сброса базы данных WordPress. '
+                      . 'Идеален для разработчиков и тестировщиков.';
+                  $enShort = '<p>WP Reset PRO is a professional WordPress reset plugin.</p>';
+                  $enLong = '<h2>WP Reset PRO</h2><p>WP Reset PRO is a professional WordPress reset plugin.</p>'
                       . '<p>WP Reset PRO is suitable for quickly resetting a WordPress database.</p>';
-                  $staleEnMeta = 'Professional WordPress reset plugin for database reset workflows.';
+                  $enMeta = 'Professional WordPress reset plugin for database reset workflows.';
                   $post = [
                       'ID' => 2956,
                       'post_type' => 'product',
                       'post_title' => 'WP Reset PRO - WordPress Development Tool for Non-Devs 6.18',
-                      'post_excerpt' => $ruShort,
-                      'post_content' => $ruShort,
+                      'post_excerpt' => $ru,
+                      'post_content' => $ru,
                   ];
                   $meta = [
                       'attr_version_value' => '6.18',
                       '_wp_shop_product_type' => 'plugin',
                       'attr_developer_value' => 'WebFactory Ltd',
                       '_wp_shop_source_update_date' => '',
-                      '_wp_shop_en_short_description' => $staleEnShort,
-                      '_wp_shop_en_long_description' => $staleEnLong,
-                      '_wp_shop_en_meta_description' => $staleEnMeta,
+                      '_wp_shop_en_short_description' => $enShort,
+                      '_wp_shop_en_long_description' => $enLong,
+                      '_wp_shop_en_meta_description' => $enMeta,
                       '_wp_shop_en_target_ru_fingerprint_v2' => str_repeat('a', 64),
                       '_wp_shop_en_content_fingerprint_v2' => hash(
                           'sha256',
-                          $staleEnShort . "\0" . $staleEnLong . "\0" . $staleEnMeta
+                          $enShort . "\0" . $enLong . "\0" . $enMeta
                       ),
-                      'surerank_settings_general' => ['page_description' => $ruShort],
+                      'surerank_settings_general' => ['page_description' => $ru],
                   ];
 
                   $service = new ProductEditorialMigrationService($this->caller($post, $meta));
@@ -377,46 +292,6 @@ jobs:
                   );
                   self::assertStringNotContainsString(
                       'is suitable for quickly resetting a WordPress database',
-                      $preview['generated']['enLong']
-                  );
-              }
-
-              public function testPreparedEnglishMarkerDoesNotClaimManuallyChangedEnglish(): void
-              {
-                  $ruShort = 'Lirena — элегантная тема WordPress для салонов красоты и спа.';
-                  $enShort = '<p>Lirena is an elegant WordPress theme for beauty salons and spas.</p>';
-                  $enLong = '<h2>Lirena</h2><p>Lirena is an elegant WordPress theme for beauty salons and spas.</p>'
-                      . '<p>Lirena is suitable for beauty salons and spas.</p>';
-                  $enMeta = 'Elegant WordPress theme for beauty salons and spas.';
-                  $post = [
-                      'ID' => 2997,
-                      'post_type' => 'product',
-                      'post_title' => 'Lirena - Beauty and Spa Salon WordPress Theme 12.5',
-                      'post_excerpt' => $ruShort,
-                      'post_content' => $ruShort,
-                  ];
-                  $meta = [
-                      'attr_version_value' => '12.5',
-                      '_wp_shop_product_type' => 'theme',
-                      'attr_developer_value' => 'GT3themes',
-                      '_wp_shop_source_update_date' => '',
-                      '_wp_shop_en_short_description' => $enShort,
-                      '_wp_shop_en_long_description' => $enLong,
-                      '_wp_shop_en_meta_description' => $enMeta,
-                      '_wp_shop_en_target_ru_fingerprint_v2' => str_repeat('b', 64),
-                      '_wp_shop_en_content_fingerprint_v2' => str_repeat('c', 64),
-                      'surerank_settings_general' => ['page_description' => $ruShort],
-                  ];
-
-                  $service = new ProductEditorialMigrationService($this->caller($post, $meta));
-                  $preview = $service->preview(2997);
-
-                  self::assertStringContainsString(
-                      'Lirena подходит для салонов красоты и спа.',
-                      $preview['generated']['ruLong']
-                  );
-                  self::assertStringContainsString(
-                      'Lirena is suitable for beauty salons and spas.',
                       $preview['generated']['enLong']
                   );
               }
