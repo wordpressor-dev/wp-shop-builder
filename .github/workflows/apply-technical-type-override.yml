@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore: launch technical type override patch'
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
