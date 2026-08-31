@@ -63,10 +63,13 @@ final class ProductEditorialDraftBuilder
     ): array {
         $title = trim($title);
         $developer = trim($developer);
-        $topics = $this->topics(array_merge(
+        $topicCandidates = array_merge(
             $this->titleTopics($title),
             $sourceTags
-        ));
+        );
+        $topics = $this->topics(
+            $this->filterEditionTopics($title, $topicCandidates)
+        );
         $ruTopics = $this->translatedTopics($topics, 'ru');
         $enTopics = $this->translatedTopics($topics, 'en');
         $ruType = $this->ruType($productType);
@@ -699,6 +702,36 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         );
     }
 
+    /**
+     * @param list<string> $topics
+     * @return list<string>
+     */
+    private function filterEditionTopics(string $title, array $topics): array
+    {
+        $rules = [
+            'business' => '/\bbusiness\s*[–—-]\s*/ui',
+            'premium' => '/\bpremium\s*[–—-]\s*/ui',
+            'pro' => '/\bpro\s*[–—-]\s*/ui',
+        ];
+        $editionTopics = [];
+        foreach ($rules as $topic => $pattern) {
+            if ($this->matches($title, $pattern)) {
+                $editionTopics[] = $topic;
+            }
+        }
+        if ($editionTopics === []) {
+            return $topics;
+        }
+        return array_values(array_filter(
+            $topics,
+            static fn (string $topic): bool => ! in_array(
+                strtolower(trim($topic)),
+                $editionTopics,
+                true
+            )
+        ));
+    }
+
     /** @return list<string> */
     private function titleTopics(string $title): array
     {
@@ -959,7 +992,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
     {
         $sentences = preg_split('/(?<=[.!?])\s+/u', trim($value)) ?: [];
 
-        if ($skipFirstSentence && count($sentences) > 1) {
+        if ($skipFirstSentence && $sentences !== []) {
             array_shift($sentences);
         }
 
@@ -972,7 +1005,13 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
                 continue;
             }
 
-            $parts = preg_split('/\s*[,;]\s*/u', $sentence) ?: [];
+            $explicitList = $this->matches(
+                $sentence,
+                '/^(?:включает|включены|добавляет|поддерживает|предлагает|содержит|'
+                    . 'includes|adds|supports|offers|contains|features)\b/ui'
+            );
+            $separator = $explicitList ? '/\s*[,;]\s*/u' : '/\s*;\s*/u';
+            $parts = preg_split($separator, $sentence) ?: [];
 
             if (count($parts) < 2) {
                 continue;
