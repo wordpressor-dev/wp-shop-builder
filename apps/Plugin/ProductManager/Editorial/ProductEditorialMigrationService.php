@@ -274,10 +274,6 @@ final class ProductEditorialMigrationService
 
     /**
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
-     * @return list<string>
-     */
-    /**
-     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
      */
     private function ruFingerprint(array $content): string
     {
@@ -292,6 +288,10 @@ final class ProductEditorialMigrationService
         return hash('sha256', $content['enShort'] . "\0" . $content['enLong'] . "\0" . $content['enMeta']);
     }
 
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
+     * @return list<string>
+     */
     private function syncTranslatePress(int $productId, array $content): array
     {
         if ($this->translate === null) {

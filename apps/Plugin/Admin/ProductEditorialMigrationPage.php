@@ -482,12 +482,12 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         return hash('sha256', $content['ruShort'] . "\0" . $content['ruLong'] . "\0" . $content['ruMeta']);
     }
 
-    /** @param array<string, mixed> $preview */
     private function englishFingerprint(string $short, string $long, string $meta): string
     {
         return hash('sha256', $short . "\0" . $long . "\0" . $meta);
     }
 
+    /** @param array<string, mixed> $preview */
     private function packEligible(array $preview): bool
     {
         return $preview['productType'] !== 'unknown'
