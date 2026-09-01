@@ -90,8 +90,8 @@ final class ProductEditorialMigrationBatchGuard
             }
 
             $skipped[] = 'PRODUCT ' . $id . ' = SKIP / NOT ELIGIBLE / STATUS '
-                . (string) ($preview['status'] ?? 'UNKNOWN')
-                . ' / EN ' . (string) ($preview['enStatus'] ?? 'UNKNOWN');
+                . $preview['status']
+                . ' / EN ' . $preview['enStatus'];
         }
 
         $this->replaceSelected($kept);
@@ -116,7 +116,7 @@ final class ProductEditorialMigrationBatchGuard
                 continue;
             }
 
-            $status = (string) ($preview['status'] ?? 'UNKNOWN');
+            $status = $preview['status'];
             if ($status === 'MIGRATE') {
                 $kept[] = $id;
                 continue;
@@ -137,10 +137,10 @@ final class ProductEditorialMigrationBatchGuard
 
     private function filterImportPack(): void
     {
-        $upload = $_FILES['editorial_en_pack'] ?? null;
-        if (! is_array($upload)) {
+        if (! isset($_FILES['editorial_en_pack'])) {
             return;
         }
+        $upload = $_FILES['editorial_en_pack'];
 
         $tmp = is_scalar($upload['tmp_name'] ?? null) ? (string) $upload['tmp_name'] : '';
         if ($tmp === '' || ! is_file($tmp)) {
@@ -221,22 +221,18 @@ final class ProductEditorialMigrationBatchGuard
 
             if (! $this->packEligible($preview)) {
                 $skipped[] = 'PRODUCT ' . $id . ' = SKIP / NOT ELIGIBLE / STATUS '
-                    . (string) ($preview['status'] ?? 'UNKNOWN')
-                    . ' / EN ' . (string) ($preview['enStatus'] ?? 'UNKNOWN');
+                    . $preview['status']
+                    . ' / EN ' . $preview['enStatus'];
                 continue;
             }
 
-            if ((string) ($mapped['Type'] ?? '') !== (string) ($preview['productType'] ?? '')) {
+            if ((string) ($mapped['Type'] ?? '') !== $preview['productType']) {
                 $skipped[] = 'PRODUCT ' . $id . ' = SKIP / TYPE CHANGED / RE-EXPORT';
                 continue;
             }
 
-            $current = is_array($preview['current'] ?? null) ? $preview['current'] : [];
-            $target = is_array($preview['generated'] ?? null) ? $preview['generated'] : [];
-            if (! $this->hasRuFields($current) || ! $this->hasRuFields($target)) {
-                $skipped[] = 'PRODUCT ' . $id . ' = SKIP / EDITORIAL DATA INCOMPLETE';
-                continue;
-            }
+            $current = $preview['current'];
+            $target = $preview['generated'];
 
             if (! hash_equals(
                 $this->fingerprint($current),
@@ -261,7 +257,7 @@ final class ProductEditorialMigrationBatchGuard
             ];
             $targetModified = false;
             foreach ($targetColumns as $column => $field) {
-                if ((string) ($mapped[$column] ?? '') !== (string) $target[$field]) {
+                if ((string) ($mapped[$column] ?? '') !== $target[$field]) {
                     $targetModified = true;
                     break;
                 }
@@ -273,9 +269,9 @@ final class ProductEditorialMigrationBatchGuard
 
             try {
                 $builder->build(
-                    (string) $target['ruShort'],
-                    (string) $target['ruLong'],
-                    (string) $target['ruMeta'],
+                    $target['ruShort'],
+                    $target['ruLong'],
+                    $target['ruMeta'],
                     trim((string) ($mapped['EN Short HTML'] ?? '')),
                     trim((string) ($mapped['EN Long HTML'] ?? '')),
                     trim((string) ($mapped['EN Meta'] ?? ''))
@@ -322,9 +318,7 @@ final class ProductEditorialMigrationBatchGuard
         }
 
         clearstatcache(true, $tmp);
-        if (isset($_FILES['editorial_en_pack']) && is_array($_FILES['editorial_en_pack'])) {
-            $_FILES['editorial_en_pack']['size'] = filesize($tmp) ?: 0;
-        }
+        $_FILES['editorial_en_pack']['size'] = filesize($tmp) ?: 0;
     }
 
     /** @param array<string,mixed> $preview */
@@ -333,14 +327,6 @@ final class ProductEditorialMigrationBatchGuard
         return ($preview['productType'] ?? 'unknown') !== 'unknown'
             && ((($preview['status'] ?? '') === 'STOP' && ($preview['enStatus'] ?? '') === 'REVIEW')
                 || ($preview['status'] ?? '') === 'MIGRATE');
-    }
-
-    /** @param array<string,mixed> $content */
-    private function hasRuFields(array $content): bool
-    {
-        return array_key_exists('ruShort', $content)
-            && array_key_exists('ruLong', $content)
-            && array_key_exists('ruMeta', $content);
     }
 
     /** @param array<string,mixed> $content */
