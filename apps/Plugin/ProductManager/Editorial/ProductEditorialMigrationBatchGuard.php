@@ -12,7 +12,6 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 final class ProductEditorialMigrationBatchGuard
 {
     private const PAGE_SLUG = 'wp-shop-builder-product-editorial-migration';
-    private const PACK_VERSION = '2';
 
     /** @var list<string> */
     private array $notices = [];
@@ -203,11 +202,6 @@ final class ProductEditorialMigrationBatchGuard
                 continue;
             }
             $seen[$id] = true;
-
-            if (trim((string) ($mapped['Pack Version'] ?? '')) !== self::PACK_VERSION) {
-                $skipped[] = 'PRODUCT ' . $id . ' = SKIP / UNSUPPORTED PACK VERSION';
-                continue;
-            }
 
             try {
                 $preview = $this->migration->preview($id);
