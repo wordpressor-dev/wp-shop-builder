@@ -192,9 +192,6 @@ final class ProductEditorialMigrationBatchGuard
 
         foreach ($rows as $row) {
             $mapped = array_combine($headers, $row);
-            if (! is_array($mapped)) {
-                return;
-            }
 
             $id = (int) trim((string) ($mapped['Product ID'] ?? '0'));
             if ($id <= 0) {
