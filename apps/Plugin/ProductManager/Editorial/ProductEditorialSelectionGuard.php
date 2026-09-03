@@ -63,9 +63,9 @@ final class ProductEditorialSelectionGuard
             }
 
             $skipped[] = 'PRODUCT ' . $id . ' = SKIP / NOT ELIGIBLE / RU '
-                . (string) ($preview['ruStatus'] ?? 'UNKNOWN')
-                . ' / EN ' . (string) ($preview['enStatus'] ?? 'UNKNOWN')
-                . ' / OVERALL ' . (string) ($preview['status'] ?? 'UNKNOWN');
+                . $preview['ruStatus']
+                . ' / EN ' . $preview['enStatus']
+                . ' / OVERALL ' . $preview['status'];
         }
 
         $_POST['editorial_selected'] = array_map(
