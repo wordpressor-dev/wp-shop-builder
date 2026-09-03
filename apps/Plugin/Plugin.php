@@ -6,10 +6,7 @@ namespace WPShop\App\Plugin;
 
 use Closure;
 use LogicException;
-use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationBatchGuard;
-use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
-use WPShop\App\Plugin\ProductManager\WordPress\WordPressFunctionCaller;
 use WPShop\Core\Container\ContainerInterface;
 use WPShop\Core\Contracts\ProviderRegistryInterface;
 use WPShop\Core\Contracts\ServiceProviderInterface;
@@ -68,30 +65,5 @@ final readonly class Plugin
         $productManagerProvider->boot(
             $application->kernel()
         );
-
-        $editorialMigration = $application->container()->get(
-            ProductEditorialMigrationService::class
-        );
-        $functionCaller = $application->container()->get(
-            WordPressFunctionCaller::class
-        );
-
-        if (! $editorialMigration instanceof ProductEditorialMigrationService) {
-            throw new LogicException(
-                'ProductEditorialMigrationService must be registered before batch guard.'
-            );
-        }
-
-        if (! $functionCaller instanceof WordPressFunctionCaller) {
-            throw new LogicException(
-                'WordPressFunctionCaller must be registered before batch guard.'
-            );
-        }
-
-        $batchGuard = new ProductEditorialMigrationBatchGuard(
-            $editorialMigration,
-            $functionCaller(...)
-        );
-        $batchGuard->register();
     }
 }
