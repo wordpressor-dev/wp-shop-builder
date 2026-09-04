@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
+use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
@@ -21,6 +22,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
@@ -31,6 +33,7 @@ use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
+use WPShop\App\Plugin\ProductManager\Translation\PreparedEnglishProductContent;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
@@ -54,12 +57,8 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
 {
     public function register(): void
     {
-        $registry = $this->container->get(
-            AdminPageRegistry::class
-        );
-        $database = $this->container->get(
-            DatabaseConnectionInterface::class
-        );
+        $registry = $this->container->get(AdminPageRegistry::class);
+        $database = $this->container->get(DatabaseConnectionInterface::class);
 
         if (! $registry instanceof AdminPageRegistry) {
             throw new LogicException(
@@ -75,17 +74,15 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
 
         $mapper = new EnvatoItemMapper();
         $transport = new WordPressEnvatoTransport();
-        $envatoClient = new EnvatoClient(
-            $transport(...),
-            $mapper
-        );
+        $envatoClient = new EnvatoClient($transport(...), $mapper);
         $tagRepository = new WordPressCatalogTagRepository();
         $tagSelector = new ExistingTagSelector($tagRepository);
         $tagParser = new ExistingCatalogTagParser($tagRepository);
         $functionCaller = new WordPressFunctionCaller();
-        $archiveUploader = new ProductArchiveUploader(
+        $preparedEnglishContent = new PreparedEnglishProductContent(
             $functionCaller(...)
         );
+        $archiveUploader = new ProductArchiveUploader($functionCaller(...));
         $archiveVersionInspector = new ProductArchiveVersionInspector();
         $archiveIdentityInspector = new ProductArchiveIdentityInspector();
         $batchIntakeScanner = new ProductBatchIntakeScanner(
@@ -101,18 +98,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $functionCaller(...)
         );
         $draftValidator = new ProductDraftValidator();
-        $taxonomyWriter = new ProductTaxonomyWriter(
-            $functionCaller(...)
-        );
-        $metadataWriter = new ProductMetadataWriter(
-            $functionCaller(...)
-        );
-        $sureRankWriter = new SureRankWriter(
-            $functionCaller(...)
-        );
-        $labelWriter = new AdvancedLabelWriter(
-            $functionCaller(...)
-        );
+        $taxonomyWriter = new ProductTaxonomyWriter($functionCaller(...));
+        $metadataWriter = new ProductMetadataWriter($functionCaller(...));
+        $sureRankWriter = new SureRankWriter($functionCaller(...));
+        $labelWriter = new AdvancedLabelWriter($functionCaller(...));
         $draftCreator = new ProductDraftCreator(
             $draftGateway,
             $draftValidator,
@@ -138,6 +127,15 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $translationRegistrar,
             $functionCaller(...)
         );
+        $editorialMigrationService = new ProductEditorialMigrationService(
+            $functionCaller(...),
+            $envatoClient,
+            translate: $translator->translate(...)
+        );
+        $editorialMigrationPage = new ProductEditorialMigrationPage(
+            $editorialMigrationService,
+            $functionCaller(...)
+        );
         $controller = new ProductManagerController(
             $envatoClient,
             $tagSelector,
@@ -146,20 +144,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $tagParser,
             $archiveUploader
         );
-        $page = new ProductManagerPage(
-            $controller,
-            $functionCaller(...)
-        );
-        $versionUpdater = new ProductVersionUpdater(
-            $functionCaller(...)
-        );
+        $page = new ProductManagerPage($controller, $functionCaller(...));
+        $versionUpdater = new ProductVersionUpdater($functionCaller(...));
         $archiveUpdateCoordinator = new ProductArchiveUpdateCoordinator(
             $versionUpdater,
             $archiveUploader
         );
-        $updateAdvisor = new ProductUpdateEnvatoAdvisor(
-            $envatoClient
-        );
+        $updateAdvisor = new ProductUpdateEnvatoAdvisor($envatoClient);
         $manualCandidateBuilder = new ProductUpdateManualCandidateBuilder();
         $updatePage = new ProductUpdatePage(
             $versionUpdater,
@@ -181,36 +172,23 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $updateScanner,
             $functionCaller(...)
         );
-        $updateQueuePage = new ProductUpdateQueuePage(
-            $functionCaller(...)
-        );
+        $updateQueuePage = new ProductUpdateQueuePage($functionCaller(...));
         $updateQueueReturnNavigation = new ProductUpdateQueueReturnNavigation(
             $functionCaller(...)
         );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($batchIntakePage);
+        $registry->addSubmenu($editorialMigrationPage);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
         $registry->addSubmenu($updateQueuePage);
 
-        $this->container->set(
-            EnvatoItemMapper::class,
-            $mapper
-        );
-        $this->container->set(
-            WordPressEnvatoTransport::class,
-            $transport
-        );
-        $this->container->set(
-            EnvatoClientInterface::class,
-            $envatoClient
-        );
-        $this->container->set(
-            EnvatoClient::class,
-            $envatoClient
-        );
+        $this->container->set(EnvatoItemMapper::class, $mapper);
+        $this->container->set(WordPressEnvatoTransport::class, $transport);
+        $this->container->set(EnvatoClientInterface::class, $envatoClient);
+        $this->container->set(EnvatoClient::class, $envatoClient);
         $this->container->set(
             CatalogTagRepositoryInterface::class,
             $tagRepository
@@ -219,22 +197,22 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             WordPressCatalogTagRepository::class,
             $tagRepository
         );
+        $this->container->set(ExistingTagSelector::class, $tagSelector);
+        $this->container->set(ExistingCatalogTagParser::class, $tagParser);
+        $this->container->set(WordPressFunctionCaller::class, $functionCaller);
         $this->container->set(
-            ExistingTagSelector::class,
-            $tagSelector
+            PreparedEnglishProductContent::class,
+            $preparedEnglishContent
         );
         $this->container->set(
-            ExistingCatalogTagParser::class,
-            $tagParser
+            ProductEditorialMigrationService::class,
+            $editorialMigrationService
         );
         $this->container->set(
-            WordPressFunctionCaller::class,
-            $functionCaller
+            ProductEditorialMigrationPage::class,
+            $editorialMigrationPage
         );
-        $this->container->set(
-            ProductArchiveUploader::class,
-            $archiveUploader
-        );
+        $this->container->set(ProductArchiveUploader::class, $archiveUploader);
         $this->container->set(
             ProductArchiveVersionInspector::class,
             $archiveVersionInspector
@@ -243,114 +221,51 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             ProductArchiveIdentityInspector::class,
             $archiveIdentityInspector
         );
-        $this->container->set(
-            ProductBatchIntakeScanner::class,
-            $batchIntakeScanner
-        );
-        $this->container->set(
-            ProductBatchIntakePage::class,
-            $batchIntakePage
-        );
-        $this->container->set(
-            ProductDraftGatewayInterface::class,
-            $draftGateway
-        );
-        $this->container->set(
-            WordPressWooCommerceDraftGateway::class,
-            $draftGateway
-        );
-        $this->container->set(
-            ProductDraftValidator::class,
-            $draftValidator
-        );
-        $this->container->set(
-            ProductTaxonomyWriter::class,
-            $taxonomyWriter
-        );
-        $this->container->set(
-            ProductMetadataWriter::class,
-            $metadataWriter
-        );
-        $this->container->set(
-            SureRankWriter::class,
-            $sureRankWriter
-        );
-        $this->container->set(
-            AdvancedLabelWriter::class,
-            $labelWriter
-        );
-        $this->container->set(
-            ProductDraftCreator::class,
-            $draftCreator
-        );
-        $this->container->set(
-            TranslationMapBuilder::class,
-            $translationMapBuilder
-        );
+        $this->container->set(ProductBatchIntakeScanner::class, $batchIntakeScanner);
+        $this->container->set(ProductBatchIntakePage::class, $batchIntakePage);
+        $this->container->set(ProductDraftGatewayInterface::class, $draftGateway);
+        $this->container->set(WordPressWooCommerceDraftGateway::class, $draftGateway);
+        $this->container->set(ProductDraftValidator::class, $draftValidator);
+        $this->container->set(ProductTaxonomyWriter::class, $taxonomyWriter);
+        $this->container->set(ProductMetadataWriter::class, $metadataWriter);
+        $this->container->set(SureRankWriter::class, $sureRankWriter);
+        $this->container->set(AdvancedLabelWriter::class, $labelWriter);
+        $this->container->set(ProductDraftCreator::class, $draftCreator);
+        $this->container->set(TranslationMapBuilder::class, $translationMapBuilder);
         $this->container->set(
             TranslationDictionaryInterface::class,
             $translationDictionary
         );
-        $this->container->set(
-            TranslatePressDictionary::class,
-            $translationDictionary
-        );
+        $this->container->set(TranslatePressDictionary::class, $translationDictionary);
         $this->container->set(
             TranslationRegistrarInterface::class,
             $translationRegistrar
         );
-        $this->container->set(
-            TranslatePressRegistrar::class,
-            $translationRegistrar
-        );
+        $this->container->set(TranslatePressRegistrar::class, $translationRegistrar);
         $this->container->set(
             TranslatePressProductTranslator::class,
             $translator
         );
-        $this->container->set(
-            ProductManagerController::class,
-            $controller
-        );
-        $this->container->set(
-            ProductManagerPage::class,
-            $page
-        );
-        $this->container->set(
-            ProductVersionUpdater::class,
-            $versionUpdater
-        );
+        $this->container->set(ProductManagerController::class, $controller);
+        $this->container->set(ProductManagerPage::class, $page);
+        $this->container->set(ProductVersionUpdater::class, $versionUpdater);
         $this->container->set(
             ProductArchiveUpdateCoordinator::class,
             $archiveUpdateCoordinator
         );
-        $this->container->set(
-            ProductUpdateEnvatoAdvisor::class,
-            $updateAdvisor
-        );
+        $this->container->set(ProductUpdateEnvatoAdvisor::class, $updateAdvisor);
         $this->container->set(
             ProductUpdateManualCandidateBuilder::class,
             $manualCandidateBuilder
         );
-        $this->container->set(
-            ProductUpdatePage::class,
-            $updatePage
-        );
-        $this->container->set(
-            ProductUpdateScanner::class,
-            $updateScanner
-        );
-        $this->container->set(
-            ProductUpdateScannerPage::class,
-            $updateScannerPage
-        );
+        $this->container->set(ProductUpdatePage::class, $updatePage);
+        $this->container->set(ProductUpdateScanner::class, $updateScanner);
+        $this->container->set(ProductUpdateScannerPage::class, $updateScannerPage);
         $this->container->set(
             ProductUpdateFullScannerPage::class,
             $updateFullScannerPage
         );
-        $this->container->set(
-            ProductUpdateQueuePage::class,
-            $updateQueuePage
-        );
+        $this->container->set(ProductUpdateQueuePage::class, $updateQueuePage);
         $this->container->set(
             ProductUpdateQueueReturnNavigation::class,
             $updateQueueReturnNavigation
@@ -364,6 +279,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             ProductUpdateQueueReturnNavigation::class
         );
         $functionCaller = $this->container->get(WordPressFunctionCaller::class);
+        $preparedEnglishContent = $this->container->get(
+            PreparedEnglishProductContent::class
+        );
 
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
@@ -383,6 +301,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             );
         }
 
+        if (! $preparedEnglishContent instanceof PreparedEnglishProductContent) {
+            throw new LogicException(
+                'PreparedEnglishProductContent must be registered before boot.'
+            );
+        }
+
         $functionCaller(
             'add_action',
             'admin_post_wp_shop_pm_export_update_report',
@@ -397,6 +321,27 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_footer',
             [$returnNavigation, 'injectQueueReturnState']
+        );
+        $functionCaller(
+            'add_filter',
+            'woocommerce_short_description',
+            [$preparedEnglishContent, 'filterShortDescription'],
+            999,
+            1
+        );
+        $functionCaller(
+            'add_filter',
+            'woocommerce_product_get_short_description',
+            [$preparedEnglishContent, 'filterShortDescription'],
+            999,
+            1
+        );
+        $functionCaller(
+            'add_filter',
+            'woocommerce_product_get_description',
+            [$preparedEnglishContent, 'filterLongDescription'],
+            999,
+            1
         );
     }
 }

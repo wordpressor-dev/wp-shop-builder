@@ -84,7 +84,7 @@ final class TranslatePressProductTranslator
         $catalogPair = null;
 
         try {
-            $map = $this->mapBuilder->build(
+            $baseMap = $this->mapBuilder->build(
                 $ruShort,
                 $ruLong,
                 $ruMeta,
@@ -97,7 +97,7 @@ final class TranslatePressProductTranslator
             );
 
             if ($catalogPair !== null) {
-                $map[$catalogPair['source']] = $catalogPair['target'];
+                $baseMap[$catalogPair['source']] = $catalogPair['target'];
             }
         } catch (InvalidArgumentException $exception) {
             return new ProductTranslationResult(
@@ -116,16 +116,27 @@ final class TranslatePressProductTranslator
                     . ' -> '
                     . $catalogPair['target']
                 : 'CATALOG DISPLAY TRANSLATION = NOT FOUND',
-            'TRANSLATION SEGMENTS = ' . count($map),
         ];
 
         try {
             $logs[] = $this->registrar->registerPage($slug);
+
+            $map = $this->productAwareMap(
+                $productId,
+                $baseMap
+            );
+            $logs[] = 'TRANSLATION BLOCK SEGMENTS = '
+                . max(0, count($map) - count($baseMap));
+            $logs[] = 'TRANSLATION SEGMENTS = ' . count($map);
             $translationStatus = $this->dictionary->status($map);
 
             if ($translationStatus->missing > 0) {
                 $logs[] = 'RETRY_'
                     . $this->registrar->registerPage($slug);
+                $map = $this->productAwareMap(
+                    $productId,
+                    $baseMap
+                );
                 $translationStatus = $this->dictionary->status($map);
             }
 
@@ -138,6 +149,10 @@ final class TranslatePressProductTranslator
                     $this->registrar->registerMissing(
                         $translationStatus
                     )
+                );
+                $map = $this->productAwareMap(
+                    $productId,
+                    $baseMap
                 );
                 $translationStatus = $this->dictionary->status($map);
             }
@@ -178,6 +193,11 @@ final class TranslatePressProductTranslator
                 $translationStatus
             );
             $logs[] = 'EN FILLED = ' . $filled;
+
+            $map = $this->productAwareMap(
+                $productId,
+                $baseMap
+            );
             $final = $this->dictionary->status($map);
         } catch (Throwable $exception) {
             $logs[] = 'TRANSLATION_ERROR: '
@@ -205,40 +225,35 @@ final class TranslatePressProductTranslator
     }
 
     /**
+     * @param array<string, string> $map
+     * @return array<string, string>
+     */
+    private function productAwareMap(
+        int $productId,
+        array $map
+    ): array {
+        if (! $this->dictionary instanceof TranslatePressDictionary) {
+            return $map;
+        }
+
+        return $this->dictionary->augmentMapForProduct(
+            $productId,
+            $map
+        );
+    }
+
+    /**
      * @return array{source: string, target: string}|null
      */
     private function catalogDisplayTranslation(
         int $productId
     ): ?array {
-        $productType = ($this->call)(
-            'get_post_meta',
-            $productId,
-            '_wp_shop_product_type',
-            true
+        $taxonomyPair = $this->taxonomyCategoryTranslation(
+            $productId
         );
 
-        if (is_string($productType)) {
-            $productType = trim($productType);
-
-            $pair = match ($productType) {
-                CatalogProductType::THEME => [
-                    'source' => 'Темы',
-                    'target' => 'Themes',
-                ],
-                CatalogProductType::PLUGIN => [
-                    'source' => 'Плагины',
-                    'target' => 'Plugins',
-                ],
-                CatalogProductType::TEMPLATE_KIT => [
-                    'source' => 'Шаблоны',
-                    'target' => 'Templates',
-                ],
-                default => null,
-            };
-
-            if ($pair !== null) {
-                return $pair;
-            }
+        if ($taxonomyPair !== null) {
+            return $taxonomyPair;
         }
 
         $category = ($this->call)(
@@ -248,11 +263,83 @@ final class TranslatePressProductTranslator
             true
         );
 
-        if (! is_string($category)) {
+        if (is_string($category)) {
+            $pair = $this->categoryPair(trim($category));
+
+            if ($pair !== null) {
+                return $pair;
+            }
+        }
+
+        $productType = ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_product_type',
+            true
+        );
+
+        if (! is_string($productType)) {
             return null;
         }
 
-        $category = trim($category);
+        $productType = trim($productType);
+
+        return match ($productType) {
+            CatalogProductType::THEME => [
+                'source' => 'Темы',
+                'target' => 'Themes',
+            ],
+            CatalogProductType::PLUGIN => [
+                'source' => 'Плагины',
+                'target' => 'Plugins',
+            ],
+            CatalogProductType::TEMPLATE_KIT => [
+                'source' => 'Шаблоны',
+                'target' => 'Templates',
+            ],
+            default => null,
+        };
+    }
+
+    /**
+     * @return array{source: string, target: string}|null
+     */
+    private function taxonomyCategoryTranslation(
+        int $productId
+    ): ?array {
+        $terms = ($this->call)(
+            'wp_get_post_terms',
+            $productId,
+            'product_cat',
+            ['fields' => 'names']
+        );
+
+        if (! is_array($terms)) {
+            return null;
+        }
+
+        foreach ($terms as $term) {
+            if (! is_scalar($term)) {
+                continue;
+            }
+
+            $pair = $this->categoryPair(
+                trim((string) $term)
+            );
+
+            if ($pair !== null) {
+                return $pair;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{source: string, target: string}|null
+     */
+    private function categoryPair(string $category): ?array
+    {
         $english = match ($category) {
             'Темы' => 'Themes',
             'Плагины' => 'Plugins',

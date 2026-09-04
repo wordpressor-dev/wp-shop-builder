@@ -6,6 +6,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
+use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
@@ -15,6 +16,7 @@ use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterfac
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
@@ -75,6 +77,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             WordPressFunctionCaller::class,
             $container->get(WordPressFunctionCaller::class)
+        );
+        self::assertInstanceOf(
+            ProductEditorialMigrationService::class,
+            $container->get(ProductEditorialMigrationService::class)
+        );
+        self::assertInstanceOf(
+            ProductEditorialMigrationPage::class,
+            $container->get(ProductEditorialMigrationPage::class)
         );
         self::assertInstanceOf(
             ProductBatchIntakeScanner::class,
@@ -161,12 +171,20 @@ final class ProductManagerServiceProviderTest extends TestCase
             $registry->submenus()[1]->slug()
         );
         self::assertSame(
-            $container->get(ProductUpdatePage::class),
+            $container->get(ProductEditorialMigrationPage::class),
             $registry->submenus()[2]
         );
         self::assertSame(
-            'wp-shop-builder-product-update',
+            'wp-shop-builder-product-editorial-migration',
             $registry->submenus()[2]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[3]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[3]->slug()
         );
     }
 }

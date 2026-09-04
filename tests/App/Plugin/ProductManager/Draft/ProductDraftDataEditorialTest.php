@@ -16,19 +16,27 @@ final class ProductDraftDataEditorialTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'виллы, отели и курорты',
+            'отели, курорты и виллы',
             $data->shortDescription
         );
         self::assertStringContainsString(
-            '<h3>Назначение и основные сведения</h3>',
+            '<h3>Elementor и настройка страниц</h3>',
             $data->longDescription
         );
         self::assertStringContainsString(
-            'villa, hotel and resort',
+            '<h3>Кому подходит Villora?</h3>',
+            $data->longDescription
+        );
+        self::assertStringContainsString(
+            'hotels, resorts and villas',
             $data->enShortDescription
         );
         self::assertStringContainsString(
-            '<h3>Purpose and product details</h3>',
+            '<h3>Elementor and page building</h3>',
+            $data->enLongDescription
+        );
+        self::assertStringContainsString(
+            '<h3>Who is Villora for?</h3>',
             $data->enLongDescription
         );
         self::assertNotSame('RU meta placeholder', $data->metaDescription);
