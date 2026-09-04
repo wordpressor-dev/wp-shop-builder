@@ -57,7 +57,7 @@ final class ProductSkuFilenameTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'does not match the ThemeForest Item ID'
+            'does not match the Envato marketplace and Item ID'
         );
 
         ProductSkuFilename::synchronize(
@@ -72,7 +72,7 @@ final class ProductSkuFilenameTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'ThemeForest Item ID does not match Sales Page Item ID.'
+            'Envato Item ID does not match Sales Page Item ID.'
         );
 
         ProductSkuFilename::synchronize(
@@ -93,6 +93,34 @@ final class ProductSkuFilenameTest extends TestCase
                 'https://themeforest.net/item/aabbe-digital-marketplace-wordpress-theme/26350912',
                 '6.2.0'
             )
+        );
+    }
+
+    public function testBuildsCodeCanyonPluginSku(): void
+    {
+        self::assertSame(
+            'codecanyon-3357410-ajax-search-pro-for-wordpress-live-search-plugin-4.29.1.zip',
+            ProductSkuFilename::synchronize(
+                'codecanyon-3357410-ajax-search-pro-for-wordpress-live-search-plugin-4.28.1.zip',
+                3357410,
+                'https://codecanyon.net/item/ajax-search-pro-for-wordpress-live-search-plugin/3357410',
+                '4.29.1'
+            )
+        );
+    }
+
+    public function testRejectsCrossMarketplaceSkuForSameItemId(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'does not match the Envato marketplace and Item ID'
+        );
+
+        ProductSkuFilename::synchronize(
+            'themeforest-3357410-ajax-search-pro-for-wordpress-live-search-plugin-4.28.1.zip',
+            3357410,
+            'https://codecanyon.net/item/ajax-search-pro-for-wordpress-live-search-plugin/3357410',
+            '4.29.1'
         );
     }
 
