@@ -84,7 +84,10 @@ final class PreparedEnglishProductContent
             is_string($sourceLong)
             && trim($sourceLong) !== ''
             && $preparedLong !== ''
-            && $this->normalizedText($content) === $this->normalizedText($sourceLong)
+            && (
+                $this->normalizedText($content) === $this->normalizedText($sourceLong)
+                || $this->sameHtmlStructure($content, $sourceLong)
+            )
         ) {
             return $preparedLong;
         }
@@ -176,6 +179,48 @@ final class PreparedEnglishProductContent
     private function normalizedText(string $content): string
     {
         return mb_strtolower($this->plainText($content), 'UTF-8');
+    }
+
+    private function sameHtmlStructure(string $left, string $right): bool
+    {
+        $leftStructure = $this->htmlStructure($left);
+        $rightStructure = $this->htmlStructure($right);
+
+        return $leftStructure !== []
+            && $leftStructure === $rightStructure;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function htmlStructure(string $content): array
+    {
+        $matches = [];
+
+        if (
+            preg_match_all(
+                '/<\/?([a-z][a-z0-9]*)\b[^>]*>/i',
+                $content,
+                $matches,
+                PREG_SET_ORDER
+            ) !== false
+        ) {
+            $structure = [];
+
+            foreach ($matches as $match) {
+                $tag = strtolower((string) $match[1]);
+
+                $isClosing = str_starts_with(
+                    ltrim((string) $match[0]),
+                    '</'
+                );
+                $structure[] = ($isClosing ? '/' : '') . $tag;
+            }
+
+            return $structure;
+        }
+
+        return [];
     }
 
     private function plainText(string $content): string
