@@ -64,6 +64,27 @@ final class PreparedEnglishProductContentTest extends TestCase
         );
     }
 
+    public function testUsesPreparedEnglishWhenTranslatePressPartiallyTranslatedLongContent(): void
+    {
+        $sourceLong = '<h2>Русский заголовок</h2><p>Первый русский абзац.</p><p>Второй русский абзац.</p>';
+        $sourceShort = '<p>Русский short.</p>';
+        $preparedLong = '<h2>English heading</h2><p>First English paragraph.</p><p>Second English paragraph.</p>';
+        $preparedShort = '<p>English short.</p>';
+        $call = $this->englishProductCaller(
+            $sourceLong,
+            $sourceShort,
+            $preparedLong,
+            $preparedShort
+        );
+        $content = new PreparedEnglishProductContent($call(...));
+        $partiallyTranslated = '<h2>English heading</h2><p>Первый русский абзац.</p><p>Second English paragraph.</p>';
+
+        self::assertSame(
+            $preparedLong,
+            $content->filterPostContent($partiallyTranslated)
+        );
+    }
+
     public function testPatchesOnlyRussianFragmentInsideAssembledContent(): void
     {
         $sourceLong = '<h2>Русский заголовок</h2><p>Другой русский текст.</p>';
