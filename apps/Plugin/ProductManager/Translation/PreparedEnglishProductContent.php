@@ -208,14 +208,10 @@ final class PreparedEnglishProductContent
             $structure = [];
 
             foreach ($matches as $match) {
-                $tag = strtolower((string) ($match[1] ?? ''));
-
-                if ($tag === '') {
-                    continue;
-                }
+                $tag = strtolower((string) $match[1]);
 
                 $isClosing = str_starts_with(
-                    ltrim((string) ($match[0] ?? '')),
+                    ltrim((string) $match[0]),
                     '</'
                 );
                 $structure[] = ($isClosing ? '/' : '') . $tag;
