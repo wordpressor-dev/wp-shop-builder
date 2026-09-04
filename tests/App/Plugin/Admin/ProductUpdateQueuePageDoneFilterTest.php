@@ -60,6 +60,34 @@ final class ProductUpdateQueuePageDoneFilterTest extends TestCase
         );
     }
 
+    public function testEnvatoActionAllowsThemeForestAndCodeCanyon(): void
+    {
+        $page = new ProductUpdateQueuePage(
+            static function (string $name, mixed ...$arguments): mixed {
+                if ($name !== 'get_post_meta') {
+                    return null;
+                }
+
+                return match ($arguments[0] ?? 0) {
+                    100 => 'https://themeforest.net/item/theme-a/100',
+                    200 => 'https://codecanyon.net/item/plugin-b/200',
+                    300 => 'https://example.com/item/other/300',
+                    default => '',
+                };
+            }
+        );
+
+        self::assertSame(
+            'https://themeforest.net/item/theme-a/100',
+            $this->invoke($page, 'envatoUrl', [100])
+        );
+        self::assertSame(
+            'https://codecanyon.net/item/plugin-b/200',
+            $this->invoke($page, 'envatoUrl', [200])
+        );
+        self::assertSame('', $this->invoke($page, 'envatoUrl', [300]));
+    }
+
     /**
      * @param list<mixed> $arguments
      */
