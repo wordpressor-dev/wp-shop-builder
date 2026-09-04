@@ -87,7 +87,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Update Queue</h1>';
-        echo '<p>Рабочая очередь после Full Update Scan. Сначала проверяйте официальный ThemeForest changelog, затем открывайте Update Product. Envato metadata остаётся только подсказкой; New Version вводится вручную после проверки changelog.</p>';
+        echo '<p>Рабочая очередь после Full Update Scan. Сначала проверяйте официальный Envato changelog, затем открывайте Update Product. Envato metadata остаётся только подсказкой; New Version вводится вручную после проверки changelog.</p>';
 
         if ($markedDone) {
             echo '<div class="notice notice-success"><p><strong>QUEUE ITEM = DONE</strong></p></div>';
@@ -127,7 +127,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">Рабочая очередь — '
             . $this->escape($this->filterLabel($filter))
             . '</h2>';
-        echo '<p>Новые Envato Date показаны сверху. Поиск работает по Product ID и названию товара. Перед обновлением обязательно откройте ThemeForest и подтвердите версию по публичному changelog.</p>';
+        echo '<p>Новые Envato Date показаны сверху. Поиск работает по Product ID и названию товара. Перед обновлением обязательно откройте Envato и подтвердите версию по публичному changelog.</p>';
 
         if ($matchingRows === []) {
             echo '<p><em>По текущему фильтру и поиску ничего не найдено.</em></p>';
@@ -253,7 +253,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
                 'Envato Date',
                 'Status',
                 'Note',
-                'ThemeForest',
+                'Envato',
                 'Update Product',
                 'Queue',
             ] as $heading
@@ -278,7 +278,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             echo '<td><strong>' . $this->escape((string) $row['status']) . '</strong></td>';
             echo '<td>' . $this->escape((string) $row['message']) . '</td>';
             echo '<td>';
-            $this->renderThemeForestAction($productId);
+            $this->renderEnvatoAction($productId);
             echo '</td>';
             echo '<td>';
             $this->renderUpdateAction($productId);
@@ -365,9 +365,9 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '</form>';
     }
 
-    private function renderThemeForestAction(int $productId): void
+    private function renderEnvatoAction(int $productId): void
     {
-        $url = $this->themeForestUrl($productId);
+        $url = $this->envatoUrl($productId);
 
         if ($url === '') {
             echo '—';
@@ -377,7 +377,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
 
         echo '<a class="button button-secondary" target="_blank" rel="noopener noreferrer" href="'
             . $this->escapeUrl($url)
-            . '">Открыть ThemeForest ↗</a>';
+            . '">Открыть Envato ↗</a>';
     }
 
     private function renderUpdateAction(int $productId): void
@@ -443,7 +443,7 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             . '">';
     }
 
-    private function themeForestUrl(int $productId): string
+    private function envatoUrl(int $productId): string
     {
         if ($productId <= 0) {
             return '';
@@ -475,7 +475,18 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             return '';
         }
 
-        if ($host !== 'themeforest.net' && $host !== 'www.themeforest.net') {
+        if (
+            ! in_array(
+                $host,
+                [
+                    'themeforest.net',
+                    'www.themeforest.net',
+                    'codecanyon.net',
+                    'www.codecanyon.net',
+                ],
+                true
+            )
+        ) {
             return '';
         }
 
