@@ -31,6 +31,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
+use WPShop\App\Plugin\ProductManager\Update\ProductBatchZipUpdateService;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
@@ -151,6 +152,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             ProductVersionUpdater::class,
             $container->get(ProductVersionUpdater::class)
+        );
+        self::assertInstanceOf(
+            ProductBatchZipUpdateService::class,
+            $container->get(ProductBatchZipUpdateService::class)
         );
         self::assertInstanceOf(
             ProductUpdateEnvatoAdvisor::class,
