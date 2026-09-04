@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
+use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -25,6 +26,7 @@ use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
+use WPShop\App\Plugin\ProductManager\Translation\EnglishContentAuditService;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
@@ -139,6 +141,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(TranslatePressProductTranslator::class)
         );
         self::assertInstanceOf(
+            EnglishContentAuditService::class,
+            $container->get(EnglishContentAuditService::class)
+        );
+        self::assertInstanceOf(
+            EnglishContentAuditPage::class,
+            $container->get(EnglishContentAuditPage::class)
+        );
+        self::assertInstanceOf(
             ProductVersionUpdater::class,
             $container->get(ProductVersionUpdater::class)
         );
@@ -179,12 +189,20 @@ final class ProductManagerServiceProviderTest extends TestCase
             $registry->submenus()[2]->slug()
         );
         self::assertSame(
-            $container->get(ProductUpdatePage::class),
+            $container->get(EnglishContentAuditPage::class),
             $registry->submenus()[3]
         );
         self::assertSame(
-            'wp-shop-builder-product-update',
+            'wp-shop-builder-en-content-audit',
             $registry->submenus()[3]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[4]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[4]->slug()
         );
     }
 }
