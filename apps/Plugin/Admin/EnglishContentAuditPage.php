@@ -12,8 +12,8 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class EnglishContentAuditPage implements SubmenuPageInterface
 {
-    private const REPORT_META_KEY = 'wp_shop_pm_en_content_audit_report_v1';
-    private const STATE_META_KEY = 'wp_shop_pm_en_content_audit_state_v1';
+    private const REPORT_META_KEY = 'wp_shop_pm_en_content_audit_report_v2';
+    private const STATE_META_KEY = 'wp_shop_pm_en_content_audit_state_v2';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -85,7 +85,7 @@ final class EnglishContentAuditPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — EN Content Audit</h1>';
-        echo '<p>Read-only audit of prepared English Short/Long/Meta plus TranslatePress rows linked to each WooCommerce product. It detects missing EN fields, Cyrillic text on the EN side, and unfinished TranslatePress rows. Product content is never written.</p>';
+        echo '<p>Read-only audit of the authoritative prepared English Short/Long/Meta used by the storefront. REVIEW is triggered only by missing EN fields or Cyrillic inside those prepared EN fields. TranslatePress tables are checked only for availability; stale historical dictionary rows do not create false REVIEW items. Product content is never written.</p>';
 
         if ($message !== '') {
             echo '<div class="notice notice-success"><p><strong>'
@@ -115,7 +115,7 @@ final class EnglishContentAuditPage implements SubmenuPageInterface
             echo '<table class="widefat striped">';
             echo '<thead><tr>';
             foreach (
-                ['ID', 'Product', 'Status', 'Location', 'Issues', 'TRP check', 'Product']
+                ['ID', 'Product', 'Status', 'Location', 'Issues', 'TRP tables', 'Product']
                 as $heading
             ) {
                 echo '<th>' . $this->escape($heading) . '</th>';
