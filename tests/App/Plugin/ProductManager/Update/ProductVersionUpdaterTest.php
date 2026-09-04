@@ -54,7 +54,7 @@ final class ProductVersionUpdaterTest extends TestCase
         );
     }
 
-    public function testUpdateChangesOnlyVersionIdentityDateAndDownload(): void
+    public function testUpdatePreservesPublicationDateAndStatus(): void
     {
         $calls = [];
         $updater = new ProductVersionUpdater(
@@ -69,7 +69,6 @@ final class ProductVersionUpdaterTest extends TestCase
                     'get_post_status' => 'publish',
                     'get_post_meta' => self::currentIdentityMeta($arguments),
                     'wc_get_product_id_by_sku' => 5034,
-                    'get_gmt_from_date' => '2026-08-20 09:00:00',
                     'wp_update_post' => 5034,
                     'is_wp_error' => false,
                     default => true,
@@ -95,9 +94,12 @@ final class ProductVersionUpdaterTest extends TestCase
             'Veera – Multipurpose WooCommerce Theme 2.0.0',
             $update[0]['post_title']
         );
-        self::assertSame(
-            '2026-08-20 12:00:00',
-            $update[0]['post_date']
+        self::assertArrayNotHasKey('post_date', $update[0]);
+        self::assertArrayNotHasKey('post_date_gmt', $update[0]);
+        self::assertArrayNotHasKey('post_status', $update[0]);
+        self::assertContains(
+            'PUBLICATION DATE / STATUS = PRESERVED',
+            $result->logs
         );
 
         $meta = $this->metaCalls($calls);
