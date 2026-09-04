@@ -169,7 +169,9 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             . ' &nbsp; MATCHES = ' . $this->escape((string) $matchingCount)
             . ' &nbsp; PAGE = ' . $this->escape((string) $page)
             . '/' . $this->escape((string) $totalPages)
-            . ' &nbsp; PER PAGE = ' . $this->escape((string) $perPage);
+            . ' &nbsp; PER PAGE = ' . $this->escape((string) $perPage)
+            . ' &nbsp; BATCH ZIP SERVICE = '
+            . $this->escape($this->batchZipUpdate !== null ? 'READY' : 'UNAVAILABLE');
 
         if ($report['updated_at'] !== '') {
             echo ' &nbsp; LAST SAVED = ' . $this->escape($report['updated_at']);
@@ -183,7 +185,6 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         if (
             $filter === 'update_available'
             && $pageRows !== []
-            && $this->batchZipUpdate !== null
         ) {
             $this->renderBatchZipUpdate(
                 $pageRows,
@@ -340,6 +341,13 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">Batch ZIP Update — максимум '
             . ProductBatchZipUpdateService::MAX_BATCH
             . ' товаров</h2>';
+
+        if ($this->batchZipUpdate === null) {
+            echo '<div class="notice notice-error inline"><p><strong>BATCH ZIP SERVICE = UNAVAILABLE</strong><br>Plugin wiring is stale. Reinstall the current WP Shop Builder build and reload this page.</p></div>';
+            echo '</div>';
+
+            return;
+        }
         echo '<p>Выберите товары и ZIP-файлы. <strong>Preflight selected</strong> проверяет ZIP без записи товара. После успешного Preflight выберите те же ZIP ещё раз: Apply сверяет SHA256 и повторно выполняет безопасный preflight перед каждым обновлением.</p>';
         echo '<p><strong>Изоляция ошибок:</strong> STOP одного товара не блокирует READY-товары. Каждый Apply использует отдельный archive rollback. Publication date/status и RU/EN контент сохраняются.</p>';
 
