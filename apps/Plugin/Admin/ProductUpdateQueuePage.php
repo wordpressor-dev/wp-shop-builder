@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\Admin;
 
 use Closure;
+use Throwable;
+use WPShop\App\Plugin\ProductManager\Update\ProductBatchZipUpdateService;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class ProductUpdateQueuePage implements SubmenuPageInterface
 {
     private const REPORT_META_KEY = 'wp_shop_pm_update_scan_report_v1';
+    private const BATCH_STATE_META_KEY = 'wp_shop_pm_update_batch_zip_v1';
 
     /**
      * @param Closure(string, mixed...): mixed $call
      */
     public function __construct(
-        private readonly Closure $call
+        private readonly Closure $call,
+        private readonly ?ProductBatchZipUpdateService $batchZipUpdate = null
     ) {
     }
 
@@ -50,12 +54,62 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         );
         $page = max(1, (int) $this->posted('queue_page', '1'));
         $markedDone = false;
+        $batchMessage = '';
+        $batchError = '';
+        $action = $this->posted('wp_shop_pm_update_queue_action');
 
-        if ($this->posted('wp_shop_pm_update_queue_action') === 'mark_done') {
+        if ($action === 'mark_done') {
             $this->checkNonce();
             $markedDone = $this->markDone(
                 (int) $this->posted('report_product_id')
             );
+        } elseif (
+            $action === 'batch_preflight'
+            || $action === 'batch_apply'
+        ) {
+            $this->checkNonce();
+
+            if ($this->batchZipUpdate === null) {
+                $batchError = 'Batch ZIP Update service is unavailable.';
+            } else {
+                try {
+                    $reportForBatch = $this->loadReport();
+                    $selectedIds = $this->postedBatchProductIds();
+                    $archiveFiles = $this->batchArchiveFiles();
+
+                    if ($action === 'batch_preflight') {
+                        $rows = $this->batchZipUpdate->preflight(
+                            $reportForBatch['attention'],
+                            $selectedIds,
+                            $archiveFiles
+                        );
+                        $this->saveBatchState([
+                            'mode' => 'PREFLIGHT',
+                            'rows' => $rows,
+                            'updated_at' => $this->currentTime(),
+                        ]);
+                        $batchMessage = 'BATCH ZIP PREFLIGHT = SAVED';
+                    } else {
+                        $prepared = $this->loadBatchState();
+                        $rows = $this->batchZipUpdate->apply(
+                            $reportForBatch['attention'],
+                            $selectedIds,
+                            $archiveFiles,
+                            is_array($prepared['rows'] ?? null)
+                                ? $prepared['rows']
+                                : []
+                        );
+                        $this->saveBatchState([
+                            'mode' => 'APPLY',
+                            'rows' => $rows,
+                            'updated_at' => $this->currentTime(),
+                        ]);
+                        $batchMessage = 'BATCH ZIP APPLY = FINISHED';
+                    }
+                } catch (Throwable $exception) {
+                    $batchError = $exception->getMessage();
+                }
+            }
         }
 
         $report = $this->loadReport();
@@ -93,6 +147,18 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
             echo '<div class="notice notice-success"><p><strong>QUEUE ITEM = DONE</strong></p></div>';
         }
 
+        if ($batchMessage !== '') {
+            echo '<div class="notice notice-success"><p><strong>'
+                . $this->escape($batchMessage)
+                . '</strong></p></div>';
+        }
+
+        if ($batchError !== '') {
+            echo '<div class="notice notice-error"><p><strong>BATCH ZIP ERROR:</strong> '
+                . $this->escape($batchError)
+                . '</p></div>';
+        }
+
         echo '<div class="notice notice-info" style="max-width:1400px;padding:10px 14px;">';
         echo '<p><strong>QUEUE STORAGE = USER META ONLY</strong> &nbsp; '
             . 'ATTENTION = ' . $this->escape((string) (count($updateRows) + count($manualRows)))
@@ -113,6 +179,20 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
 
         $this->renderNavigationLinks();
         $this->renderControls($filter, $search, $perPage);
+
+        if (
+            $filter === 'update_available'
+            && $pageRows !== []
+            && $this->batchZipUpdate !== null
+        ) {
+            $this->renderBatchZipUpdate(
+                $pageRows,
+                $filter,
+                $search,
+                $perPage,
+                $page
+            );
+        }
 
         if ($updateRows === [] && $manualRows === [] && $doneRows === []) {
             echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
@@ -228,6 +308,129 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         echo '</select></label>';
         echo '<button type="submit" class="button button-primary">Применить</button>';
         echo '</form>';
+        echo '</div>';
+    }
+
+    /**
+     * @param list<array<string, int|string>> $rows
+     */
+    private function renderBatchZipUpdate(
+        array $rows,
+        string $filter,
+        string $search,
+        int $perPage,
+        int $page
+    ): void {
+        $state = $this->loadBatchState();
+        $stateRows = is_array($state['rows'] ?? null)
+            ? $state['rows']
+            : [];
+        $ready = 0;
+
+        foreach ($stateRows as $stateRow) {
+            if (
+                is_array($stateRow)
+                && (string) ($stateRow['status'] ?? '') === 'READY'
+            ) {
+                ++$ready;
+            }
+        }
+
+        echo '<div class="postbox" style="max-width:1400px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Batch ZIP Update — максимум '
+            . ProductBatchZipUpdateService::MAX_BATCH
+            . ' товаров</h2>';
+        echo '<p>Выберите товары и ZIP-файлы. <strong>Preflight selected</strong> проверяет ZIP без записи товара. После успешного Preflight выберите те же ZIP ещё раз: Apply сверяет SHA256 и повторно выполняет безопасный preflight перед каждым обновлением.</p>';
+        echo '<p><strong>Изоляция ошибок:</strong> STOP одного товара не блокирует READY-товары. Каждый Apply использует отдельный archive rollback. Publication date/status и RU/EN контент сохраняются.</p>';
+
+        if ((string) ($state['updated_at'] ?? '') !== '') {
+            echo '<p>LAST BATCH = '
+                . $this->escape((string) ($state['mode'] ?? ''))
+                . ' / '
+                . $this->escape((string) $state['updated_at'])
+                . ' &nbsp; READY = '
+                . $this->escape((string) $ready)
+                . '</p>';
+        }
+
+        echo '<form method="post" enctype="multipart/form-data">';
+        $this->nonceField();
+        $this->hiddenQueueState($filter, $search, $perPage, $page);
+        echo '<table class="widefat striped"><thead><tr>';
+        echo '<th style="width:45px;">Use</th><th>ID</th><th>Product</th>';
+        echo '<th>Current</th><th>Envato</th><th>ZIP</th><th>Batch status</th>';
+        echo '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            if ((string) ($row['status'] ?? '') !== 'UPDATE_AVAILABLE') {
+                continue;
+            }
+
+            $productId = (int) $row['productId'];
+            $saved = $stateRows[$productId]
+                ?? $stateRows[(string) $productId]
+                ?? null;
+            $savedStatus = is_array($saved)
+                ? (string) ($saved['status'] ?? '')
+                : '';
+            $checked = in_array($savedStatus, ['READY', 'STOP'], true)
+                ? ' checked'
+                : '';
+
+            echo '<tr>';
+            echo '<td><input type="checkbox" name="batch_product_ids[]" value="'
+                . $this->escapeAttr((string) $productId)
+                . '"'
+                . $checked
+                . '></td>';
+            echo '<td>' . $this->escape((string) $productId) . '</td>';
+            echo '<td>' . $this->escape((string) $row['title']) . '</td>';
+            echo '<td>' . $this->escape($this->valueOrEmpty($row['currentVersion'])) . '</td>';
+            echo '<td>' . $this->escape($this->valueOrEmpty($row['envatoVersion'])) . '</td>';
+            echo '<td><input type="file" accept=".zip,application/zip" name="batch_archive_zip['
+                . $this->escapeAttr((string) $productId)
+                . ']" style="max-width:320px;"></td>';
+            echo '<td><strong>'
+                . $this->escape($savedStatus !== '' ? $savedStatus : '—')
+                . '</strong></td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+        echo '<p style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:0;">';
+        echo '<button type="submit" name="wp_shop_pm_update_queue_action" value="batch_preflight" class="button button-secondary">Preflight selected — без записи</button>';
+
+        if ($ready > 0) {
+            echo '<button type="submit" name="wp_shop_pm_update_queue_action" value="batch_apply" class="button button-primary">Apply READY selected</button>';
+        }
+
+        echo '</p></form>';
+
+        if ($stateRows !== []) {
+            echo '<h3>Последний Batch result</h3>';
+            echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Product</th><th>Status</th><th>Log</th></tr></thead><tbody>';
+
+            foreach ($stateRows as $stateRow) {
+                if (! is_array($stateRow)) {
+                    continue;
+                }
+
+                $logs = is_array($stateRow['logs'] ?? null)
+                    ? array_map('strval', $stateRow['logs'])
+                    : [];
+                echo '<tr>';
+                echo '<td>' . $this->escape((string) ($stateRow['productId'] ?? '')) . '</td>';
+                echo '<td>' . $this->escape((string) ($stateRow['title'] ?? '')) . '</td>';
+                echo '<td><strong>' . $this->escape((string) ($stateRow['status'] ?? '')) . '</strong></td>';
+                echo '<td><details><summary>Показать лог</summary><pre style="white-space:pre-wrap;">'
+                    . $this->escape(implode("\n", $logs))
+                    . '</pre></details></td>';
+                echo '</tr>';
+            }
+
+            echo '</tbody></table>';
+        }
+
         echo '</div>';
     }
 
@@ -696,6 +899,106 @@ final class ProductUpdateQueuePage implements SubmenuPageInterface
         }
 
         return 25;
+    }
+
+    /**
+     * @return list<int|string>
+     */
+    private function postedBatchProductIds(): array
+    {
+        $raw = $_POST['batch_product_ids'] ?? [];
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $ids = [];
+
+        foreach ($raw as $value) {
+            if (is_scalar($value)) {
+                $ids[] = (string) ($this->call)(
+                    'wp_unslash',
+                    (string) $value
+                );
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function batchArchiveFiles(): array
+    {
+        $bag = $_FILES['batch_archive_zip'] ?? null;
+
+        if (! is_array($bag)) {
+            return [];
+        }
+
+        $names = is_array($bag['name'] ?? null) ? $bag['name'] : [];
+        $files = [];
+
+        foreach ($names as $rawId => $name) {
+            $productId = (int) $rawId;
+
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $files[$productId] = [
+                'name' => is_scalar($name) ? (string) $name : '',
+                'type' => is_scalar($bag['type'][$rawId] ?? null)
+                    ? (string) $bag['type'][$rawId]
+                    : '',
+                'tmp_name' => is_scalar($bag['tmp_name'][$rawId] ?? null)
+                    ? (string) $bag['tmp_name'][$rawId]
+                    : '',
+                'error' => (int) ($bag['error'][$rawId] ?? UPLOAD_ERR_NO_FILE),
+                'size' => (int) ($bag['size'][$rawId] ?? 0),
+            ];
+        }
+
+        return $files;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadBatchState(): array
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $stored = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::BATCH_STATE_META_KEY,
+            true
+        );
+
+        return is_array($stored) ? $stored : [];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function saveBatchState(array $state): void
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::BATCH_STATE_META_KEY,
+                $state
+            );
+        }
     }
 
     private function markDone(int $productId): bool

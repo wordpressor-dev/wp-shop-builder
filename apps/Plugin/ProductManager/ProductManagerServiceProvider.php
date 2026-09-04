@@ -41,6 +41,7 @@ use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
 use WPShop\App\Plugin\ProductManager\Translation\TranslationMapBuilder;
 use WPShop\App\Plugin\ProductManager\Update\ProductArchiveUpdateCoordinator;
+use WPShop\App\Plugin\ProductManager\Update\ProductBatchZipUpdateService;
 use WPShop\App\Plugin\ProductManager\Update\ProductArchiveVersionInspector;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateEnvatoAdvisor;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateManualCandidateBuilder;
@@ -160,6 +161,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $versionUpdater,
             $archiveUploader
         );
+        $batchZipUpdateService = new ProductBatchZipUpdateService(
+            $versionUpdater,
+            $archiveUpdateCoordinator
+        );
         $updateAdvisor = new ProductUpdateEnvatoAdvisor($envatoClient);
         $manualCandidateBuilder = new ProductUpdateManualCandidateBuilder();
         $updatePage = new ProductUpdatePage(
@@ -182,7 +187,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $updateScanner,
             $functionCaller(...)
         );
-        $updateQueuePage = new ProductUpdateQueuePage($functionCaller(...));
+        $updateQueuePage = new ProductUpdateQueuePage(
+            $functionCaller(...),
+            $batchZipUpdateService
+        );
         $updateQueueReturnNavigation = new ProductUpdateQueueReturnNavigation(
             $functionCaller(...)
         );
@@ -271,6 +279,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductArchiveUpdateCoordinator::class,
             $archiveUpdateCoordinator
+        );
+        $this->container->set(
+            ProductBatchZipUpdateService::class,
+            $batchZipUpdateService
         );
         $this->container->set(ProductUpdateEnvatoAdvisor::class, $updateAdvisor);
         $this->container->set(
