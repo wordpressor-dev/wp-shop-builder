@@ -19,6 +19,55 @@ final readonly class ProductArchiveUpdateCoordinator
     /**
      * @param array<string, mixed> $archiveFile
      */
+    public function preflight(
+        ProductUpdateData $data,
+        array $archiveFile = []
+    ): ProductUpdateResult {
+        $preparedData = $data;
+        $inspectionLogs = [];
+
+        if ($this->archiveSupplied($archiveFile)) {
+            $productType = CatalogProductType::infer(
+                $data->baseTitle,
+                $data->salesPage
+            );
+            $inspector = $this->archiveInspector
+                ?? new ProductArchiveVersionInspector();
+            $inspection = $inspector->inspect(
+                $archiveFile,
+                $productType
+            );
+            $inspectionLogs = $inspection->logs;
+
+            if (! $inspection->success) {
+                return new ProductUpdateResult(
+                    false,
+                    array_merge(
+                        ['UPDATE REQUEST = RECEIVED'],
+                        $inspectionLogs,
+                        ['STOP: PRODUCT NOT UPDATED.']
+                    )
+                );
+            }
+
+            $preparedData = $preparedData->withVersion(
+                $productType === CatalogProductType::TEMPLATE_KIT
+                    ? ''
+                    : $inspection->version
+            );
+        }
+
+        $result = $this->updater->preflight($preparedData);
+
+        return new ProductUpdateResult(
+            $result->success,
+            array_merge($inspectionLogs, $result->logs)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $archiveFile
+     */
     public function update(
         ProductUpdateData $data,
         array $archiveFile = []
