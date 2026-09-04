@@ -26,28 +26,26 @@ final class ProductSkuFilename
         }
 
         /*
-         * ThemeForest authors can rename an item. Envato then changes the
-         * slug used in newly downloaded ZIP filenames while the numeric Item
-         * ID remains stable. Treat the Item ID as the product identity and
-         * always rebuild the output filename from the current Sales Page.
+         * Envato authors can rename an item. The marketplace slug used in
+         * newly downloaded ZIP filenames can therefore change while the
+         * numeric Item ID remains stable. Treat marketplace + Item ID as the
+         * identity and rebuild the output filename from the current Sales Page.
          */
-        $identityPrefix = self::itemIdentityPrefix($itemId);
+        $identityPrefix = self::itemIdentityPrefix(
+            self::marketplacePrefix($salesPage),
+            $itemId
+        );
 
         if (
             ! str_starts_with($current, $identityPrefix)
             || ! str_ends_with($current, '.zip')
         ) {
             throw new InvalidArgumentException(
-                'SKU / ZIP filename does not match the ThemeForest Item ID. '
+                'SKU / ZIP filename does not match the Envato marketplace and Item ID. '
                 . 'Expected item identity prefix: ' . $identityPrefix
             );
         }
 
-        /*
-         * A filename for the same ThemeForest Item ID is safe to rebuild.
-         * This covers an older version, an official item/slug rename, and an
-         * unversioned Template Kit whose publisher does not expose a version.
-         */
         return $expected;
     }
 
@@ -60,7 +58,7 @@ final class ProductSkuFilename
 
         if ($itemId <= 0) {
             throw new InvalidArgumentException(
-                'ThemeForest Item ID must be positive before SKU generation.'
+                'Envato Item ID must be positive before SKU generation.'
             );
         }
 
@@ -92,7 +90,7 @@ final class ProductSkuFilename
 
         if (! is_string($path)) {
             throw new InvalidArgumentException(
-                'Cannot extract ThemeForest item slug from Sales Page.'
+                'Cannot extract Envato item slug from Sales Page.'
             );
         }
 
@@ -104,7 +102,7 @@ final class ProductSkuFilename
             ) !== 1
         ) {
             throw new InvalidArgumentException(
-                'Cannot extract ThemeForest item slug from Sales Page.'
+                'Cannot extract Envato item slug from Sales Page.'
             );
         }
 
@@ -112,7 +110,7 @@ final class ProductSkuFilename
 
         if ($salesPageItemId !== $itemId) {
             throw new InvalidArgumentException(
-                'ThemeForest Item ID does not match Sales Page Item ID.'
+                'Envato Item ID does not match Sales Page Item ID.'
             );
         }
 
@@ -127,17 +125,40 @@ final class ProductSkuFilename
 
         if (! is_string($slug) || trim($slug, '-') === '') {
             throw new InvalidArgumentException(
-                'ThemeForest item slug is empty after normalization.'
+                'Envato item slug is empty after normalization.'
             );
         }
 
-        return self::itemIdentityPrefix($itemId)
+        return self::itemIdentityPrefix(
+            self::marketplacePrefix($salesPage),
+            $itemId
+        )
             . trim($slug, '-')
             . '-';
     }
 
-    private static function itemIdentityPrefix(int $itemId): string
+    private static function marketplacePrefix(string $salesPage): string
     {
-        return sprintf('themeforest-%d-', $itemId);
+        $host = parse_url(trim($salesPage), PHP_URL_HOST);
+        $host = is_string($host) ? strtolower($host) : '';
+
+        if ($host === 'themeforest.net' || $host === 'www.themeforest.net') {
+            return 'themeforest';
+        }
+
+        if ($host === 'codecanyon.net' || $host === 'www.codecanyon.net') {
+            return 'codecanyon';
+        }
+
+        throw new InvalidArgumentException(
+            'Sales Page must be a ThemeForest or CodeCanyon item URL.'
+        );
+    }
+
+    private static function itemIdentityPrefix(
+        string $marketplace,
+        int $itemId
+    ): string {
+        return sprintf('%s-%d-', $marketplace, $itemId);
     }
 }

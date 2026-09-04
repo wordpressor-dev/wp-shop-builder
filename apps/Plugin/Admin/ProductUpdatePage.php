@@ -192,7 +192,7 @@ final class ProductUpdatePage implements SubmenuPageInterface
                     ? $snapshot->version
                     : '[empty]'
             ),
-            'THEMEFOREST ITEM ID = ' . (
+            'ENVATO ITEM ID = ' . (
                 $snapshot->itemId > 0
                     ? $snapshot->itemId
                     : 'REVIEW_REQUIRED'
@@ -476,7 +476,7 @@ final class ProductUpdatePage implements SubmenuPageInterface
     {
         echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">2. Review & Update Version</h2>';
-        echo '<p><strong>Safety:</strong> Envato values are suggestions only. Verify the public ThemeForest changelog; the manually reviewed New Version remains the source of truth. Always run Preflight before Apply.</p>';
+        echo '<p><strong>Safety:</strong> Envato values are suggestions only. Verify the public Envato changelog; the manually reviewed New Version remains the source of truth. Always run Preflight before Apply.</p>';
         echo '<p><strong>ZIP update:</strong> before Apply, select the downloaded source ZIP. Product Manager validates it, builds the canonical new filename, routes it to the product storage folder and updates the WooCommerce download entry. If the same canonical file already exists, it is backed up until the product update succeeds.</p>';
         echo '<p><strong>Manual candidate:</strong> after entering a verified New Version, use the manual prepare button to rebuild the canonical SKU/ZIP name and suggested Download URL without writing the product.</p>';
         echo '<p><strong>Preserved:</strong> RU/EN descriptions, SureRank content, tags, taxonomies, attributes, featured image and Hit/New labels are not rewritten.</p>';
@@ -489,7 +489,7 @@ final class ProductUpdatePage implements SubmenuPageInterface
                 ['Product ID', 'product_id', 'number'],
                 ['Current status', 'status', 'text'],
                 ['Base title', 'base_title', 'text'],
-                ['ThemeForest Item ID', 'item_id', 'number'],
+                ['Envato Item ID', 'item_id', 'number'],
                 ['Current Version', 'current_version', 'text'],
                 ['Current official update date', 'current_update_date', 'date'],
                 ['Envato suggested Version', 'envato_version', 'text'],

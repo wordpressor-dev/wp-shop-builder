@@ -91,7 +91,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Update Scanner</h1>';
-        echo '<p>Read-only batch comparison for ThemeForest products. Nothing is written to WooCommerce products. The cumulative admin report is stored only in the current user profile. Envato metadata is advisory only; verify the public changelog before any update.</p>';
+        echo '<p>Read-only batch comparison for ThemeForest and CodeCanyon products. Nothing is written to WooCommerce products. The cumulative admin report is stored only in the current user profile. Envato metadata is advisory only; verify the public changelog before any update.</p>';
 
         if ($reportReset) {
             echo '<div class="notice notice-success"><p><strong>CATALOG REPORT = RESET</strong></p></div>';
@@ -231,7 +231,7 @@ final class ProductUpdateScannerPage implements SubmenuPageInterface
         string $sort
     ): void {
         echo '<div class="postbox" style="max-width:1250px;padding:18px 20px;">';
-        echo '<h2 style="margin-top:0;">Scan ThemeForest Products</h2>';
+        echo '<h2 style="margin-top:0;">Scan Envato Products</h2>';
         echo '<p>Use small batches to reduce Envato rate-limit risk. Maximum batch size: 25. Each scanned package is automatically added to the cumulative report without duplicate Product IDs.</p>';
         echo '<form method="post">';
         $this->nonceField();

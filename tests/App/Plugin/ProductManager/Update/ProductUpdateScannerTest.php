@@ -119,6 +119,41 @@ final class ProductUpdateScannerTest extends TestCase
         self::assertSame([], $writes);
     }
 
+    public function testScanQueriesThemeForestAndCodeCanyonProducts(): void
+    {
+        $query = [];
+        $call = static function (
+            string $function,
+            mixed ...$args
+        ) use (&$query): mixed {
+            if ($function === 'get_posts') {
+                $query = $args[0] ?? [];
+
+                return [];
+            }
+
+            return null;
+        };
+
+        $envato = $this->createMock(EnvatoClientInterface::class);
+        $scanner = new ProductUpdateScanner(
+            new ProductVersionUpdater($call(...)),
+            new ProductUpdateEnvatoAdvisor($envato),
+            $call(...)
+        );
+
+        self::assertSame([], $scanner->scan(0, 25, 'token'));
+        self::assertSame('OR', $query['meta_query']['relation'] ?? null);
+        self::assertSame(
+            'themeforest.net/item/',
+            $query['meta_query'][0]['value'] ?? null
+        );
+        self::assertSame(
+            'codecanyon.net/item/',
+            $query['meta_query'][1]['value'] ?? null
+        );
+    }
+
     /**
      * @return array<string, mixed>
      */
