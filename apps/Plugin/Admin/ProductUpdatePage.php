@@ -96,7 +96,12 @@ final class ProductUpdatePage implements SubmenuPageInterface
             $data = $this->data($fields);
 
             if ($action === 'preflight_update') {
-                $result = $this->updater->preflight($data);
+                $result = $this->archiveCoordinator !== null
+                    ? $this->archiveCoordinator->preflight(
+                        $data,
+                        $this->uploadedFile('update_archive_zip')
+                    )
+                    : $this->updater->preflight($data);
             } elseif ($this->archiveCoordinator !== null) {
                 $result = $this->archiveCoordinator->update(
                     $data,
