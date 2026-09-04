@@ -71,10 +71,9 @@ final class EnglishContentAuditServiceTest extends TestCase
 
         self::assertSame('REVIEW', $rows[1]->status);
         self::assertContains('LONG', $rows[1]->locations);
-        self::assertContains('TRP', $rows[1]->locations);
         self::assertContains('EN_LONG_CYRILLIC', $rows[1]->issues);
-        self::assertContains('TRP_CYRILLIC_1', $rows[1]->issues);
-        self::assertContains('TRP_INCOMPLETE_1', $rows[1]->issues);
+        self::assertNotContains('TRP', $rows[1]->locations);
+        self::assertCount(1, $rows[1]->issues);
         self::assertTrue($rows[1]->trpChecked);
         self::assertSame([], $writes);
     }

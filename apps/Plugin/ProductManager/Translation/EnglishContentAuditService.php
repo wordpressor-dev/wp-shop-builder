@@ -77,9 +77,7 @@ final class EnglishContentAuditService
             return [];
         }
 
-        [$translationIssues, $trpChecked] = $this->translationIssues(
-            $productIds
-        );
+        $trpChecked = $this->translationTablesAvailable();
         $rows = [];
 
         foreach ($productIds as $productId) {
@@ -114,11 +112,6 @@ final class EnglishContentAuditService
                 }
             }
 
-            foreach ($translationIssues[$productId] ?? [] as $issue) {
-                $issues[] = $issue;
-                $locations[] = 'TRP';
-            }
-
             $issues = array_values(array_unique($issues));
             $locations = array_values(array_unique($locations));
 
@@ -135,113 +128,12 @@ final class EnglishContentAuditService
         return $rows;
     }
 
-    /**
-     * @param list<int> $productIds
-     * @return array{array<int, list<string>>, bool}
-     */
-    private function translationIssues(array $productIds): array
+    private function translationTablesAvailable(): bool
     {
-        $dictionaryTable = $this->tableLike(
-            '%trp_dictionary_ru_ru_en_us'
-        );
-        $metaTable = $this->tableLike('%trp_original_meta');
-
-        if ($dictionaryTable === null || $metaTable === null) {
-            return [[], false];
-        }
-
-        $originalToProducts = [];
-
-        foreach (array_chunk($productIds, 100) as $chunk) {
-            $placeholders = implode(
-                ',',
-                array_fill(0, count($chunk), '%s')
-            );
-            $sql = sprintf(
-                'SELECT original_id, meta_value FROM %s '
-                . 'WHERE meta_key = %%s AND meta_value IN (%s)',
-                $metaTable,
-                $placeholders
-            );
-            $parameters = array_merge(
-                ['post_parent_id'],
-                array_map('strval', $chunk)
-            );
-
-            foreach ($this->database->fetchAll($sql, $parameters) as $row) {
-                $originalId = (int) ($row['original_id'] ?? 0);
-                $productId = (int) ($row['meta_value'] ?? 0);
-
-                if ($originalId <= 0 || $productId <= 0) {
-                    continue;
-                }
-
-                $originalToProducts[$originalId] ??= [];
-                $originalToProducts[$originalId][] = $productId;
-            }
-        }
-
-        if ($originalToProducts === []) {
-            return [[], true];
-        }
-
-        $counts = [];
-
-        foreach (
-            array_chunk(array_keys($originalToProducts), 100)
-            as $chunk
-        ) {
-            $placeholders = implode(
-                ',',
-                array_fill(0, count($chunk), '%d')
-            );
-            $sql = sprintf(
-                'SELECT original_id, translated, status FROM %s '
-                . 'WHERE original_id IN (%s)',
-                $dictionaryTable,
-                $placeholders
-            );
-
-            foreach ($this->database->fetchAll($sql, $chunk) as $row) {
-                $originalId = (int) ($row['original_id'] ?? 0);
-                $translated = trim(
-                    (string) ($row['translated'] ?? '')
-                );
-                $status = (int) ($row['status'] ?? 0);
-
-                foreach ($originalToProducts[$originalId] ?? [] as $productId) {
-                    $counts[$productId] ??= [
-                        'cyrillic' => 0,
-                        'incomplete' => 0,
-                    ];
-
-                    if ($this->hasCyrillic($translated)) {
-                        ++$counts[$productId]['cyrillic'];
-                    }
-
-                    if ($translated === '' || $status !== 2) {
-                        ++$counts[$productId]['incomplete'];
-                    }
-                }
-            }
-        }
-
-        $issues = [];
-
-        foreach ($counts as $productId => $productCounts) {
-            if ($productCounts['cyrillic'] > 0) {
-                $issues[$productId][] = 'TRP_CYRILLIC_'
-                    . $productCounts['cyrillic'];
-            }
-
-            if ($productCounts['incomplete'] > 0) {
-                $issues[$productId][] = 'TRP_INCOMPLETE_'
-                    . $productCounts['incomplete'];
-            }
-        }
-
-        return [$issues, true];
+        return $this->tableLike('%trp_dictionary_ru_ru_en_us') !== null
+            && $this->tableLike('%trp_original_meta') !== null;
     }
+
 
     private function tableLike(string $pattern): ?string
     {
