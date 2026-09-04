@@ -122,13 +122,18 @@ final class WordPressEnvatoTransport
     {
         $page = $_REQUEST['page'] ?? '';
         $action = $_POST['wp_shop_pm_editorial_action'] ?? '';
+        $applyId = $_POST['editorial_apply_id'] ?? '';
 
-        if (! is_scalar($page) || ! is_scalar($action)) {
+        if (! is_scalar($page) || ! is_scalar($action) || ! is_scalar($applyId)) {
             return false;
         }
 
         if ((string) $page !== 'wp-shop-builder-product-editorial-migration') {
             return false;
+        }
+
+        if ((int) $applyId > 0) {
+            return true;
         }
 
         return in_array((string) $action, [
