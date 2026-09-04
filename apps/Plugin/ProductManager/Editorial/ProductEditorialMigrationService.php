@@ -170,26 +170,35 @@ final class ProductEditorialMigrationService
             && $preparedEnglishFingerprint !== ''
             && hash_equals($preparedEnglishFingerprint, $this->englishFingerprint($current));
 
-        if (
-            $preparedEnglishIsCurrent
-            && ! hash_equals($preparedTargetFingerprint, $this->ruFingerprint($generated))
-        ) {
-            $stalePreparedEnglish = true;
-            if (is_array($legacy)) {
-                $legacyWithoutEnglish = $legacy;
-                foreach (['enShort', 'enLong', 'enMeta'] as $field) {
-                    $legacyWithoutEnglish[$field] = '';
+        if ($preparedEnglishIsCurrent) {
+            if (hash_equals($preparedTargetFingerprint, $this->ruFingerprint($generated))) {
+                /*
+                 * EN Pack v2 was already validated against this exact Generated v28 RU
+                 * fingerprint. Keep the imported English authoritative instead of
+                 * rebuilding it from legacy content, which can collapse rich LONG
+                 * structures and make Apply fail after a successful import.
+                 */
+                $generated['enShort'] = $current['enShort'];
+                $generated['enLong'] = $current['enLong'];
+                $generated['enMeta'] = $current['enMeta'];
+            } else {
+                $stalePreparedEnglish = true;
+                if (is_array($legacy)) {
+                    $legacyWithoutEnglish = $legacy;
+                    foreach (['enShort', 'enLong', 'enMeta'] as $field) {
+                        $legacyWithoutEnglish[$field] = '';
+                    }
+                    $generated = $this->builder->build(
+                        $baseTitle,
+                        $developer,
+                        $productType,
+                        $signals,
+                        $sourceUpdateDate,
+                        $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
+                    );
+                    $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
+                    $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
                 }
-                $generated = $this->builder->build(
-                    $baseTitle,
-                    $developer,
-                    $productType,
-                    $signals,
-                    $sourceUpdateDate,
-                    $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
-                );
-                $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
-                $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
             }
         }
 
