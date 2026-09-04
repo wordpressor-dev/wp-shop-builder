@@ -40,6 +40,62 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         );
     }
 
+    public function testScanResolvesItemIdFromMatchedProductSalesPage(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'identity-match';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'demo-theme.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->themeZip($zipPath, 'Demo Theme', '2.0.0');
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [100];
+            }
+
+            if ($name === 'get_the_title') {
+                return 'Demo Theme 1.0.0';
+            }
+
+            if ($name === 'get_post_meta') {
+                return match ((string) ($arguments[1] ?? '')) {
+                    '_wp_shop_product_type' => 'theme',
+                    'attr_version_value' => '1.0.0',
+                    '_wp_shop_source_item_id' => '',
+                    'sales_page' => 'https://themeforest.net/item/demo-theme/123456',
+                    '_sku' => 'themeforest-123456-demo-theme-1.0.0.zip',
+                    default => '',
+                };
+            }
+
+            return null;
+        };
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector()
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertCount(1, $rows);
+        self::assertSame(100, $rows[0]['productId']);
+        self::assertSame(123456, $rows[0]['itemId']);
+        self::assertSame('UPDATE', $rows[0]['action']);
+        self::assertSame('READY', $rows[0]['status']);
+        self::assertSame('2.0.0', $rows[0]['detectedVersion']);
+    }
+
     public function testReadyUpdateRowsKeepsOnlyReadyExistingUpdates(): void
     {
         $scanner = $this->scanner('1.0.0');
