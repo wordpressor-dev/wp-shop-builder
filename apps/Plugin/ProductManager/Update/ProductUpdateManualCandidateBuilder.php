@@ -23,7 +23,7 @@ final class ProductUpdateManualCandidateBuilder
 
         if ($itemId <= 0) {
             throw new InvalidArgumentException(
-                'ThemeForest Item ID is required before manual candidate preparation.'
+                'Envato Item ID is required before manual candidate preparation.'
             );
         }
 
@@ -40,13 +40,13 @@ final class ProductUpdateManualCandidateBuilder
 
         if ($salesPageItemId <= 0) {
             throw new InvalidArgumentException(
-                'Cannot extract ThemeForest Item ID from Sales Page.'
+                'Cannot extract Envato Item ID from Sales Page.'
             );
         }
 
         if ($salesPageItemId !== $itemId) {
             throw new InvalidArgumentException(
-                'ThemeForest Item ID does not match the Sales Page.'
+                'Envato Item ID does not match the Sales Page.'
             );
         }
 
