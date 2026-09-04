@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
+use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -33,6 +34,7 @@ use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
+use WPShop\App\Plugin\ProductManager\Translation\EnglishContentAuditService;
 use WPShop\App\Plugin\ProductManager\Translation\PreparedEnglishProductContent;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
@@ -127,6 +129,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $translationRegistrar,
             $functionCaller(...)
         );
+        $englishContentAudit = new EnglishContentAuditService(
+            $functionCaller(...),
+            $database
+        );
+        $englishContentAuditPage = new EnglishContentAuditPage(
+            $englishContentAudit,
+            $functionCaller(...)
+        );
         $editorialMigrationService = new ProductEditorialMigrationService(
             $functionCaller(...),
             $envatoClient,
@@ -180,6 +190,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($page);
         $registry->addSubmenu($batchIntakePage);
         $registry->addSubmenu($editorialMigrationPage);
+        $registry->addSubmenu($englishContentAuditPage);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
@@ -246,6 +257,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             TranslatePressProductTranslator::class,
             $translator
         );
+        $this->container->set(
+            EnglishContentAuditService::class,
+            $englishContentAudit
+        );
+        $this->container->set(
+            EnglishContentAuditPage::class,
+            $englishContentAuditPage
+        );
         $this->container->set(ProductManagerController::class, $controller);
         $this->container->set(ProductManagerPage::class, $page);
         $this->container->set(ProductVersionUpdater::class, $versionUpdater);
@@ -275,6 +294,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
     public function boot(KernelInterface $kernel): void
     {
         $page = $this->container->get(ProductUpdateScannerPage::class);
+        $englishContentAuditPage = $this->container->get(
+            EnglishContentAuditPage::class
+        );
         $returnNavigation = $this->container->get(
             ProductUpdateQueueReturnNavigation::class
         );
@@ -286,6 +308,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
                 'ProductUpdateScannerPage must be registered before boot.'
+            );
+        }
+
+        if (! $englishContentAuditPage instanceof EnglishContentAuditPage) {
+            throw new LogicException(
+                'EnglishContentAuditPage must be registered before boot.'
             );
         }
 
@@ -311,6 +339,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_update_report',
             [$page, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_en_content_audit',
+            [$englishContentAuditPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',
