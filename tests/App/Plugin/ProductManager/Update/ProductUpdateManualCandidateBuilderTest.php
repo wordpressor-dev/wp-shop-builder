@@ -50,13 +50,44 @@ final class ProductUpdateManualCandidateBuilderTest extends TestCase
         );
     }
 
+    public function testBuildsCodeCanyonManualCandidate(): void
+    {
+        $builder = new ProductUpdateManualCandidateBuilder();
+        $salesPage = 'https://codecanyon.net/item/ajax-search-pro-for-wordpress-live-search-plugin/3357410';
+        $currentUrl = implode('', [
+            'https://wp-shop.org/wp-content/uploads/',
+            'woocommerce_uploads/PLUGINS/Codecanyon/3357410/',
+            'codecanyon-3357410-ajax-search-pro-for-wordpress-live-search-plugin-4.28.1.zip',
+        ]);
+
+        $suggestion = $builder->build(
+            3357410,
+            $salesPage,
+            '4.29.1',
+            $currentUrl
+        );
+
+        self::assertSame(
+            'codecanyon-3357410-ajax-search-pro-for-wordpress-live-search-plugin-4.29.1.zip',
+            $suggestion->skuFilename
+        );
+        self::assertSame(
+            implode('', [
+                'https://wp-shop.org/wp-content/uploads/',
+                'woocommerce_uploads/PLUGINS/Codecanyon/3357410/',
+                'codecanyon-3357410-ajax-search-pro-for-wordpress-live-search-plugin-4.29.1.zip',
+            ]),
+            $suggestion->downloadUrl
+        );
+    }
+
     public function testRejectsSalesPageItemMismatch(): void
     {
         $builder = new ProductUpdateManualCandidateBuilder();
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage(
-            'ThemeForest Item ID does not match the Sales Page.'
+            'Envato Item ID does not match the Sales Page.'
         );
 
         $builder->build(
