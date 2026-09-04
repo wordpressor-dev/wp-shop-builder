@@ -21,6 +21,8 @@ use WPShop\App\Plugin\ProductManager\Update\ProductVersionUpdater;
 
 final class ProductBatchIntakeScanner
 {
+    public const MAX_AUTO_UPDATE_BATCH = 10;
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -147,6 +149,142 @@ final class ProductBatchIntakeScanner
         );
 
         return $rows;
+    }
+
+    /**
+     * @return array{
+     *   processed: int,
+     *   updated: int,
+     *   failed: int,
+     *   remaining: int,
+     *   continue: bool,
+     *   logs: list<string>
+     * }
+     */
+    public function applyReadyUpdates(
+        string $uploadsBaseDir,
+        string $folder,
+        int $limit = self::MAX_AUTO_UPDATE_BATCH
+    ): array {
+        $limit = max(1, min(self::MAX_AUTO_UPDATE_BATCH, $limit));
+        $readyRows = $this->readyUpdateRows(
+            $this->scan($uploadsBaseDir, $folder)
+        );
+        $batch = array_slice($readyRows, 0, $limit);
+        $processed = 0;
+        $updated = 0;
+        $failed = 0;
+        $canContinue = true;
+        $logs = [
+            'AUTO BATCH UPDATE = RECEIVED',
+            'BATCH LIMIT = ' . $limit,
+            'READY BEFORE = ' . count($readyRows),
+        ];
+
+        foreach ($batch as $row) {
+            ++$processed;
+            $filename = $row['filename'];
+            $productId = $row['productId'];
+            $logs[] = str_repeat('=', 72);
+            $logs[] = 'AUTO ITEM = ' . $filename;
+            $logs[] = 'AUTO PRODUCT ID = ' . $productId;
+            $result = $this->applyUpdate(
+                $uploadsBaseDir,
+                $folder,
+                $filename
+            );
+
+            foreach ($result->logs as $line) {
+                $logs[] = $line;
+            }
+
+            if ($result->success) {
+                ++$updated;
+                $logs[] = 'AUTO ITEM RESULT = UPDATED';
+
+                continue;
+            }
+
+            ++$failed;
+            $logs[] = 'AUTO ITEM RESULT = REVIEW';
+
+            try {
+                $target = $this->moveToBucket(
+                    $uploadsBaseDir,
+                    $folder,
+                    $filename,
+                    '_REVIEW'
+                );
+                $logs[] = 'FAILED ZIP MOVED TO = ' . $target;
+            } catch (Throwable $exception) {
+                $canContinue = false;
+                $logs[] = 'FAILED ZIP MOVE TO REVIEW = FAILED';
+                $logs[] = 'FAILED ZIP MOVE ERROR = ' . $exception->getMessage();
+                $logs[] = 'AUTO CONTINUE = BLOCKED FOR MANUAL REVIEW';
+            }
+        }
+
+        $remaining = count(
+            $this->readyUpdateRows(
+                $this->scan($uploadsBaseDir, $folder)
+            )
+        );
+        $logs[] = str_repeat('=', 72);
+        $logs[] = 'AUTO BATCH PROCESSED = ' . $processed;
+        $logs[] = 'AUTO BATCH UPDATED = ' . $updated;
+        $logs[] = 'AUTO BATCH REVIEW = ' . $failed;
+        $logs[] = 'AUTO BATCH REMAINING READY = ' . $remaining;
+        $logs[] = $remaining > 0
+            ? 'AUTO BATCH CONTINUE = REQUIRED'
+            : 'AUTO BATCH UPDATE = COMPLETE';
+
+        return [
+            'processed' => $processed,
+            'updated' => $updated,
+            'failed' => $failed,
+            'remaining' => $remaining,
+            'continue' => $canContinue && $remaining > 0,
+            'logs' => $logs,
+        ];
+    }
+
+    /**
+     * @param list<array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * }> $rows
+     * @return list<array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * }>
+     */
+    public function readyUpdateRows(array $rows): array
+    {
+        return array_values(
+            array_filter(
+                $rows,
+                static fn (array $row): bool => $row['action'] === 'UPDATE'
+                    && $row['status'] === 'READY'
+            )
+        );
     }
 
     public function applyUpdate(
@@ -531,6 +669,29 @@ final class ProductBatchIntakeScanner
                 $detectedVersion = $inspection->version;
                 $note = $inspection->logs[2] ?? 'ZIP INSPECTION = READY';
             }
+        }
+
+        if (
+            $productId > 0
+            && $status === 'READY'
+            && $productType !== CatalogProductType::TEMPLATE_KIT
+            && $currentVersion !== ''
+            && $detectedVersion !== ''
+            && $detectedVersion !== '—'
+            && version_compare(
+                $detectedVersion,
+                $currentVersion,
+                '<='
+            )
+        ) {
+            $status = 'STOP';
+            $note = version_compare(
+                $detectedVersion,
+                $currentVersion,
+                '=='
+            )
+                ? 'ZIP VERSION = CURRENT; UPDATE NOT REQUIRED'
+                : 'ZIP VERSION OLDER THAN CURRENT; DOWNGRADE BLOCKED';
         }
 
         return [
