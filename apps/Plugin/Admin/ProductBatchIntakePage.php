@@ -12,6 +12,8 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class ProductBatchIntakePage implements SubmenuPageInterface
 {
+    private const AUTO_UPDATE_STATE_META_KEY = 'wp_shop_pm_import_auto_update_v1';
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -58,6 +60,8 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         $logs = [];
         $success = null;
         $showResults = false;
+        $autoContinue = false;
+        $autoState = [];
 
         try {
             $root = $this->scanner->ensureInbox($uploadsBaseDir);
@@ -66,7 +70,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             if (
                 in_array(
                     $action,
-                    ['scan', 'apply', 'create', 'skip', 'review'],
+                    ['scan', 'apply', 'apply_all_ready', 'create', 'skip', 'review'],
                     true
                 )
             ) {
@@ -82,6 +86,34 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 );
                 $logs = $result->logs;
                 $success = $result->success;
+            } elseif ($action === 'apply_all_ready') {
+                $continuation = $this->posted('intake_batch_continue') === '1';
+
+                if (! $continuation) {
+                    $this->saveAutoUpdateState([
+                        'folder' => $selectedFolder,
+                        'processed' => 0,
+                        'updated' => 0,
+                        'review' => 0,
+                        'remaining' => 0,
+                        'started_at' => $this->currentTime(),
+                        'updated_at' => $this->currentTime(),
+                        'complete' => false,
+                    ]);
+                }
+
+                $batch = $this->scanner->applyReadyUpdates(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    ProductBatchIntakeScanner::MAX_AUTO_UPDATE_BATCH
+                );
+                $autoState = $this->accumulateAutoUpdateState(
+                    $selectedFolder,
+                    $batch
+                );
+                $logs = $batch['logs'];
+                $success = $batch['failed'] === 0;
+                $autoContinue = $batch['continue'];
             } elseif ($action === 'create') {
                 $coordinator = new ProductBatchCreateCoordinator(
                     $this->call,
@@ -131,6 +163,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     $selectedFolder
                 );
             }
+
+            if ($autoState === []) {
+                $autoState = $this->loadAutoUpdateState();
+            }
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
             $success = false;
@@ -147,6 +183,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         $this->renderLogs($logs, $success);
+        $this->renderAutoUpdateState($autoState, $selectedFolder);
 
         echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
         echo '<p><strong>INBOX ROOT</strong> = '
@@ -159,7 +196,12 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         if ($showResults && $error === '') {
             $this->renderSummary($rows, $selectedFolder);
+            $this->renderApplyAllReady($rows, $selectedFolder);
             $this->renderTable($rows, $selectedFolder);
+
+            if ($autoContinue) {
+                $this->renderAutoContinue($selectedFolder);
+            }
         }
 
         echo '</div>';
@@ -198,6 +240,185 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         echo '</div>';
+    }
+
+    /**
+     * @param list<array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * }> $rows
+     */
+    private function renderApplyAllReady(
+        array $rows,
+        string $selectedFolder
+    ): void {
+        $ready = $this->scanner->readyUpdateRows($rows);
+
+        if ($ready === []) {
+            return;
+        }
+
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Apply ALL READY Updates</h2>';
+        echo '<p><strong>READY UPDATE = '
+            . $this->escape((string) count($ready))
+            . '</strong>. Обработка идёт автоматически партиями по '
+            . $this->escape((string) ProductBatchIntakeScanner::MAX_AUTO_UPDATE_BATCH)
+            . ' товаров за HTTP-запрос. После каждой партии страница сама продолжает следующую, пока READY UPDATE не закончатся.</p>';
+        echo '<p>Только существующие товары со статусом <strong>UPDATE / READY</strong> обновляются автоматически. CREATE / REVIEW / STOP не затрагиваются. Ошибка отдельного ZIP переносит его в <code>_REVIEW</code> и не блокирует остальные товары.</p>';
+        echo '<form method="post">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="apply_all_ready">';
+        echo '<input type="hidden" name="intake_batch_continue" value="0">';
+        echo '<input type="hidden" name="intake_folder" value="'
+            . $this->escapeAttr($selectedFolder)
+            . '">';
+        echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Автоматически обновить все UPDATE / READY ZIP в этой папке? CREATE, REVIEW и STOP будут пропущены.\');">Apply ALL READY Updates</button>';
+        echo '</form>';
+        echo '</div>';
+    }
+
+    private function renderAutoContinue(string $selectedFolder): void
+    {
+        echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
+        echo '<p><strong>AUTO BATCH CONTINUE = READY</strong> — следующая партия запустится автоматически.</p>';
+        echo '</div>';
+        echo '<form id="wp-shop-auto-batch-continue" method="post" style="display:none;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="apply_all_ready">';
+        echo '<input type="hidden" name="intake_batch_continue" value="1">';
+        echo '<input type="hidden" name="intake_folder" value="'
+            . $this->escapeAttr($selectedFolder)
+            . '">';
+        echo '</form>';
+        echo '<script>window.setTimeout(function(){var f=document.getElementById("wp-shop-auto-batch-continue");if(f){f.submit();}},900);</script>';
+    }
+
+    /**
+     * @param array{
+     *   processed: int,
+     *   updated: int,
+     *   failed: int,
+     *   remaining: int,
+     *   continue: bool,
+     *   logs: list<string>
+     * } $batch
+     * @return array<string, mixed>
+     */
+    private function accumulateAutoUpdateState(
+        string $folder,
+        array $batch
+    ): array {
+        $state = $this->loadAutoUpdateState();
+
+        if (
+            (string) ($state['folder'] ?? '') !== $folder
+            || (bool) ($state['complete'] ?? false)
+        ) {
+            $state = [
+                'folder' => $folder,
+                'processed' => 0,
+                'updated' => 0,
+                'review' => 0,
+                'remaining' => 0,
+                'started_at' => $this->currentTime(),
+                'updated_at' => $this->currentTime(),
+                'complete' => false,
+            ];
+        }
+
+        $state['processed'] = (int) ($state['processed'] ?? 0)
+            + $batch['processed'];
+        $state['updated'] = (int) ($state['updated'] ?? 0)
+            + $batch['updated'];
+        $state['review'] = (int) ($state['review'] ?? 0)
+            + $batch['failed'];
+        $state['remaining'] = $batch['remaining'];
+        $state['updated_at'] = $this->currentTime();
+        $state['complete'] = $batch['remaining'] === 0;
+        $this->saveAutoUpdateState($state);
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function renderAutoUpdateState(
+        array $state,
+        string $selectedFolder
+    ): void {
+        if (
+            $state === []
+            || (string) ($state['folder'] ?? '') !== $selectedFolder
+        ) {
+            return;
+        }
+
+        echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
+        echo '<p><strong>AUTO UPDATE REPORT</strong> &nbsp; PROCESSED = '
+            . $this->escape((string) ((int) ($state['processed'] ?? 0)))
+            . ' &nbsp; UPDATED = '
+            . $this->escape((string) ((int) ($state['updated'] ?? 0)))
+            . ' &nbsp; REVIEW = '
+            . $this->escape((string) ((int) ($state['review'] ?? 0)))
+            . ' &nbsp; REMAINING READY = '
+            . $this->escape((string) ((int) ($state['remaining'] ?? 0)))
+            . ' &nbsp; STATUS = '
+            . $this->escape((bool) ($state['complete'] ?? false) ? 'COMPLETE' : 'RUNNING')
+            . '</p></div>';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadAutoUpdateState(): array
+    {
+        $userId = (int) ($this->call)('get_current_user_id');
+
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $stored = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::AUTO_UPDATE_STATE_META_KEY,
+            true
+        );
+
+        return is_array($stored) ? $stored : [];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function saveAutoUpdateState(array $state): void
+    {
+        $userId = (int) ($this->call)('get_current_user_id');
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::AUTO_UPDATE_STATE_META_KEY,
+                $state
+            );
+        }
+    }
+
+    private function currentTime(): string
+    {
+        return (string) ($this->call)('current_time', 'mysql');
     }
 
     /**
