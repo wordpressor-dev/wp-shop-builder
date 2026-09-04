@@ -258,7 +258,7 @@ final class ProductVersionUpdater
         }
 
         if ($data->itemId <= 0) {
-            $errors[] = 'ThemeForest Item ID is required.';
+            $errors[] = 'Envato Item ID is required.';
         }
 
         if (
