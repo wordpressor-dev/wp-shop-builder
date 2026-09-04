@@ -157,6 +157,7 @@ final class ProductBatchIntakeScanner
      *   updated: int,
      *   failed: int,
      *   remaining: int,
+     *   continue: bool,
      *   logs: list<string>
      * }
      */
@@ -173,6 +174,7 @@ final class ProductBatchIntakeScanner
         $processed = 0;
         $updated = 0;
         $failed = 0;
+        $canContinue = true;
         $logs = [
             'AUTO BATCH UPDATE = RECEIVED',
             'BATCH LIMIT = ' . $limit,
@@ -215,8 +217,10 @@ final class ProductBatchIntakeScanner
                 );
                 $logs[] = 'FAILED ZIP MOVED TO = ' . $target;
             } catch (Throwable $exception) {
+                $canContinue = false;
                 $logs[] = 'FAILED ZIP MOVE TO REVIEW = FAILED';
                 $logs[] = 'FAILED ZIP MOVE ERROR = ' . $exception->getMessage();
+                $logs[] = 'AUTO CONTINUE = BLOCKED FOR MANUAL REVIEW';
             }
         }
 
@@ -239,6 +243,7 @@ final class ProductBatchIntakeScanner
             'updated' => $updated,
             'failed' => $failed,
             'remaining' => $remaining,
+            'continue' => $canContinue && $remaining > 0,
             'logs' => $logs,
         ];
     }
