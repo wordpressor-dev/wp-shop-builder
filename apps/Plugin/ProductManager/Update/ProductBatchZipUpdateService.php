@@ -262,10 +262,6 @@ final class ProductBatchZipUpdateService
         $ids = [];
 
         foreach ($selectedIds as $rawId) {
-            if (! is_scalar($rawId)) {
-                continue;
-            }
-
             $productId = (int) $rawId;
 
             if ($productId > 0) {
@@ -412,7 +408,7 @@ final class ProductBatchZipUpdateService
             'title' => $title,
             'status' => $status,
             'sha256' => $sha256,
-            'logs' => array_values($logs),
+            'logs' => $logs,
         ];
     }
 }
