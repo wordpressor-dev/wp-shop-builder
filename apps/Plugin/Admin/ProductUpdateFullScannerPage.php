@@ -91,7 +91,7 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Full Update Scan</h1>';
-        echo '<p>One-click catalog scan for ThemeForest products. The browser processes one bounded batch per request, then automatically opens the next batch. WooCommerce products remain read-only; only the current administrator\'s scan report and progress state are stored.</p>';
+        echo '<p>One-click catalog scan for ThemeForest and CodeCanyon products. The browser processes one bounded batch per request, then automatically opens the next batch. WooCommerce products remain read-only; only the current administrator\'s scan report and progress state are stored.</p>';
         echo '<p><strong>Important:</strong> keep this page open while the automatic scan is running. Envato metadata remains advisory; every actual update still requires public changelog verification in Update Product.</p>';
 
         if ($message !== '') {
@@ -337,9 +337,15 @@ final class ProductUpdateFullScannerPage implements SubmenuPageInterface
                 'orderby' => 'ID',
                 'order' => 'ASC',
                 'meta_query' => [
+                    'relation' => 'OR',
                     [
                         'key' => 'sales_page',
                         'value' => 'themeforest.net/item/',
+                        'compare' => 'LIKE',
+                    ],
+                    [
+                        'key' => 'sales_page',
+                        'value' => 'codecanyon.net/item/',
                         'compare' => 'LIKE',
                     ],
                 ],
