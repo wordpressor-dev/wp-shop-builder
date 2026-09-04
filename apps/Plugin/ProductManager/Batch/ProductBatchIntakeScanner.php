@@ -613,12 +613,7 @@ final class ProductBatchIntakeScanner
             );
 
             if ($productId > 0) {
-                $itemId = (int) ($this->call)(
-                    'get_post_meta',
-                    $productId,
-                    '_wp_shop_source_item_id',
-                    true
-                );
+                $itemId = $this->productItemId($productId);
             }
         }
 
@@ -766,6 +761,72 @@ final class ProductBatchIntakeScanner
         }
 
         return 0;
+    }
+
+    private function productItemId(int $productId): int
+    {
+        $stored = (int) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_source_item_id',
+            true
+        );
+
+        if ($stored > 0) {
+            return $stored;
+        }
+
+        $salesPage = trim((string) ($this->call)(
+            'get_post_meta',
+            $productId,
+            'sales_page',
+            true
+        ));
+        $fromSalesPage = $this->itemIdFromSalesPage($salesPage);
+
+        if ($fromSalesPage > 0) {
+            return $fromSalesPage;
+        }
+
+        $sku = trim((string) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_sku',
+            true
+        ));
+
+        if (
+            preg_match(
+                '/^(?:themeforest|codecanyon)-(\d+)-/i',
+                $sku,
+                $matches
+            ) === 1
+        ) {
+            return (int) $matches[1];
+        }
+
+        return 0;
+    }
+
+    private function itemIdFromSalesPage(string $salesPage): int
+    {
+        $path = parse_url(trim($salesPage), PHP_URL_PATH);
+
+        if (! is_string($path)) {
+            return 0;
+        }
+
+        if (
+            preg_match(
+                '~/item/[^/]+/(\d+)/?$~',
+                $path,
+                $matches
+            ) !== 1
+        ) {
+            return 0;
+        }
+
+        return (int) $matches[1];
     }
 
     private function productIdByItemId(int $itemId): int
