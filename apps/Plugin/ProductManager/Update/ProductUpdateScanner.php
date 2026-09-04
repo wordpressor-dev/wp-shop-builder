@@ -41,9 +41,15 @@ final class ProductUpdateScanner
                 'orderby' => 'ID',
                 'order' => 'ASC',
                 'meta_query' => [
+                    'relation' => 'OR',
                     [
                         'key' => 'sales_page',
                         'value' => 'themeforest.net/item/',
+                        'compare' => 'LIKE',
+                    ],
+                    [
+                        'key' => 'sales_page',
+                        'value' => 'codecanyon.net/item/',
                         'compare' => 'LIKE',
                     ],
                 ],
@@ -143,14 +149,14 @@ final class ProductUpdateScanner
                     && $envatoUpdateDate <= $currentDate
                 ) {
                     $status = 'SAME';
-                    $message = 'Template Kit has no published version; ThemeForest update date has not advanced.';
+                    $message = 'Template Kit has no published version; Envato update date has not advanced.';
                 } elseif (
                     $envatoUpdateDate !== ''
                     && $currentDate !== ''
                     && $envatoUpdateDate > $currentDate
                 ) {
                     $status = 'MANUAL_REVIEW';
-                    $message = 'Template Kit has no published version; ThemeForest update date advanced. Verify the downloaded package manually.';
+                    $message = 'Template Kit has no published version; Envato update date advanced. Verify the downloaded package manually.';
                 } else {
                     $status = 'MANUAL_REVIEW';
                     $message = 'Template Kit has no published version and update-date comparison is incomplete.';
