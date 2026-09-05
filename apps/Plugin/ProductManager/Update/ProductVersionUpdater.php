@@ -9,7 +9,9 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 use RuntimeException;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
+use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 
 final class ProductVersionUpdater
 {
@@ -131,6 +133,10 @@ final class ProductVersionUpdater
             $preparedData->baseTitle,
             $preparedData->salesPage
         );
+        $sourceType = ProductSourceType::normalize(
+            $preparedData->sourceType,
+            $preparedData->salesPage
+        );
         $displayVersion = $preparedData->version;
 
         if (
@@ -184,9 +190,17 @@ final class ProductVersionUpdater
         );
         $this->updateMeta(
             $preparedData->productId,
-            '_wp_shop_source_item_id',
-            (string) $preparedData->itemId
+            '_wp_shop_source_type',
+            $sourceType
         );
+
+        if ($sourceType === ProductSourceType::ENVATO) {
+            $this->updateMeta(
+                $preparedData->productId,
+                '_wp_shop_source_item_id',
+                (string) $preparedData->itemId
+            );
+        }
 
         $downloadId = md5($preparedData->downloadUrl);
         $this->updateMeta(
@@ -202,6 +216,7 @@ final class ProductVersionUpdater
 
         $logs[] = 'PRODUCT UPDATE = READY';
         $logs[] = 'PRODUCT ID = ' . $preparedData->productId;
+        $logs[] = 'SOURCE TYPE = ' . strtoupper($sourceType);
         $logs[] = 'VERSION = ' . (
             $preparedData->version !== ''
                 ? $preparedData->version
@@ -235,6 +250,10 @@ final class ProductVersionUpdater
             $data->baseTitle,
             $data->salesPage
         );
+        $sourceType = ProductSourceType::normalize(
+            $data->sourceType,
+            $data->salesPage
+        );
 
         try {
             $this->assertProduct($data->productId);
@@ -250,7 +269,10 @@ final class ProductVersionUpdater
             $errors[] = 'Base title is required.';
         }
 
-        if ($data->itemId <= 0) {
+        if (
+            $sourceType === ProductSourceType::ENVATO
+            && $data->itemId <= 0
+        ) {
             $errors[] = 'Envato Item ID is required.';
         }
 
@@ -262,7 +284,7 @@ final class ProductVersionUpdater
         }
 
         if (! $this->validDate($data->sourceUpdateDate)) {
-            $errors[] = 'Official update date must be YYYY-MM-DD.';
+            $errors[] = 'Source update date must be YYYY-MM-DD.';
         }
 
         if (trim($data->salesPage) === '') {
@@ -274,12 +296,18 @@ final class ProductVersionUpdater
         }
 
         try {
-            $canonicalSku = ProductSkuFilename::synchronize(
-                $data->currentSku,
-                $data->itemId,
-                $data->salesPage,
-                $data->version
-            );
+            $canonicalSku = $sourceType === ProductSourceType::VENDOR
+                ? ProductVendorSkuFilename::synchronize(
+                    $data->currentSku,
+                    $data->currentVersion,
+                    $data->version
+                )
+                : ProductSkuFilename::synchronize(
+                    $data->currentSku,
+                    $data->itemId,
+                    $data->salesPage,
+                    $data->version
+                );
         } catch (InvalidArgumentException $exception) {
             $canonicalSku = '';
             $errors[] = $exception->getMessage();
@@ -315,6 +343,7 @@ final class ProductVersionUpdater
             $data->currentVersion
         );
         $logs[] = 'PRODUCT ID = ' . $data->productId;
+        $logs[] = 'SOURCE TYPE = ' . strtoupper($sourceType);
         $logs[] = 'CURRENT VERSION = ' . (
             $currentVersion !== ''
                 ? $currentVersion
