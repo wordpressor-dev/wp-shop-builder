@@ -45,7 +45,7 @@ final class VendorProductNamingAuditServiceTest extends TestCase
             &$writes
         ): mixed {
             if ($name === 'get_posts') {
-                return [10, 20, 30, 40];
+                return [10, 20, 30, 40, 50];
             }
 
             if ($name === 'wp_upload_dir') {
@@ -62,6 +62,7 @@ final class VendorProductNamingAuditServiceTest extends TestCase
                     30 => 'Elementor Website Builder – more than just a page '
                         . 'builder 3.30.0',
                     40 => 'Envato Elements Product',
+                    50 => 'Legacy Marketplace Product',
                     default => '',
                 };
             }
@@ -102,6 +103,11 @@ final class VendorProductNamingAuditServiceTest extends TestCase
                     40 => [
                         '_wp_shop_source_type' => 'vendor',
                         'sales_page' => 'https://elements.envato.com/example',
+                    ],
+                    50 => [
+                        '_wp_shop_source_type' => 'vendor',
+                        'sales_page' => 'https://author.example.com/product/',
+                        '_sku' => 'themeforest-12345-example-1.0.zip',
                     ],
                 ];
 
