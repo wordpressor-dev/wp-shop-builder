@@ -1121,6 +1121,31 @@ final class ProductBatchIntakeScanner
             }
         }
 
+        if ($result === []) {
+            $fallbackStop = [
+                'wordpress',
+                'theme',
+                'plugin',
+                'template',
+                'kit',
+                'pro',
+                'the',
+                'and',
+                'for',
+                'with',
+            ];
+
+            foreach ($tokens as $token) {
+                if (
+                    strlen($token) >= 4
+                    && ! in_array($token, $fallbackStop, true)
+                ) {
+                    $result[] = $token;
+                    break;
+                }
+            }
+        }
+
         return array_values(array_unique(array_slice($result, 0, 4)));
     }
 
