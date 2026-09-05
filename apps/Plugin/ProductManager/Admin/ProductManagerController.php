@@ -15,6 +15,8 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
+use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -525,13 +527,23 @@ final class ProductManagerController
         ProductDraftData $data,
         string $requestLog
     ): array|ProductDraftResult {
+        $sourceType = ProductSourceType::fromSalesPage(
+            $data->salesPage
+        );
+
         try {
-            $canonicalSku = ProductSkuFilename::synchronize(
-                $data->skuFilename,
-                $data->itemId,
-                $data->salesPage,
-                $data->version
-            );
+            $canonicalSku = $sourceType === ProductSourceType::VENDOR
+                ? ProductVendorSkuFilename::synchronize(
+                    $data->skuFilename,
+                    $data->version,
+                    $data->version
+                )
+                : ProductSkuFilename::synchronize(
+                    $data->skuFilename,
+                    $data->itemId,
+                    $data->salesPage,
+                    $data->version
+                );
         } catch (InvalidArgumentException $exception) {
             return new ProductDraftResult(
                 false,
@@ -540,6 +552,7 @@ final class ProductManagerController
                     $requestLog,
                     'STOP: DRAFT NOT CREATED.',
                     'VERSION / SKU SAFETY CHECK = FAILED',
+                    'SOURCE TYPE = ' . strtoupper($sourceType),
                     'ERROR MESSAGE: ' . $exception->getMessage(),
                 ]
             );
@@ -550,7 +563,10 @@ final class ProductManagerController
             $data->salesPage
         );
         $logs = array_merge(
-            [$requestLog],
+            [
+                $requestLog,
+                'SOURCE TYPE = ' . strtoupper($sourceType),
+            ],
             $this->versionLogs(
                 $productType,
                 $data->version,
@@ -566,9 +582,13 @@ final class ProductManagerController
                 . ' -> '
                 . $canonicalSku;
         } else {
-            $logs[] = $data->version !== ''
-                ? 'SKU / VERSION = MATCH'
-                : 'SKU / VERSIONLESS MODE = MATCH';
+            $logs[] = $sourceType === ProductSourceType::VENDOR
+                ? 'VENDOR SKU / VERSION = MATCH'
+                : (
+                    $data->version !== ''
+                        ? 'SKU / VERSION = MATCH'
+                        : 'SKU / VERSIONLESS MODE = MATCH'
+                );
         }
 
         return [
