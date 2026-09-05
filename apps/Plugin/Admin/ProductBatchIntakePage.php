@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\Admin;
 
 use Closure;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateAllService;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateCoordinator;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
@@ -13,6 +14,7 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 final class ProductBatchIntakePage implements SubmenuPageInterface
 {
     private const AUTO_UPDATE_STATE_META_KEY = 'wp_shop_pm_import_auto_update_v1';
+    private const AUTO_CREATE_STATE_META_KEY = 'wp_shop_pm_import_auto_create_v1';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -61,7 +63,9 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         $success = null;
         $showResults = false;
         $autoContinue = false;
+        $autoCreateContinue = false;
         $autoState = [];
+        $autoCreateState = [];
 
         try {
             $root = $this->scanner->ensureInbox($uploadsBaseDir);
@@ -70,7 +74,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             if (
                 in_array(
                     $action,
-                    ['scan', 'apply', 'apply_all_ready', 'create', 'skip', 'review'],
+                    ['scan', 'apply', 'apply_all_ready', 'create', 'create_all_new', 'skip', 'review'],
                     true
                 )
             ) {
@@ -127,6 +131,69 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 );
                 $logs = $result->logs;
                 $success = $result->success;
+            } elseif ($action === 'create_all_new') {
+                $continuation = $this->posted('intake_create_continue') === '1';
+                $service = $this->createAllService();
+
+                if (! $continuation) {
+                    $scanRows = $this->scanner->scan(
+                        $uploadsBaseDir,
+                        $selectedFolder
+                    );
+                    $prepared = $service->prepare(
+                        $scanRows,
+                        $this->postedNewReferences()
+                    );
+
+                    if ($prepared['entries'] === []) {
+                        throw new \RuntimeException(
+                            'No NEW PRODUCT rows have an Envato URL / Item ID.'
+                        );
+                    }
+
+                    $autoCreateState = [
+                        'folder' => $selectedFolder,
+                        'pending' => $prepared['entries'],
+                        'missing' => $prepared['missing'],
+                        'processed' => 0,
+                        'created' => 0,
+                        'review' => 0,
+                        'product_ids' => [],
+                        'started_at' => $this->currentTime(),
+                        'updated_at' => $this->currentTime(),
+                        'complete' => false,
+                    ];
+                    $this->saveAutoCreateState($autoCreateState);
+                } else {
+                    $autoCreateState = $this->loadAutoCreateState();
+
+                    if (
+                        (string) ($autoCreateState['folder'] ?? '')
+                        !== $selectedFolder
+                    ) {
+                        throw new \RuntimeException(
+                            'AUTO CREATE state belongs to another INBOX folder.'
+                        );
+                    }
+                }
+
+                $pending = is_array($autoCreateState['pending'] ?? null)
+                    ? $autoCreateState['pending']
+                    : [];
+                $batch = $service->process(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    $pending,
+                    ProductBatchCreateAllService::MAX_BATCH
+                );
+                $autoCreateState = $this->accumulateAutoCreateState(
+                    $selectedFolder,
+                    $autoCreateState,
+                    $batch
+                );
+                $logs = $batch['logs'];
+                $success = $batch['failed'] === 0;
+                $autoCreateContinue = $batch['continue'];
             } elseif ($action === 'skip') {
                 $target = $this->scanner->moveToBucket(
                     $uploadsBaseDir,
@@ -167,6 +234,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             if ($autoState === []) {
                 $autoState = $this->loadAutoUpdateState();
             }
+
+            if ($autoCreateState === []) {
+                $autoCreateState = $this->loadAutoCreateState();
+            }
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
             $success = false;
@@ -184,6 +255,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         $this->renderLogs($logs, $success);
         $this->renderAutoUpdateState($autoState, $selectedFolder);
+        $this->renderAutoCreateState($autoCreateState, $selectedFolder);
 
         echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
         echo '<p><strong>INBOX ROOT</strong> = '
@@ -197,10 +269,15 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         if ($showResults && $error === '') {
             $this->renderSummary($rows, $selectedFolder);
             $this->renderApplyAllReady($rows, $selectedFolder);
+            $this->renderCreateAllNew($rows, $selectedFolder);
             $this->renderTable($rows, $selectedFolder);
 
             if ($autoContinue) {
                 $this->renderAutoContinue($selectedFolder);
+            }
+
+            if ($autoCreateContinue) {
+                $this->renderAutoCreateContinue($selectedFolder);
             }
         }
 
