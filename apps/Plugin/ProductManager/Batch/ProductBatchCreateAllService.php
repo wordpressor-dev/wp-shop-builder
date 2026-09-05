@@ -185,7 +185,7 @@ final class ProductBatchCreateAllService
             'created' => $created,
             'failed' => $failed,
             'productIds' => $productIds,
-            'remaining' => array_values($remaining),
+            'remaining' => $remaining,
             'continue' => $remaining !== [],
             'logs' => $logs,
         ];
