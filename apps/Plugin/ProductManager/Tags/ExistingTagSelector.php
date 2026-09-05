@@ -30,7 +30,11 @@ final class ExistingTagSelector
         $selected = [];
 
         foreach ($this->rules() as $rule) {
-            if (! $this->matches($blob, $rule['needles'])) {
+            $matched = $rule['slug'] === 'software'
+                ? $this->matchesSoftwareNiche($envatoItem)
+                : $this->matches($blob, $rule['needles']);
+
+            if (! $matched) {
                 continue;
             }
 
@@ -50,6 +54,155 @@ final class ExistingTagSelector
         }
 
         return array_values($selected);
+    }
+
+    /**
+     * @param array<string, mixed> $envatoItem
+     */
+    private function matchesSoftwareNiche(array $envatoItem): bool
+    {
+        if (! $this->isThemeItem($envatoItem)) {
+            return false;
+        }
+
+        $name = $this->string($envatoItem['name'] ?? null);
+        $classification = $this->string(
+            $envatoItem['classification'] ?? null
+        );
+        $titleSignals = mb_strtolower(
+            $name . ' ' . $classification,
+            'UTF-8'
+        );
+        $phrases = [
+            'software',
+            'saas',
+            'software company',
+            'software startup',
+            'software business',
+            'software solution',
+            'software product',
+            'app landing',
+            'technology company',
+            'tech startup',
+        ];
+
+        if ($this->matches($titleSignals, $phrases)) {
+            return true;
+        }
+
+        foreach ($this->tags($envatoItem['tags'] ?? []) as $tag) {
+            $normalized = $this->normalizeTag($tag);
+
+            if (
+                in_array(
+                    $normalized,
+                    [
+                        'software',
+                        'saas',
+                        'software company',
+                        'software startup',
+                        'software business',
+                        'software solution',
+                        'software product',
+                        'app landing',
+                        'app landing page',
+                        'technology company',
+                        'tech startup',
+                        'saas startup',
+                    ],
+                    true
+                )
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $envatoItem
+     */
+    private function isThemeItem(array $envatoItem): bool
+    {
+        if (is_array($envatoItem['wordpress_plugin_metadata'] ?? null)) {
+            return false;
+        }
+
+        $url = $this->string($envatoItem['url'] ?? null);
+        $host = strtolower(
+            (string) parse_url(
+                $url,
+                PHP_URL_HOST
+            )
+        );
+        $host = preg_replace('/^www\./', '', $host) ?? $host;
+
+        if ($host === 'codecanyon.net') {
+            return false;
+        }
+
+        return $host === 'themeforest.net'
+            || is_array(
+                $envatoItem['wordpress_theme_metadata'] ?? null
+            );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tags(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $tags = [];
+
+        foreach ($value as $tag) {
+            if (is_array($tag)) {
+                $tag = $tag['name']
+                    ?? $tag['value']
+                    ?? null;
+            }
+
+            $string = $this->string($tag);
+
+            if ($string !== '') {
+                $tags[] = $string;
+            }
+        }
+
+        return array_values(array_unique($tags));
+    }
+
+    private function normalizeTag(string $value): string
+    {
+        $value = html_entity_decode(
+            $value,
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+        $value = mb_strtolower($value, 'UTF-8');
+        $value = preg_replace(
+            '/[^a-z0-9]+/i',
+            ' ',
+            $value
+        );
+
+        return is_string($value)
+            ? trim(
+                preg_replace('/\s+/', ' ', $value)
+                ?? ''
+            )
+            : '';
+    }
+
+    private function string(mixed $value): string
+    {
+        return is_scalar($value)
+            ? trim((string) $value)
+            : '';
     }
 
     /**
@@ -171,7 +324,7 @@ final class ExistingTagSelector
             [
                 'name' => 'программное обеспечение',
                 'slug' => 'software',
-                'needles' => ['software'],
+                'needles' => [],
             ],
             [
                 'name' => 'музыка и группы',
