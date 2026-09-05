@@ -14,6 +14,7 @@ use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
@@ -29,6 +30,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -199,6 +201,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $updateQueueReturnNavigation = new ProductUpdateQueueReturnNavigation(
             $functionCaller(...)
         );
+        $vendorNamingAudit = new VendorProductNamingAuditService(
+            $functionCaller(...),
+            $archiveIdentityInspector
+        );
+        $vendorNamingAuditPage = new VendorProductNamingAuditPage(
+            $vendorNamingAudit,
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($batchIntakePage);
@@ -208,6 +218,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
         $registry->addSubmenu($updateQueuePage);
+        $registry->addSubmenu($vendorNamingAuditPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -307,6 +318,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $this->container->set(ProductUpdateQueuePage::class, $updateQueuePage);
         $this->container->set(
+            VendorProductNamingAuditService::class,
+            $vendorNamingAudit
+        );
+        $this->container->set(
+            VendorProductNamingAuditPage::class,
+            $vendorNamingAuditPage
+        );
+        $this->container->set(
             ProductUpdateQueueReturnNavigation::class,
             $updateQueueReturnNavigation
         );
@@ -317,6 +336,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $page = $this->container->get(ProductUpdateScannerPage::class);
         $englishContentAuditPage = $this->container->get(
             EnglishContentAuditPage::class
+        );
+        $vendorNamingAuditPage = $this->container->get(
+            VendorProductNamingAuditPage::class
         );
         $returnNavigation = $this->container->get(
             ProductUpdateQueueReturnNavigation::class
@@ -335,6 +357,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $englishContentAuditPage instanceof EnglishContentAuditPage) {
             throw new LogicException(
                 'EnglishContentAuditPage must be registered before boot.'
+            );
+        }
+
+        if (! $vendorNamingAuditPage instanceof VendorProductNamingAuditPage) {
+            throw new LogicException(
+                'VendorProductNamingAuditPage must be registered before boot.'
             );
         }
 
@@ -365,6 +393,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_en_content_audit',
             [$englishContentAuditPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_naming_audit',
+            [$vendorNamingAuditPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',
