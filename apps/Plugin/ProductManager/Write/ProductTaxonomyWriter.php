@@ -9,6 +9,7 @@ use RuntimeException;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
 final class ProductTaxonomyWriter implements
@@ -35,6 +36,16 @@ final class ProductTaxonomyWriter implements
         );
         $categoryLabel = CatalogProductType::categoryLabel($productType);
         $categorySlug = CatalogProductType::categorySlug($productType);
+        $sourceType = ProductSourceType::fromSalesPage(
+            $data->salesPage
+        );
+        $brandName = $sourceType === ProductSourceType::VENDOR
+            ? $data->developer
+            : 'Themeforest';
+        $brandSlug = (string) ($this->call)(
+            'sanitize_title',
+            $brandName
+        );
 
         $categoryId = $this->termId(
             'product_cat',
@@ -44,8 +55,8 @@ final class ProductTaxonomyWriter implements
         );
         $brandId = $this->termId(
             'product_brand',
-            'Themeforest',
-            'themeforest',
+            $brandName,
+            $brandSlug,
             true
         );
         $categoryAttributeId = $this->termId(
@@ -56,8 +67,8 @@ final class ProductTaxonomyWriter implements
         );
         $companyAttributeId = $this->termId(
             'pa_company',
-            'Themeforest',
-            'themeforest',
+            $brandName,
+            $brandSlug,
             true
         );
         $developerSlug = (string) ($this->call)(
@@ -120,7 +131,7 @@ final class ProductTaxonomyWriter implements
 
         return [
             'product_cat = ' . $categoryLabel,
-            'product_brand = Themeforest',
+            'product_brand = ' . $brandName,
             'pa_categori = ' . $categoryLabel,
             'pa_developer = ' . $data->developer,
             'TAGS ASSIGNED = ' . count($productTagIds),
