@@ -7,13 +7,14 @@ namespace WPShop\App\Plugin\ProductManager\Batch;
 use Closure;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 
 final class ProductBatchCreateAllService
 {
     public const MAX_BATCH = 10;
 
     /**
-     * @param Closure(string, string, string, string, string): ProductDraftResult $createDraft
+     * @param Closure(string, string, string, string, string, string): ProductDraftResult $createDraft
      * @param Closure(string, string, string): string $moveToReview
      */
     public function __construct(
@@ -38,15 +39,17 @@ final class ProductBatchCreateAllService
      * }> $rows
      * @param array<string, string> $references
      * @param array<string, string> $notes
+     * @param array<string, string> $sourceTypes
      * @return array{
-     *   entries: list<array{filename:string,reference:string,notes:string}>,
+     *   entries: list<array{filename:string,reference:string,notes:string,sourceType:string}>,
      *   missing: list<string>
      * }
      */
     public function prepare(
         array $rows,
         array $references,
-        array $notes = []
+        array $notes = [],
+        array $sourceTypes = []
     ): array {
         $entries = [];
         $missing = [];
@@ -68,8 +71,34 @@ final class ProductBatchCreateAllService
             $reference = $row['itemId'] > 0
                 ? (string) $row['itemId']
                 : trim((string) ($references[$filename] ?? ''));
+            $sourceType = $row['itemId'] > 0
+                ? ProductSourceType::ENVATO
+                : strtolower(
+                    trim(
+                        (string) (
+                            $sourceTypes[$filename]
+                            ?? ProductSourceType::ENVATO
+                        )
+                    )
+                );
 
-            if ($reference === '') {
+            if (
+                ! in_array(
+                    $sourceType,
+                    [
+                        ProductSourceType::ENVATO,
+                        ProductSourceType::VENDOR,
+                    ],
+                    true
+                )
+            ) {
+                $sourceType = ProductSourceType::ENVATO;
+            }
+
+            if (
+                $sourceType === ProductSourceType::ENVATO
+                && $reference === ''
+            ) {
                 $missing[] = $filename;
 
                 continue;
@@ -79,6 +108,7 @@ final class ProductBatchCreateAllService
                 'filename' => $filename,
                 'reference' => $reference,
                 'notes' => trim((string) ($notes[$filename] ?? '')),
+                'sourceType' => $sourceType,
             ];
         }
 
@@ -89,13 +119,13 @@ final class ProductBatchCreateAllService
     }
 
     /**
-     * @param list<array{filename:string,reference:string,notes:string}> $entries
+     * @param list<array{filename:string,reference:string,notes:string,sourceType:string}> $entries
      * @return array{
      *   processed:int,
      *   created:int,
      *   failed:int,
      *   productIds:list<int>,
-     *   remaining:list<array{filename:string,reference:string,notes:string}>,
+     *   remaining:list<array{filename:string,reference:string,notes:string,sourceType:string}>,
      *   continue:bool,
      *   logs:list<string>
      * }
@@ -124,9 +154,13 @@ final class ProductBatchCreateAllService
             $filename = $entry['filename'];
             $reference = $entry['reference'];
             $notes = $entry['notes'];
+            $sourceType = $entry['sourceType'];
             $logs[] = str_repeat('=', 72);
             $logs[] = 'AUTO NEW ITEM = ' . $filename;
-            $logs[] = 'ENVATO REFERENCE = ' . $reference;
+            $logs[] = 'SOURCE TYPE = ' . strtoupper($sourceType);
+            $logs[] = $reference !== ''
+                ? 'SOURCE REFERENCE = ' . $reference
+                : 'SOURCE REFERENCE = ZIP HEADER';
 
             try {
                 $result = ($this->createDraft)(
@@ -134,7 +168,8 @@ final class ProductBatchCreateAllService
                     $folder,
                     $filename,
                     $reference,
-                    $notes
+                    $notes,
+                    $sourceType
                 );
             } catch (Throwable $exception) {
                 $result = new ProductDraftResult(
