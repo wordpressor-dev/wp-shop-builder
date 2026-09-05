@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\Update\ProductArchiveVersionInspector;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use ZipArchive;
 
 final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
@@ -231,6 +232,67 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         self::assertSame('REVIEW', $rows[0]['status']);
         self::assertStringContainsString(
             'ITEM ID NOT DETECTED',
+            $rows[0]['note']
+        );
+    }
+
+    public function testScanAutoResolvesNewProductEnvatoItemId(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'auto-envato';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'betheme.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->themeZip($zipPath, 'Betheme', '28.5.9.1');
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [];
+            }
+
+            if ($name === 'get_option') {
+                return 'envato-token';
+            }
+
+            return null;
+        };
+        $resolver = new EnvatoItemSearchResolver(
+            static fn (string $url, array $headers): array => [
+                'matches' => [
+                    [
+                        'id' => 7758048,
+                        'name' => 'Betheme | Responsive Multipurpose WordPress & WooCommerce Theme',
+                        'url' => 'https://themeforest.net/item/betheme-responsive-multipurpose-wordpress-theme/7758048',
+                    ],
+                ],
+            ]
+        );
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector(),
+            $resolver
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertCount(1, $rows);
+        self::assertSame(7758048, $rows[0]['itemId']);
+        self::assertSame(0, $rows[0]['productId']);
+        self::assertSame('28.5.9.1', $rows[0]['detectedVersion']);
+        self::assertSame('CREATE', $rows[0]['action']);
+        self::assertSame('READY', $rows[0]['status']);
+        self::assertStringContainsString(
+            'ENVATO AUTO-MATCH: Betheme',
             $rows[0]['note']
         );
     }
