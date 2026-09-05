@@ -24,15 +24,24 @@ final class ProductBatchCreateAllServiceTest extends TestCase
             [
                 'manual.zip' => 'https://codecanyon.net/item/manual/654321',
                 'missing.zip' => '',
+            ],
+            [
+                'known.zip' => '⚠ Продукт предварительно активирован.',
+                'manual.zip' => '',
             ]
         );
 
         self::assertSame(
             [
-                ['filename' => 'known.zip', 'reference' => '123456'],
+                [
+                    'filename' => 'known.zip',
+                    'reference' => '123456',
+                    'notes' => '⚠ Продукт предварительно активирован.',
+                ],
                 [
                     'filename' => 'manual.zip',
                     'reference' => 'https://codecanyon.net/item/manual/654321',
+                    'notes' => '',
                 ],
             ],
             $prepared['entries']
@@ -49,9 +58,10 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                 string $uploadsBaseDir,
                 string $folder,
                 string $filename,
-                string $reference
+                string $reference,
+                string $notes
             ) use (&$created): ProductDraftResult {
-                unset($uploadsBaseDir, $folder, $reference);
+                unset($uploadsBaseDir, $folder, $reference, $notes);
 
                 if ($filename === 'bad.zip') {
                     return new ProductDraftResult(
@@ -88,6 +98,9 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                     ? 'bad.zip'
                     : 'new-' . $index . '.zip',
                 'reference' => (string) (1000 + $index),
+                'notes' => $index === 1
+                    ? '⚠ Продукт предварительно активирован.'
+                    : '',
             ];
         }
 
@@ -118,7 +131,8 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                 string $uploadsBaseDir,
                 string $folder,
                 string $filename,
-                string $reference
+                string $reference,
+                string $notes
             ): ProductDraftResult => new ProductDraftResult(
                 true,
                 1,
@@ -127,6 +141,7 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                     $folder,
                     $filename,
                     $reference,
+                    $notes,
                 ]
             ),
             static fn (
