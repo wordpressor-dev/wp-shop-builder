@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\Admin;
 
 use Closure;
 use Throwable;
+use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateAllService;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateCoordinator;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
@@ -13,6 +14,7 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 final class ProductBatchIntakePage implements SubmenuPageInterface
 {
     private const AUTO_UPDATE_STATE_META_KEY = 'wp_shop_pm_import_auto_update_v1';
+    private const AUTO_CREATE_STATE_META_KEY = 'wp_shop_pm_import_auto_create_v1';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -61,7 +63,9 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         $success = null;
         $showResults = false;
         $autoContinue = false;
+        $autoCreateContinue = false;
         $autoState = [];
+        $autoCreateState = [];
 
         try {
             $root = $this->scanner->ensureInbox($uploadsBaseDir);
@@ -70,7 +74,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             if (
                 in_array(
                     $action,
-                    ['scan', 'apply', 'apply_all_ready', 'create', 'skip', 'review'],
+                    ['scan', 'apply', 'apply_all_ready', 'create', 'create_all_new', 'skip', 'review'],
                     true
                 )
             ) {
@@ -127,6 +131,69 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 );
                 $logs = $result->logs;
                 $success = $result->success;
+            } elseif ($action === 'create_all_new') {
+                $continuation = $this->posted('intake_create_continue') === '1';
+                $service = $this->createAllService();
+
+                if (! $continuation) {
+                    $scanRows = $this->scanner->scan(
+                        $uploadsBaseDir,
+                        $selectedFolder
+                    );
+                    $prepared = $service->prepare(
+                        $scanRows,
+                        $this->postedNewReferences()
+                    );
+
+                    if ($prepared['entries'] === []) {
+                        throw new \RuntimeException(
+                            'No NEW PRODUCT rows have an Envato URL / Item ID.'
+                        );
+                    }
+
+                    $autoCreateState = [
+                        'folder' => $selectedFolder,
+                        'pending' => $prepared['entries'],
+                        'missing' => $prepared['missing'],
+                        'processed' => 0,
+                        'created' => 0,
+                        'review' => 0,
+                        'product_ids' => [],
+                        'started_at' => $this->currentTime(),
+                        'updated_at' => $this->currentTime(),
+                        'complete' => false,
+                    ];
+                    $this->saveAutoCreateState($autoCreateState);
+                } else {
+                    $autoCreateState = $this->loadAutoCreateState();
+
+                    if (
+                        (string) ($autoCreateState['folder'] ?? '')
+                        !== $selectedFolder
+                    ) {
+                        throw new \RuntimeException(
+                            'AUTO CREATE state belongs to another INBOX folder.'
+                        );
+                    }
+                }
+
+                $pending = $this->autoCreatePending(
+                    $autoCreateState
+                );
+                $batch = $service->process(
+                    $uploadsBaseDir,
+                    $selectedFolder,
+                    $pending,
+                    ProductBatchCreateAllService::MAX_BATCH
+                );
+                $autoCreateState = $this->accumulateAutoCreateState(
+                    $selectedFolder,
+                    $autoCreateState,
+                    $batch
+                );
+                $logs = $batch['logs'];
+                $success = $batch['failed'] === 0;
+                $autoCreateContinue = $batch['continue'];
             } elseif ($action === 'skip') {
                 $target = $this->scanner->moveToBucket(
                     $uploadsBaseDir,
@@ -167,6 +234,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             if ($autoState === []) {
                 $autoState = $this->loadAutoUpdateState();
             }
+
+            if ($autoCreateState === []) {
+                $autoCreateState = $this->loadAutoCreateState();
+            }
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
             $success = false;
@@ -184,6 +255,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         $this->renderLogs($logs, $success);
         $this->renderAutoUpdateState($autoState, $selectedFolder);
+        $this->renderAutoCreateState($autoCreateState, $selectedFolder);
 
         echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
         echo '<p><strong>INBOX ROOT</strong> = '
@@ -197,10 +269,15 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         if ($showResults && $error === '') {
             $this->renderSummary($rows, $selectedFolder);
             $this->renderApplyAllReady($rows, $selectedFolder);
+            $this->renderCreateAllNew($rows, $selectedFolder);
             $this->renderTable($rows, $selectedFolder);
 
             if ($autoContinue) {
                 $this->renderAutoContinue($selectedFolder);
+            }
+
+            if ($autoCreateContinue) {
+                $this->renderAutoCreateContinue($selectedFolder);
             }
         }
 
@@ -285,6 +362,379 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Автоматически обновить все UPDATE / READY ZIP в этой папке? CREATE, REVIEW и STOP будут пропущены.\');">Apply ALL READY Updates</button>';
         echo '</form>';
         echo '</div>';
+    }
+
+    /**
+     * @param list<array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * }> $rows
+     */
+    private function renderCreateAllNew(
+        array $rows,
+        string $selectedFolder
+    ): void {
+        $newRows = array_values(
+            array_filter(
+                $rows,
+                static fn (array $row): bool => $row['productId'] <= 0
+                    && $row['productType'] !== ''
+            )
+        );
+
+        if ($newRows === []) {
+            return;
+        }
+
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Create ALL NEW Products as Drafts</h2>';
+        echo '<p><strong>NEW PRODUCT = '
+            . $this->escape((string) count($newRows))
+            . '</strong>. Для ZIP без Item ID укажи Envato URL или Item ID. Пустые строки будут пропущены. Создаются только WooCommerce Drafts; публикация вручную после проверки.</p>';
+        echo '<p>Обработка идёт автоматически партиями по '
+            . $this->escape((string) ProductBatchCreateAllService::MAX_BATCH)
+            . ' товаров за HTTP-запрос. Ошибка отдельного ZIP переносит его в <code>_REVIEW</code> и не блокирует остальные Drafts.</p>';
+        echo '<form method="post">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="create_all_new">';
+        echo '<input type="hidden" name="intake_create_continue" value="0">';
+        echo '<input type="hidden" name="intake_folder" value="'
+            . $this->escapeAttr($selectedFolder)
+            . '">';
+        echo '<table class="widefat striped" style="max-width:1100px;">';
+        echo '<thead><tr><th>ZIP</th><th>Type</th><th>Detected</th><th>Envato URL / Item ID</th></tr></thead><tbody>';
+
+        foreach ($newRows as $row) {
+            echo '<tr>';
+            echo '<td><code>' . $this->escape($row['filename']) . '</code></td>';
+            echo '<td>' . $this->escape($row['productType']) . '</td>';
+            echo '<td>'
+                . $this->escape(
+                    $row['detectedVersion'] !== ''
+                        ? $row['detectedVersion']
+                        : '—'
+                )
+                . '</td>';
+            echo '<td>';
+            echo '<input type="hidden" name="intake_new_filename[]" value="'
+                . $this->escapeAttr($row['filename'])
+                . '">';
+
+            if ($row['itemId'] > 0) {
+                echo '<input type="hidden" name="intake_new_reference[]" value="'
+                    . $this->escapeAttr((string) $row['itemId'])
+                    . '">';
+                echo '<code>' . $this->escape((string) $row['itemId']) . '</code>';
+            } else {
+                echo '<input type="text" name="intake_new_reference[]" placeholder="ThemeForest/CodeCanyon URL or Item ID" style="width:100%;max-width:520px;">';
+            }
+
+            echo '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+        echo '<p style="margin-bottom:0;"><button type="submit" class="button button-primary" onclick="return confirm(\'Создать Draft для всех NEW PRODUCT, где указан Envato URL / Item ID? Товары не будут опубликованы автоматически.\');">Create ALL NEW Drafts</button></p>';
+        echo '</form>';
+        echo '</div>';
+    }
+
+    private function renderAutoCreateContinue(string $selectedFolder): void
+    {
+        echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
+        echo '<p><strong>AUTO CREATE CONTINUE = READY</strong> — следующая партия Drafts запустится автоматически.</p>';
+        echo '</div>';
+        echo '<form id="wp-shop-auto-create-continue" method="post" style="display:none;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="create_all_new">';
+        echo '<input type="hidden" name="intake_create_continue" value="1">';
+        echo '<input type="hidden" name="intake_folder" value="'
+            . $this->escapeAttr($selectedFolder)
+            . '">';
+        echo '</form>';
+        echo '<script>window.setTimeout(function(){var f=document.getElementById("wp-shop-auto-create-continue");if(f){f.submit();}},900);</script>';
+    }
+
+    private function createAllService(): ProductBatchCreateAllService
+    {
+        $coordinator = new ProductBatchCreateCoordinator(
+            $this->call,
+            $this->scanner
+        );
+
+        return new ProductBatchCreateAllService(
+            static fn (
+                string $uploadsBaseDir,
+                string $folder,
+                string $filename,
+                string $reference
+            ) => $coordinator->createDraft(
+                $uploadsBaseDir,
+                $folder,
+                $filename,
+                $reference
+            ),
+            fn (
+                string $uploadsBaseDir,
+                string $folder,
+                string $filename
+            ): string => $this->scanner->moveToBucket(
+                $uploadsBaseDir,
+                $folder,
+                $filename,
+                '_REVIEW'
+            )
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return list<array{filename:string,reference:string}>
+     */
+    private function autoCreatePending(array $state): array
+    {
+        $raw = $state['pending'] ?? null;
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $pending = [];
+
+        foreach ($raw as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $filename = $entry['filename'] ?? null;
+            $reference = $entry['reference'] ?? null;
+
+            if (! is_string($filename) || ! is_string($reference)) {
+                continue;
+            }
+
+            $filename = trim($filename);
+            $reference = trim($reference);
+
+            if ($filename === '' || $reference === '') {
+                continue;
+            }
+
+            $pending[] = [
+                'filename' => $filename,
+                'reference' => $reference,
+            ];
+        }
+
+        return $pending;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function postedNewReferences(): array
+    {
+        $filenames = $_POST['intake_new_filename'] ?? [];
+        $references = $_POST['intake_new_reference'] ?? [];
+
+        if (! is_array($filenames) || ! is_array($references)) {
+            return [];
+        }
+
+        $result = [];
+        $count = min(count($filenames), count($references));
+
+        for ($index = 0; $index < $count; ++$index) {
+            $rawFilename = $filenames[$index] ?? null;
+            $rawReference = $references[$index] ?? null;
+
+            if (! is_scalar($rawFilename) || ! is_scalar($rawReference)) {
+                continue;
+            }
+
+            $filename = trim((string) ($this->call)(
+                'sanitize_file_name',
+                (string) ($this->call)(
+                    'wp_unslash',
+                    (string) $rawFilename
+                )
+            ));
+            $reference = trim((string) ($this->call)(
+                'sanitize_text_field',
+                (string) ($this->call)(
+                    'wp_unslash',
+                    (string) $rawReference
+                )
+            ));
+
+            if ($filename !== '') {
+                $result[$filename] = $reference;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array{
+     *   processed:int,
+     *   created:int,
+     *   failed:int,
+     *   productIds:list<int>,
+     *   remaining:list<array{filename:string,reference:string}>,
+     *   continue:bool,
+     *   logs:list<string>
+     * } $batch
+     * @return array<string, mixed>
+     */
+    private function accumulateAutoCreateState(
+        string $folder,
+        array $state,
+        array $batch
+    ): array {
+        if ((string) ($state['folder'] ?? '') !== $folder) {
+            $state = [
+                'folder' => $folder,
+                'pending' => [],
+                'missing' => [],
+                'processed' => 0,
+                'created' => 0,
+                'review' => 0,
+                'product_ids' => [],
+                'started_at' => $this->currentTime(),
+                'updated_at' => $this->currentTime(),
+                'complete' => false,
+            ];
+        }
+
+        $existingIds = is_array($state['product_ids'] ?? null)
+            ? array_map('intval', $state['product_ids'])
+            : [];
+        $state['processed'] = (int) ($state['processed'] ?? 0)
+            + $batch['processed'];
+        $state['created'] = (int) ($state['created'] ?? 0)
+            + $batch['created'];
+        $state['review'] = (int) ($state['review'] ?? 0)
+            + $batch['failed'];
+        $state['product_ids'] = array_values(
+            array_unique(
+                array_merge(
+                    $existingIds,
+                    $batch['productIds']
+                )
+            )
+        );
+        $state['pending'] = $batch['remaining'];
+        $state['updated_at'] = $this->currentTime();
+        $state['complete'] = $batch['remaining'] === [];
+        $this->saveAutoCreateState($state);
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function renderAutoCreateState(
+        array $state,
+        string $selectedFolder
+    ): void {
+        if (
+            $state === []
+            || (string) ($state['folder'] ?? '') !== $selectedFolder
+        ) {
+            return;
+        }
+
+        $missing = is_array($state['missing'] ?? null)
+            ? array_map('strval', $state['missing'])
+            : [];
+        $productIds = is_array($state['product_ids'] ?? null)
+            ? array_map('intval', $state['product_ids'])
+            : [];
+        $pending = is_array($state['pending'] ?? null)
+            ? count($state['pending'])
+            : 0;
+
+        echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
+        echo '<p><strong>AUTO CREATE REPORT</strong> &nbsp; PROCESSED = '
+            . $this->escape((string) ((int) ($state['processed'] ?? 0)))
+            . ' &nbsp; DRAFT CREATED = '
+            . $this->escape((string) ((int) ($state['created'] ?? 0)))
+            . ' &nbsp; REVIEW = '
+            . $this->escape((string) ((int) ($state['review'] ?? 0)))
+            . ' &nbsp; REMAINING = '
+            . $this->escape((string) $pending)
+            . ' &nbsp; STATUS = '
+            . $this->escape((bool) ($state['complete'] ?? false) ? 'COMPLETE' : 'RUNNING')
+            . '</p>';
+
+        if ($productIds !== []) {
+            echo '<p>CREATED PRODUCT IDs = '
+                . $this->escape(
+                    implode(
+                        ', ',
+                        array_map('strval', $productIds)
+                    )
+                )
+                . '</p>';
+        }
+
+        if ($missing !== []) {
+            echo '<p>SKIPPED — ENVATO REFERENCE REQUIRED = '
+                . $this->escape(implode(', ', $missing))
+                . '</p>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadAutoCreateState(): array
+    {
+        $userId = (int) ($this->call)('get_current_user_id');
+
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $stored = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::AUTO_CREATE_STATE_META_KEY,
+            true
+        );
+
+        return is_array($stored) ? $stored : [];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function saveAutoCreateState(array $state): void
+    {
+        $userId = (int) ($this->call)('get_current_user_id');
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::AUTO_CREATE_STATE_META_KEY,
+                $state
+            );
+        }
     }
 
     private function renderAutoContinue(string $selectedFolder): void
