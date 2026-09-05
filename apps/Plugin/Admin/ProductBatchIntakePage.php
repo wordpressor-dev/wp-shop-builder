@@ -15,6 +15,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 {
     private const AUTO_UPDATE_STATE_META_KEY = 'wp_shop_pm_import_auto_update_v1';
     private const AUTO_CREATE_STATE_META_KEY = 'wp_shop_pm_import_auto_create_v1';
+    private const PREACTIVATED_NOTE = '⚠ Продукт предварительно активирован.';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -127,7 +128,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     $uploadsBaseDir,
                     $selectedFolder,
                     $filename,
-                    $itemReference
+                    $itemReference,
+                    $this->posted('intake_pre_activated') === '1'
+                        ? self::PREACTIVATED_NOTE
+                        : ''
                 );
                 $logs = $result->logs;
                 $success = $result->success;
@@ -142,7 +146,8 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     );
                     $prepared = $service->prepare(
                         $scanRows,
-                        $this->postedNewReferences()
+                        $this->postedNewReferences(),
+                        $this->postedNewNotes()
                     );
 
                     if ($prepared['entries'] === []) {
@@ -411,7 +416,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             . $this->escapeAttr($selectedFolder)
             . '">';
         echo '<table class="widefat striped" style="max-width:1100px;">';
-        echo '<thead><tr><th>ZIP</th><th>Type</th><th>Detected</th><th>Envato URL / Item ID</th></tr></thead><tbody>';
+        echo '<thead><tr><th>ZIP</th><th>Type</th><th>Detected</th><th>Envato URL / Item ID</th><th>Notes</th></tr></thead><tbody>';
 
         foreach ($newRows as $row) {
             echo '<tr>';
@@ -439,6 +444,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             }
 
             echo '</td>';
+            echo '<td><select name="intake_new_pre_activated[]">';
+            echo '<option value="0" selected>Пусто</option>';
+            echo '<option value="1">⚠ Продукт предварительно активирован.</option>';
+            echo '</select></td>';
             echo '</tr>';
         }
 
@@ -476,12 +485,14 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 string $uploadsBaseDir,
                 string $folder,
                 string $filename,
-                string $reference
+                string $reference,
+                string $notes
             ) => $coordinator->createDraft(
                 $uploadsBaseDir,
                 $folder,
                 $filename,
-                $reference
+                $reference,
+                $notes
             ),
             fn (
                 string $uploadsBaseDir,
@@ -498,7 +509,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
     /**
      * @param array<string, mixed> $state
-     * @return list<array{filename:string,reference:string}>
+     * @return list<array{filename:string,reference:string,notes:string}>
      */
     private function autoCreatePending(array $state): array
     {
@@ -517,13 +528,19 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
             $filename = $entry['filename'] ?? null;
             $reference = $entry['reference'] ?? null;
+            $notes = $entry['notes'] ?? '';
 
-            if (! is_string($filename) || ! is_string($reference)) {
+            if (
+                ! is_string($filename)
+                || ! is_string($reference)
+                || ! is_string($notes)
+            ) {
                 continue;
             }
 
             $filename = trim($filename);
             $reference = trim($reference);
+            $notes = trim($notes);
 
             if ($filename === '' || $reference === '') {
                 continue;
@@ -532,6 +549,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             $pending[] = [
                 'filename' => $filename,
                 'reference' => $reference,
+                'notes' => $notes,
             ];
         }
 
@@ -585,13 +603,61 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function postedNewNotes(): array
+    {
+        $filenames = $_POST['intake_new_filename'] ?? [];
+        $flags = $_POST['intake_new_pre_activated'] ?? [];
+
+        if (! is_array($filenames) || ! is_array($flags)) {
+            return [];
+        }
+
+        $result = [];
+        $count = min(count($filenames), count($flags));
+
+        for ($index = 0; $index < $count; ++$index) {
+            $rawFilename = $filenames[$index] ?? null;
+            $rawFlag = $flags[$index] ?? null;
+
+            if (! is_scalar($rawFilename) || ! is_scalar($rawFlag)) {
+                continue;
+            }
+
+            $filename = trim((string) ($this->call)(
+                'sanitize_file_name',
+                (string) ($this->call)(
+                    'wp_unslash',
+                    (string) $rawFilename
+                )
+            ));
+            $flag = (string) ($this->call)(
+                'sanitize_text_field',
+                (string) ($this->call)(
+                    'wp_unslash',
+                    (string) $rawFlag
+                )
+            );
+
+            if ($filename !== '') {
+                $result[$filename] = $flag === '1'
+                    ? self::PREACTIVATED_NOTE
+                    : '';
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param array<string, mixed> $state
      * @param array{
      *   processed:int,
      *   created:int,
      *   failed:int,
      *   productIds:list<int>,
-     *   remaining:list<array{filename:string,reference:string}>,
+     *   remaining:list<array{filename:string,reference:string,notes:string}>,
      *   continue:bool,
      *   logs:list<string>
      * } $batch
@@ -1083,6 +1149,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             echo '<input type="text" name="intake_item_reference" required placeholder="Envato URL / Item ID" style="width:210px;">';
         }
 
+        echo '<label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" name="intake_pre_activated" value="1"> Предварительно активирован</label>';
         echo '<button type="submit" class="button button-primary" onclick="return confirm(\'Создать WooCommerce Draft из этого ZIP? Draft нужно проверить перед публикацией.\');">Create Draft</button>';
         echo '</form>';
     }
