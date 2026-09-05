@@ -1204,7 +1204,7 @@ final class ProductBatchIntakeScanner
             dirname($relative)
         );
 
-        if ($storagePath === '.' || $storagePath === '') {
+        if ($storagePath === '.') {
             return null;
         }
 
