@@ -1124,6 +1124,109 @@ final class ProductBatchIntakeScanner
         return array_values(array_unique(array_slice($result, 0, 4)));
     }
 
+    private function productSourceType(
+        int $productId,
+        string $salesPage
+    ): string {
+        $stored = trim((string) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_source_type',
+            true
+        ));
+
+        return ProductSourceType::normalize(
+            $stored,
+            $salesPage
+        );
+    }
+
+    /**
+     * @return array{
+     *   storagePath:string,
+     *   directory:string,
+     *   downloadUrl:string
+     * }|null
+     */
+    private function vendorArchiveTarget(
+        string $uploadsBaseDir,
+        string $currentDownloadUrl,
+        string $skuFilename
+    ): ?array {
+        $uploadsBaseDir = rtrim(trim($uploadsBaseDir), '/\\');
+        $currentDownloadUrl = trim($currentDownloadUrl);
+        $skuFilename = trim($skuFilename);
+
+        if (
+            $uploadsBaseDir === ''
+            || $currentDownloadUrl === ''
+            || $skuFilename === ''
+            || basename($skuFilename) !== $skuFilename
+        ) {
+            return null;
+        }
+
+        $path = parse_url(
+            $currentDownloadUrl,
+            PHP_URL_PATH
+        );
+
+        if (! is_string($path)) {
+            return null;
+        }
+
+        $marker = '/woocommerce_uploads/';
+        $position = strpos($path, $marker);
+
+        if ($position === false) {
+            return null;
+        }
+
+        $relative = ltrim(
+            substr(
+                $path,
+                $position + strlen($marker)
+            ),
+            '/'
+        );
+
+        if (
+            $relative === ''
+            || str_contains($relative, '../')
+            || str_contains($relative, '..\\')
+        ) {
+            return null;
+        }
+
+        $storagePath = str_replace(
+            '\\',
+            '/',
+            dirname($relative)
+        );
+
+        if ($storagePath === '.' || $storagePath === '') {
+            return null;
+        }
+
+        $urlPrefix = substr(
+            $currentDownloadUrl,
+            0,
+            strrpos($currentDownloadUrl, '/') + 1
+        );
+
+        if ($urlPrefix === '') {
+            return null;
+        }
+
+        return [
+            'storagePath' => $storagePath,
+            'directory' => $uploadsBaseDir
+                . '/woocommerce_uploads/'
+                . $storagePath,
+            'downloadUrl' => $urlPrefix . $skuFilename,
+        ];
+    }
+
     private function existingProductType(int $productId, string $productTitle): string
     {
         $stored = trim((string) ($this->call)(
