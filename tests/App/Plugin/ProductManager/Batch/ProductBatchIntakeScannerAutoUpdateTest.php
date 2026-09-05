@@ -96,6 +96,99 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         self::assertSame('2.0.0', $rows[0]['detectedVersion']);
     }
 
+    public function testIdentityMatchSearchesEntireCatalog(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'full-catalog';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'the-hanger.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->themeZip(
+            $zipPath,
+            'The Hanger',
+            '10.0.12'
+        );
+        $numberposts = null;
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ) use (&$numberposts): mixed {
+            if ($name === 'get_posts') {
+                $query = is_array($arguments[0] ?? null)
+                    ? $arguments[0]
+                    : [];
+                $numberposts = $query['numberposts'] ?? null;
+
+                return range(1, 100);
+            }
+
+            if ($name === 'get_the_title') {
+                $productId = (int) ($arguments[0] ?? 0);
+
+                return $productId === 95
+                    ? 'The Hanger - eCommerce WordPress Theme 10.0.11'
+                    : 'Unrelated Product ' . $productId;
+            }
+
+            if ($name === 'get_post_meta') {
+                $productId = (int) ($arguments[0] ?? 0);
+                $key = (string) ($arguments[1] ?? '');
+
+                if ($key === '_wp_shop_product_type') {
+                    return 'theme';
+                }
+
+                if ($key === 'attr_version_value') {
+                    return $productId === 95 ? '10.0.11' : '1.0.0';
+                }
+
+                if ($key === '_wp_shop_source_item_id') {
+                    return $productId === 95 ? '21753302' : '';
+                }
+
+                if ($key === 'sales_page') {
+                    return $productId === 95
+                        ? 'https://themeforest.net/item/'
+                            . 'the-hanger-modern-classic-woocommerce-theme/21753302'
+                        : '';
+                }
+
+                if ($key === '_sku') {
+                    return $productId === 95
+                        ? 'themeforest-21753302-the-hanger-modern-classic-'
+                            . 'woocommerce-theme-10.0.11.zip'
+                        : '';
+                }
+
+                return '';
+            }
+
+            return null;
+        };
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector()
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertSame(-1, $numberposts);
+        self::assertCount(1, $rows);
+        self::assertSame(95, $rows[0]['productId']);
+        self::assertSame(21753302, $rows[0]['itemId']);
+        self::assertSame('UPDATE', $rows[0]['action']);
+        self::assertSame('READY', $rows[0]['status']);
+        self::assertSame('10.0.12', $rows[0]['detectedVersion']);
+    }
+
     public function testReadyUpdateRowsKeepsOnlyReadyExistingUpdates(): void
     {
         $scanner = $this->scanner('1.0.0');
