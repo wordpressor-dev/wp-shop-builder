@@ -436,7 +436,7 @@ final class VendorProductNamingAuditService
             is_array($parts)
             && count($parts) === 2
             && trim((string) $parts[0]) !== ''
-            && mb_strlen(trim((string) $parts[1])) >= 10
+            && strlen(trim((string) $parts[1])) >= 10
         ) {
             return [
                 trim((string) $parts[0]),
