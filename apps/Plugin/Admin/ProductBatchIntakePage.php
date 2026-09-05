@@ -250,7 +250,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Import Queue</h1>';
-        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди. Для нового товара Import Queue создаёт WooCommerce Draft, переносит архив в каноническую папку и заполняет доступные данные Envato. Draft всегда нужно проверить перед публикацией.</p>';
+        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди для Envato и direct Vendor товаров. Для нового Envato товара Import Queue создаёт WooCommerce Draft, переносит архив в каноническую папку и заполняет доступные данные Envato. Draft всегда нужно проверить перед публикацией.</p>';
 
         if ($error !== '') {
             echo '<div class="notice notice-error"><p><strong>BATCH INTAKE ERROR:</strong> '
@@ -266,7 +266,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<p><strong>INBOX ROOT</strong> = '
             . $this->escape($root !== '' ? $root : 'UNAVAILABLE')
             . '</p>';
-        echo '<p>Загрузи ZIP-файлы с исходными именами в отдельную папку внутри INBOX. Для существующих товаров Item ID определяется по каталогу/ZIP. Для нового ZIP без Item ID достаточно один раз вставить ThemeForest/CodeCanyon URL или Item ID.</p>';
+        echo '<p>Загрузи ZIP-файлы с исходными именами в отдельную папку внутри INBOX. Существующие direct Vendor товары сопоставляются по ZIP identity и обновляются без Envato Item ID; текущий SKU и папка загрузки сохраняются по существующему шаблону. Для нового Envato ZIP без Item ID достаточно один раз вставить ThemeForest/CodeCanyon URL или Item ID.</p>';
         echo '</div>';
 
         $this->renderScanForm($folders, $selectedFolder);
@@ -1056,7 +1056,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         echo '</tbody></table>';
-        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> UPDATE выполняет внутренний Preflight и rollback. CREATE создаёт только Draft, сверяет ZIP с Envato, не назначает Hit/New автоматически и удаляет исходник из INBOX только после успешного создания.</p>';
+        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> UPDATE выполняет внутренний Preflight и rollback. Vendor UPDATE не требует Envato API и сохраняет текущую структуру SKU/download folder. CREATE пока создаёт только Envato Draft, сверяет ZIP с Envato, не назначает Hit/New автоматически и удаляет исходник из INBOX только после успешного создания.</p>';
         echo '</div>';
     }
 
