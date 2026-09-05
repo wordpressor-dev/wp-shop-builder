@@ -360,6 +360,99 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         self::assertSame('READY', $rows[0]['status']);
     }
 
+    public function testVendorIdentityExactSlugWinsOverAmbiguousGenericToken(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'vendor-exact-slug';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'wp-all-import-pro-5.1.0.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->pluginZip(
+            $zipPath,
+            'WP All Import Pro',
+            '5.1.0'
+        );
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [3441, 4000];
+            }
+
+            if ($name === 'get_the_title') {
+                return (int) ($arguments[0] ?? 0) === 3441
+                    ? 'WP All Import Pro 4.11.0'
+                    : 'Import Products Pro 1.0.0';
+            }
+
+            if ($name === 'get_post_field') {
+                $productId = (int) ($arguments[1] ?? 0);
+
+                return $productId === 3441
+                    ? 'wp-all-import-pro'
+                    : 'import-products-pro';
+            }
+
+            if ($name === 'get_post_meta') {
+                $productId = (int) ($arguments[0] ?? 0);
+                $key = (string) ($arguments[1] ?? '');
+
+                if ($key === '_wp_shop_product_type') {
+                    return 'plugin';
+                }
+
+                if ($key === 'attr_version_value') {
+                    return $productId === 3441
+                        ? '4.11.0'
+                        : '1.0.0';
+                }
+
+                if ($key === '_wp_shop_source_type') {
+                    return 'vendor';
+                }
+
+                if ($key === 'sales_page') {
+                    return $productId === 3441
+                        ? 'https://www.wpallimport.com/'
+                        : 'https://vendor.example/import-products/';
+                }
+
+                if ($key === '_sku') {
+                    return $productId === 3441
+                        ? 'wp-all-import-pro-4.11.0.zip'
+                        : 'import-products-pro-1.0.0.zip';
+                }
+
+                return '';
+            }
+
+            return null;
+        };
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector()
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertCount(1, $rows);
+        self::assertSame(3441, $rows[0]['productId']);
+        self::assertSame('plugin', $rows[0]['productType']);
+        self::assertSame('4.11.0', $rows[0]['currentVersion']);
+        self::assertSame('5.1.0', $rows[0]['detectedVersion']);
+        self::assertSame('UPDATE', $rows[0]['action']);
+        self::assertSame('READY', $rows[0]['status']);
+    }
+
     public function testReadyUpdateRowsKeepsOnlyReadyExistingUpdates(): void
     {
         $scanner = $this->scanner('1.0.0');

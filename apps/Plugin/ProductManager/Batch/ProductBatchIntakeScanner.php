@@ -26,7 +26,7 @@ final class ProductBatchIntakeScanner
 {
     public const MAX_AUTO_UPDATE_BATCH = 10;
 
-    /** @var list<array{id:int,itemId:int,type:string,haystack:string}>|null */
+    /** @var list<array{id:int,itemId:int,type:string,slug:string,haystack:string}>|null */
     private ?array $identityCatalog = null;
 
     /**
@@ -979,6 +979,34 @@ final class ProductBatchIntakeScanner
 
     private function productIdByArchiveIdentity(string $name, string $type): int
     {
+        $identitySlug = $this->identitySlug($name);
+
+        if ($identitySlug !== '') {
+            $exactMatches = [];
+
+            foreach ($this->identityCatalog() as $candidate) {
+                if (
+                    $type !== ''
+                    && $candidate['type'] !== ''
+                    && $candidate['type'] !== $type
+                ) {
+                    continue;
+                }
+
+                if ($candidate['slug'] === $identitySlug) {
+                    $exactMatches[] = $candidate['id'];
+                }
+            }
+
+            if (count($exactMatches) === 1) {
+                return $exactMatches[0];
+            }
+
+            if (count($exactMatches) > 1) {
+                return 0;
+            }
+        }
+
         $tokens = $this->identityTokens($name);
 
         if ($tokens === []) {
@@ -1014,7 +1042,7 @@ final class ProductBatchIntakeScanner
     }
 
     /**
-     * @return list<array{id:int,itemId:int,type:string,haystack:string}>
+     * @return list<array{id:int,itemId:int,type:string,slug:string,haystack:string}>
      */
     private function identityCatalog(): array
     {
@@ -1051,6 +1079,11 @@ final class ProductBatchIntakeScanner
 
             $title = trim((string) ($this->call)(
                 'get_the_title',
+                $candidateId
+            ));
+            $slug = trim((string) ($this->call)(
+                'get_post_field',
+                'post_name',
                 $candidateId
             ));
             $sku = trim((string) ($this->call)(
@@ -1093,6 +1126,7 @@ final class ProductBatchIntakeScanner
                     $candidateId,
                     $title
                 ),
+                'slug' => strtolower($slug),
                 'haystack' => strtolower(
                     $title . ' ' . $sku . ' ' . $salesPage
                 ),
@@ -1102,6 +1136,19 @@ final class ProductBatchIntakeScanner
         $this->identityCatalog = $catalog;
 
         return $this->identityCatalog;
+    }
+
+    private function identitySlug(string $name): string
+    {
+        $normalized = strtolower(
+            (string) preg_replace(
+                '/[^a-z0-9]+/i',
+                '-',
+                trim($name)
+            )
+        );
+
+        return trim($normalized, '-');
     }
 
     /** @return list<string> */
