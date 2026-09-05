@@ -17,7 +17,7 @@ use WPShop\WordPress\Bootstrap\Bootstrap as WordPressBootstrap;
 
 final readonly class Plugin
 {
-    public const VERSION = '0.2.8';
+    public const VERSION = '0.2.9';
 
     /**
      * @param null|Closure(

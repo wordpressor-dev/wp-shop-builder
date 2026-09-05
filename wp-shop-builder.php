@@ -4,7 +4,7 @@
  * Plugin Name: WP Shop Builder
  * Plugin URI: https://wp-shop.org
  * Description: Digital Product Platform for WordPress.
- * Version: 0.2.8
+ * Version: 0.2.9
  * Requires at least: 6.8
  * Requires PHP: 8.3
  * Requires Plugins: woocommerce
