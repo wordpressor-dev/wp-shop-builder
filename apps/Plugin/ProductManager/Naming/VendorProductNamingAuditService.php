@@ -578,7 +578,7 @@ final class VendorProductNamingAuditService
             return $headerName;
         }
 
-        $tail = strtolower((string) ($matches[1][0] ?? ''));
+        $tail = strtolower((string) $matches[1][0]);
 
         if (
             ! str_contains($tail, 'more than just')
@@ -590,7 +590,7 @@ final class VendorProductNamingAuditService
             return $headerName;
         }
 
-        $offset = (int) ($matches[0][1] ?? -1);
+        $offset = (int) $matches[0][1];
 
         if ($offset <= 0) {
             return $headerName;
