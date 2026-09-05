@@ -23,6 +23,9 @@ final class ProductBatchIntakeScanner
 {
     public const MAX_AUTO_UPDATE_BATCH = 10;
 
+    /** @var list<array{id:int,type:string,haystack:string}>|null */
+    private ?array $identityCatalog = null;
+
     /**
      * @param Closure(string, mixed...): mixed $call
      */
@@ -854,21 +857,62 @@ final class ProductBatchIntakeScanner
             return 0;
         }
 
+        $matches = [];
+
+        foreach ($this->identityCatalog() as $candidate) {
+            if (
+                $type !== ''
+                && $candidate['type'] !== ''
+                && $candidate['type'] !== $type
+            ) {
+                continue;
+            }
+
+            $allFound = true;
+
+            foreach ($tokens as $token) {
+                if (! str_contains($candidate['haystack'], $token)) {
+                    $allFound = false;
+                    break;
+                }
+            }
+
+            if ($allFound) {
+                $matches[] = $candidate['id'];
+            }
+        }
+
+        return count($matches) === 1 ? $matches[0] : 0;
+    }
+
+    /**
+     * @return list<array{id:int,type:string,haystack:string}>
+     */
+    private function identityCatalog(): array
+    {
+        if ($this->identityCatalog !== null) {
+            return $this->identityCatalog;
+        }
+
         $ids = ($this->call)(
             'get_posts',
             [
                 'post_type' => 'product',
                 'post_status' => ['publish', 'draft', 'private'],
-                'numberposts' => 80,
+                'numberposts' => -1,
                 'fields' => 'ids',
+                'orderby' => 'ID',
+                'order' => 'ASC',
             ]
         );
 
         if (! is_array($ids)) {
-            return 0;
+            $this->identityCatalog = [];
+
+            return $this->identityCatalog;
         }
 
-        $matches = [];
+        $catalog = [];
 
         foreach ($ids as $candidateId) {
             $candidateId = (int) $candidateId;
@@ -877,33 +921,38 @@ final class ProductBatchIntakeScanner
                 continue;
             }
 
-            $title = trim((string) ($this->call)('get_the_title', $candidateId));
-
-            if ($type !== '' && $this->existingProductType($candidateId, $title) !== $type) {
-                continue;
-            }
-
-            $haystack = strtolower($title . ' ' . trim((string) ($this->call)(
+            $title = trim((string) ($this->call)(
+                'get_the_title',
+                $candidateId
+            ));
+            $sku = trim((string) ($this->call)(
                 'get_post_meta',
                 $candidateId,
                 '_sku',
                 true
-            )));
-            $allFound = true;
+            ));
+            $salesPage = trim((string) ($this->call)(
+                'get_post_meta',
+                $candidateId,
+                'sales_page',
+                true
+            ));
 
-            foreach ($tokens as $token) {
-                if (! str_contains($haystack, $token)) {
-                    $allFound = false;
-                    break;
-                }
-            }
-
-            if ($allFound) {
-                $matches[] = $candidateId;
-            }
+            $catalog[] = [
+                'id' => $candidateId,
+                'type' => $this->existingProductType(
+                    $candidateId,
+                    $title
+                ),
+                'haystack' => strtolower(
+                    $title . ' ' . $sku . ' ' . $salesPage
+                ),
+            ];
         }
 
-        return count($matches) === 1 ? $matches[0] : 0;
+        $this->identityCatalog = $catalog;
+
+        return $this->identityCatalog;
     }
 
     /** @return list<string> */
