@@ -7,6 +7,11 @@ namespace WPShop\Tests\App\Plugin\ProductManager\Admin;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
+use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
+use WPShop\App\Plugin\ProductManager\Draft\ExistingProduct;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
+use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItem;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
@@ -63,6 +68,65 @@ final class ProductManagerControllerTest extends TestCase
         );
         self::assertContains(
             'FEATURED IMAGE FALLBACK = MANUAL PICKER',
+            $result->logs
+        );
+    }
+
+    public function testVendorPreflightDoesNotRequireEnvatoItemId(): void
+    {
+        $controller = new ProductManagerController(
+            new ProductManagerEnvatoClient(),
+            new ExistingTagSelector(
+                new ProductManagerCatalogTagRepository()
+            ),
+            new ProductDraftCreator(
+                new ProductManagerDraftGateway(),
+                new ProductDraftValidator()
+            )
+        );
+
+        $result = $controller->preflightDraft(
+            new ProductDraftData(
+                'WP All Import Pro',
+                'wp-all-import-pro',
+                0,
+                '5.1.0',
+                '2026-09-05',
+                'Soflyy',
+                '249',
+                'https://www.wpallimport.com/',
+                'wp-all-import-pro-5.1.0.zip',
+                'https://wp-shop.org/wp-content/uploads/'
+                    . 'woocommerce_uploads/PLUGINS/Vendor/'
+                    . 'soflyy/wp-all-import-pro/'
+                    . 'wp-all-import-pro-5.1.0.zip',
+                0,
+                [],
+                'RU short',
+                'RU long',
+                'RU meta',
+                'EN short',
+                'EN long',
+                'EN meta',
+                '',
+                false,
+                false,
+                true,
+                'plugin'
+            )
+        );
+
+        self::assertTrue($result->success);
+        self::assertContains(
+            'SOURCE TYPE = VENDOR',
+            $result->logs
+        );
+        self::assertContains(
+            'VENDOR SKU / VERSION = MATCH',
+            $result->logs
+        );
+        self::assertNotContains(
+            'Envato Item ID must be positive before SKU generation.',
             $result->logs
         );
     }
@@ -144,5 +208,25 @@ final class ProductManagerCatalogTagRepository implements
             ['elementor', 'marketplace'],
             true
         );
+    }
+}
+
+
+final class ProductManagerDraftGateway implements
+    ProductDraftGatewayInterface
+{
+    public function findBySlug(string $slug): ?ExistingProduct
+    {
+        return null;
+    }
+
+    public function findBySku(string $sku): ?ExistingProduct
+    {
+        return null;
+    }
+
+    public function createCore(ProductDraftData $data): int
+    {
+        return 9001;
     }
 }
