@@ -30,10 +30,7 @@ final class ProductTaxonomyWriter implements
         int $productId,
         ProductDraftData $data
     ): array {
-        $productType = CatalogProductType::infer(
-            $data->baseTitle,
-            $data->salesPage
-        );
+        $productType = $data->productType;
         $categoryLabel = CatalogProductType::categoryLabel($productType);
         $categorySlug = CatalogProductType::categorySlug($productType);
         $sourceType = ProductSourceType::fromSalesPage(
