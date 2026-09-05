@@ -13,7 +13,7 @@ final class ProductBatchCreateAllService
     public const MAX_BATCH = 10;
 
     /**
-     * @param Closure(string, string, string, string): ProductDraftResult $createDraft
+     * @param Closure(string, string, string, string, string): ProductDraftResult $createDraft
      * @param Closure(string, string, string): string $moveToReview
      */
     public function __construct(
@@ -37,14 +37,16 @@ final class ProductBatchCreateAllService
      *   note: string
      * }> $rows
      * @param array<string, string> $references
+     * @param array<string, string> $notes
      * @return array{
-     *   entries: list<array{filename:string,reference:string}>,
+     *   entries: list<array{filename:string,reference:string,notes:string}>,
      *   missing: list<string>
      * }
      */
     public function prepare(
         array $rows,
-        array $references
+        array $references,
+        array $notes = []
     ): array {
         $entries = [];
         $missing = [];
@@ -76,6 +78,7 @@ final class ProductBatchCreateAllService
             $entries[] = [
                 'filename' => $filename,
                 'reference' => $reference,
+                'notes' => trim((string) ($notes[$filename] ?? '')),
             ];
         }
 
@@ -86,13 +89,13 @@ final class ProductBatchCreateAllService
     }
 
     /**
-     * @param list<array{filename:string,reference:string}> $entries
+     * @param list<array{filename:string,reference:string,notes:string}> $entries
      * @return array{
      *   processed:int,
      *   created:int,
      *   failed:int,
      *   productIds:list<int>,
-     *   remaining:list<array{filename:string,reference:string}>,
+     *   remaining:list<array{filename:string,reference:string,notes:string}>,
      *   continue:bool,
      *   logs:list<string>
      * }
@@ -120,6 +123,7 @@ final class ProductBatchCreateAllService
             ++$processed;
             $filename = $entry['filename'];
             $reference = $entry['reference'];
+            $notes = $entry['notes'];
             $logs[] = str_repeat('=', 72);
             $logs[] = 'AUTO NEW ITEM = ' . $filename;
             $logs[] = 'ENVATO REFERENCE = ' . $reference;
@@ -129,7 +133,8 @@ final class ProductBatchCreateAllService
                     $uploadsBaseDir,
                     $folder,
                     $filename,
-                    $reference
+                    $reference,
+                    $notes
                 );
             } catch (Throwable $exception) {
                 $result = new ProductDraftResult(
