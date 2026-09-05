@@ -16,7 +16,8 @@ final readonly class ProductUpdateData
         public string $salesPage,
         public string $currentSku,
         public string $skuFilename,
-        public string $downloadUrl
+        public string $downloadUrl,
+        public string $sourceType = 'envato'
     ) {
     }
 
@@ -37,7 +38,8 @@ final readonly class ProductUpdateData
             $this->salesPage,
             $this->currentSku,
             $this->skuFilename,
-            $this->downloadUrl
+            $this->downloadUrl,
+            $this->sourceType
         );
     }
 
@@ -63,7 +65,8 @@ final readonly class ProductUpdateData
             $this->salesPage,
             $this->currentSku,
             $skuFilename,
-            $downloadUrl
+            $downloadUrl,
+            $this->sourceType
         );
     }
 }
