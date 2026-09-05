@@ -329,46 +329,91 @@ final class ProductBatchIntakeScanner
             );
         }
 
-        $token = $this->token();
+        $sourceType = $this->productSourceType(
+            $snapshot->productId,
+            $snapshot->salesPage
+        );
+        $sourceUpdateDate = '';
 
-        if ($token === '') {
-            return $this->batchFailure(
-                'BATCH APPLY = ENVATO TOKEN REQUIRED FOR OFFICIAL UPDATE DATE'
-            );
-        }
+        if ($sourceType === ProductSourceType::ENVATO) {
+            $token = $this->token();
 
-        try {
-            $transport = new WordPressEnvatoTransport();
-            $client = new EnvatoClient($transport(...), new EnvatoItemMapper());
-            $suggestion = (new ProductUpdateEnvatoAdvisor($client))->suggest(
-                $snapshot,
-                $token
-            );
-        } catch (Throwable $exception) {
-            return $this->batchFailure(
-                'BATCH APPLY ENVATO ERROR = ' . $exception->getMessage()
-            );
-        }
+            if ($token === '') {
+                return $this->batchFailure(
+                    'BATCH APPLY = ENVATO TOKEN REQUIRED FOR OFFICIAL UPDATE DATE'
+                );
+            }
 
-        if ($suggestion->updateDate === '') {
-            return $this->batchFailure(
-                'BATCH APPLY = ENVATO UPDATE DATE NOT PROVIDED'
+            try {
+                $transport = new WordPressEnvatoTransport();
+                $client = new EnvatoClient(
+                    $transport(...),
+                    new EnvatoItemMapper()
+                );
+                $suggestion = (new ProductUpdateEnvatoAdvisor($client))->suggest(
+                    $snapshot,
+                    $token
+                );
+            } catch (Throwable $exception) {
+                return $this->batchFailure(
+                    'BATCH APPLY ENVATO ERROR = ' . $exception->getMessage()
+                );
+            }
+
+            if ($suggestion->updateDate === '') {
+                return $this->batchFailure(
+                    'BATCH APPLY = ENVATO UPDATE DATE NOT PROVIDED'
+                );
+            }
+
+            $sourceUpdateDate = $suggestion->updateDate;
+        } else {
+            $sourceUpdateDate = (string) ($this->call)(
+                'current_time',
+                'Y-m-d'
             );
+
+            if (
+                preg_match(
+                    '/^\\d{4}-\\d{2}-\\d{2}$/',
+                    $sourceUpdateDate
+                ) !== 1
+            ) {
+                return $this->batchFailure(
+                    'BATCH APPLY = VENDOR IMPORT DATE NOT AVAILABLE'
+                );
+            }
         }
 
         $productType = $row['productType'];
         $newVersion = $productType === CatalogProductType::TEMPLATE_KIT
             ? ''
             : $row['detectedVersion'];
-        $skuFilename = ProductSkuFilename::build(
-            $snapshot->itemId,
-            $snapshot->salesPage,
-            $newVersion
-        );
+
+        try {
+            $skuFilename = $sourceType === ProductSourceType::VENDOR
+                ? ProductVendorSkuFilename::synchronize(
+                    $snapshot->skuFilename,
+                    $snapshot->version,
+                    $newVersion
+                )
+                : ProductSkuFilename::build(
+                    $snapshot->itemId,
+                    $snapshot->salesPage,
+                    $newVersion
+                );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->batchFailure(
+                'BATCH APPLY SKU ERROR = ' . $exception->getMessage()
+            );
+        }
+
         $uploads = ($this->call)('wp_upload_dir');
 
         if (! is_array($uploads)) {
-            return $this->batchFailure('BATCH APPLY = WORDPRESS UPLOADS UNAVAILABLE');
+            return $this->batchFailure(
+                'BATCH APPLY = WORDPRESS UPLOADS UNAVAILABLE'
+            );
         }
 
         $baseDir = trim((string) ($uploads['basedir'] ?? ''));
@@ -384,11 +429,47 @@ final class ProductBatchIntakeScanner
             return $this->batchFailure('BATCH APPLY = INVALID ZIP SIGNATURE');
         }
 
-        $storage = CatalogProductType::storageFolder($productType);
-        $vendor = ProductDownloadUrl::vendorFolder($skuFilename);
-        $storagePath = $storage . ($vendor !== '' ? '/' . $vendor : '');
-        $directory = rtrim($baseDir, '/\\')
-            . '/woocommerce_uploads/' . $storagePath . '/' . $snapshot->itemId;
+        if ($sourceType === ProductSourceType::VENDOR) {
+            $vendorTarget = $this->vendorArchiveTarget(
+                $baseDir,
+                $snapshot->downloadUrl,
+                $skuFilename
+            );
+
+            if ($vendorTarget === null) {
+                return $this->batchFailure(
+                    'BATCH APPLY = VENDOR DOWNLOAD PATH CANNOT BE PRESERVED'
+                );
+            }
+
+            $storagePath = $vendorTarget['storagePath'];
+            $directory = $vendorTarget['directory'];
+            $downloadUrl = $vendorTarget['downloadUrl'];
+            $itemDirectory = '[preserved vendor path]';
+        } else {
+            $storage = CatalogProductType::storageFolder($productType);
+            $vendor = ProductDownloadUrl::vendorFolder($skuFilename);
+            $storagePath = $storage
+                . ($vendor !== '' ? '/' . $vendor : '');
+            $directory = rtrim($baseDir, '/\\')
+                . '/woocommerce_uploads/'
+                . $storagePath
+                . '/'
+                . $snapshot->itemId;
+            $downloadUrl = ProductDownloadUrl::build(
+                $baseUrl,
+                $productType,
+                $snapshot->itemId,
+                $skuFilename
+            );
+            $itemDirectory = (string) $snapshot->itemId;
+        }
+
+        if ($downloadUrl === '') {
+            return $this->batchFailure(
+                'BATCH APPLY = DOWNLOAD URL BUILD FAILED'
+            );
+        }
 
         if (! (bool) ($this->call)('wp_mkdir_p', $directory)) {
             return $this->batchFailure(
@@ -419,30 +500,18 @@ final class ProductBatchIntakeScanner
             return $this->batchFailure('BATCH APPLY = ZIP COPY FAILED');
         }
 
-        $downloadUrl = ProductDownloadUrl::build(
-            $baseUrl,
-            $productType,
-            $snapshot->itemId,
-            $skuFilename
-        );
-
-        if ($downloadUrl === '') {
-            $this->rollbackTarget($targetPath, $backupPath);
-
-            return $this->batchFailure('BATCH APPLY = DOWNLOAD URL BUILD FAILED');
-        }
-
         $data = new ProductUpdateData(
             $snapshot->productId,
             $snapshot->baseTitle,
             $snapshot->itemId,
             $snapshot->version,
             $newVersion,
-            $suggestion->updateDate,
+            $sourceUpdateDate,
             $snapshot->salesPage,
             $snapshot->skuFilename,
             $skuFilename,
-            $downloadUrl
+            $downloadUrl,
+            $sourceType
         );
         $preflight = $updater->preflight($data);
 
@@ -504,10 +573,15 @@ final class ProductBatchIntakeScanner
                     'BATCH ACTION = UPDATE',
                     'ZIP VERSION = SOURCE OF TRUTH: '
                         . ($newVersion !== '' ? $newVersion : '[versionless]'),
-                    'ENVATO UPDATE DATE = ' . $suggestion->updateDate,
+                    'SOURCE TYPE = ' . strtoupper($sourceType),
+                    (
+                        $sourceType === ProductSourceType::ENVATO
+                            ? 'ENVATO UPDATE DATE = '
+                            : 'VENDOR UPDATE DATE = IMPORT DATE: '
+                    ) . $sourceUpdateDate,
                     'ARCHIVE CANONICAL NAME = ' . $skuFilename,
                     'ARCHIVE STORAGE = ' . $storagePath,
-                    'ARCHIVE ITEM DIRECTORY = ' . $snapshot->itemId,
+                    'ARCHIVE ITEM DIRECTORY = ' . $itemDirectory,
                     'DOWNLOAD URL = ' . $downloadUrl,
                 ],
                 $preflight->logs,
