@@ -40,7 +40,10 @@ final class VendorProductNamingAuditServiceTest extends TestCase
         $call = static function (
             string $name,
             mixed ...$arguments
-        ) use ($uploadsDir, &$writes): mixed {
+        ) use (
+            $uploadsDir,
+            &$writes
+        ): mixed {
             if ($name === 'get_posts') {
                 return [10, 20, 30, 40];
             }
@@ -56,7 +59,8 @@ final class VendorProductNamingAuditServiceTest extends TestCase
                 return match ((int) ($arguments[1] ?? 0)) {
                     10 => 'GutenBricks 1.1.29',
                     20 => 'Marketplace Product',
-                    30 => 'Elementor Website Builder – more than just a page builder 3.30.0',
+                    30 => 'Elementor Website Builder – more than just a page '
+                        . 'builder 3.30.0',
                     40 => 'Envato Elements Product',
                     default => '',
                 };
@@ -74,7 +78,8 @@ final class VendorProductNamingAuditServiceTest extends TestCase
                         '_wp_shop_product_type' => 'plugin',
                         '_downloadable_files' => [
                             'a' => [
-                                'file' => 'https://wp-shop.test/wp-content/uploads/woocommerce_uploads/vendor/gutenbricks.zip',
+                                'file' => 'https://wp-shop.test/wp-content/uploads/'
+                                    . 'woocommerce_uploads/vendor/gutenbricks.zip',
                             ],
                         ],
                     ],
@@ -89,7 +94,8 @@ final class VendorProductNamingAuditServiceTest extends TestCase
                         '_wp_shop_product_type' => 'plugin',
                         '_downloadable_files' => [
                             'b' => [
-                                'file' => 'https://wp-shop.test/wp-content/uploads/woocommerce_uploads/vendor/elementor.zip',
+                                'file' => 'https://wp-shop.test/wp-content/uploads/'
+                                    . 'woocommerce_uploads/vendor/elementor.zip',
                             ],
                         ],
                     ],
