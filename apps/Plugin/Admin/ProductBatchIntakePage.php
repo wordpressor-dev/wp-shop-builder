@@ -635,6 +635,66 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
     /**
      * @return array<string, string>
      */
+    private function postedNewSourceTypes(): array
+    {
+        $filenames = $_POST['intake_new_filename'] ?? [];
+        $sourceTypes = $_POST['intake_new_source_type'] ?? [];
+
+        if (! is_array($filenames) || ! is_array($sourceTypes)) {
+            return [];
+        }
+
+        $result = [];
+        $count = min(count($filenames), count($sourceTypes));
+
+        for ($index = 0; $index < $count; ++$index) {
+            $rawFilename = $filenames[$index] ?? null;
+            $rawSourceType = $sourceTypes[$index] ?? null;
+
+            if (! is_scalar($rawFilename) || ! is_scalar($rawSourceType)) {
+                continue;
+            }
+
+            $filename = trim((string) ($this->call)(
+                'sanitize_file_name',
+                (string) ($this->call)(
+                    'wp_unslash',
+                    (string) $rawFilename
+                )
+            ));
+            $sourceType = strtolower(
+                trim(
+                    (string) ($this->call)(
+                        'sanitize_text_field',
+                        (string) ($this->call)(
+                            'wp_unslash',
+                            (string) $rawSourceType
+                        )
+                    )
+                )
+            );
+
+            if (
+                $filename !== ''
+                && in_array(
+                    $sourceType,
+                    [
+                        ProductSourceType::ENVATO,
+                        ProductSourceType::VENDOR,
+                    ],
+                    true
+                )
+            ) {
+                $result[$filename] = $sourceType;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, string>
+     */
     private function postedNewNotes(): array
     {
         $filenames = $_POST['intake_new_filename'] ?? [];
