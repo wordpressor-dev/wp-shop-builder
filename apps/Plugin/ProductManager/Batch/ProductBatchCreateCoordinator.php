@@ -714,7 +714,7 @@ final class ProductBatchCreateCoordinator
         }
 
         $parts = explode('.', $host);
-        $name = trim((string) ($parts[0] ?? ''));
+        $name = trim($parts[0]);
 
         return $name !== ''
             ? ucfirst(str_replace('-', ' ', $name))
