@@ -106,16 +106,22 @@ final class EnvatoItemSearchResolver
                 continue;
             }
 
-            if (
-                $candidateUrl !== ''
-                && strtolower(
+            if ($candidateUrl !== '') {
+                $candidateHost = strtolower(
                     (string) parse_url(
                         $candidateUrl,
                         PHP_URL_HOST
                     )
-                ) !== $site
-            ) {
-                continue;
+                );
+                $candidateHost = preg_replace(
+                    '/^www\./',
+                    '',
+                    $candidateHost
+                );
+
+                if ($candidateHost !== $site) {
+                    continue;
+                }
             }
 
             $score = $this->score(
