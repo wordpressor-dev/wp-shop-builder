@@ -10,6 +10,30 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 
 final class ProductVendorSkuFilenameTest extends TestCase
 {
+    public function testBuildKeepsOriginalVersionedFilename(): void
+    {
+        self::assertSame(
+            'elementor-pro-4.2.4-package.zip',
+            ProductVendorSkuFilename::build(
+                'elementor-pro-4.2.4-package.zip',
+                'Elementor Pro',
+                '4.2.4'
+            )
+        );
+    }
+
+    public function testBuildAddsVersionWhenOriginalFilenameHasNone(): void
+    {
+        self::assertSame(
+            'elementor-pro-4.2.4.zip',
+            ProductVendorSkuFilename::build(
+                'elementor-pro.zip',
+                'Elementor Pro',
+                '4.2.4'
+            )
+        );
+    }
+
     public function testSynchronizesVendorSkuByCurrentVersion(): void
     {
         self::assertSame(
