@@ -106,11 +106,9 @@ final class VendorProductNamingAuditService
         }
 
         $headerName = $this->normalizeName($identity->name);
-        [$recommendedTitle, $marketingTail] = $this->recommendedFromHeader(
-            $headerName
-        );
-        $productType = trim($identity->productType) !== ''
-            ? trim($identity->productType)
+        $identityProductType = trim($identity->productType);
+        $productType = $identityProductType !== ''
+            ? $identityProductType
             : $storedProductType;
         $evidence = $productType === 'theme'
             ? 'ZIP_THEME_NAME'
@@ -118,22 +116,26 @@ final class VendorProductNamingAuditService
                 ? 'ZIP_PLUGIN_NAME'
                 : 'ZIP_HEADER_NAME');
 
-        if ($marketingTail !== '') {
+        if (
+            $storedProductType !== ''
+            && $identityProductType !== ''
+            && $storedProductType !== $identityProductType
+        ) {
             return new VendorProductNamingAuditRow(
                 $productId,
                 $currentTitle,
                 $currentBaseTitle,
                 $headerName,
-                $recommendedTitle,
-                $productType,
+                $currentBaseTitle,
+                $storedProductType,
                 'REVIEW',
-                'MEDIUM',
-                $evidence,
-                'ZIP header contains a likely marketing tagline after the product name; review the shortened recommendation before any rename.'
+                'LOW',
+                'ZIP_TYPE_MISMATCH',
+                'Stored Vendor product type differs from the current ZIP identity; do not use the ZIP header as a public product name until the package is verified.'
             );
         }
 
-        if ($recommendedTitle === '') {
+        if ($this->suspiciousHeaderName($headerName)) {
             return new VendorProductNamingAuditRow(
                 $productId,
                 $currentTitle,
@@ -144,22 +146,73 @@ final class VendorProductNamingAuditService
                 'REVIEW',
                 'LOW',
                 $evidence,
-                'ZIP header name is present but could not produce a safe canonical recommendation.'
+                'ZIP header looks like an internal package/component name rather than a safe public product name.'
             );
         }
 
-        if ($currentTitle === $recommendedTitle) {
+        if ($headerName === '') {
+            return new VendorProductNamingAuditRow(
+                $productId,
+                $currentTitle,
+                $currentBaseTitle,
+                '',
+                $currentBaseTitle,
+                $productType,
+                'REVIEW',
+                'LOW',
+                $evidence,
+                'ZIP header name is empty; public product name was not verified.'
+            );
+        }
+
+        if ($currentTitle === $headerName) {
             return new VendorProductNamingAuditRow(
                 $productId,
                 $currentTitle,
                 $currentBaseTitle,
                 $headerName,
-                $recommendedTitle,
+                $headerName,
                 $productType,
                 'KEEP',
                 'HIGH',
                 $evidence,
-                'Published title already matches the canonical Plugin Name / Theme Name from the Vendor ZIP.'
+                'Published title already matches the Vendor ZIP product name.'
+            );
+        }
+
+        if (
+            $this->comparableName($currentBaseTitle)
+            === $this->comparableName($headerName)
+        ) {
+            return new VendorProductNamingAuditRow(
+                $productId,
+                $currentTitle,
+                $currentBaseTitle,
+                $headerName,
+                $headerName,
+                $productType,
+                'RENAME',
+                'HIGH',
+                $evidence,
+                'Current base title matches the Vendor ZIP name; only version/case/punctuation cleanup is required.'
+            );
+        }
+
+        if ($this->headerIsPrefixOfCurrentTitle(
+            $currentBaseTitle,
+            $headerName
+        )) {
+            return new VendorProductNamingAuditRow(
+                $productId,
+                $currentTitle,
+                $currentBaseTitle,
+                $headerName,
+                $headerName,
+                $productType,
+                'RENAME',
+                'HIGH',
+                $evidence,
+                'Current public title starts with the verified Vendor ZIP product name and then adds a descriptive/marketing suffix.'
             );
         }
 
@@ -168,14 +221,12 @@ final class VendorProductNamingAuditService
             $currentTitle,
             $currentBaseTitle,
             $headerName,
-            $recommendedTitle,
+            $currentBaseTitle,
             $productType,
-            'RENAME',
-            'HIGH',
+            'REVIEW',
+            'MEDIUM',
             $evidence,
-            $currentBaseTitle === $recommendedTitle
-                ? 'Current title contains a version or other suffix; canonical Vendor ZIP name is unchanged.'
-                : 'Published title differs from the canonical Plugin Name / Theme Name in the Vendor ZIP.'
+            'Current public title and Vendor ZIP name differ materially; verify the official Vendor product name before renaming.'
         );
     }
 
@@ -438,33 +489,64 @@ final class VendorProductNamingAuditService
         return is_string($name) ? trim($name) : '';
     }
 
-    /**
-     * @return array{string,string}
-     */
-    private function recommendedFromHeader(string $headerName): array
+    private function comparableName(string $name): string
     {
-        if ($headerName === '') {
-            return ['', ''];
-        }
+        $name = strtolower($this->normalizeName($name));
+        $name = str_replace(['–', '—'], '-', $name);
 
-        $parts = preg_split(
-            '/\s+(?:[|–—]|-{1})\s+/u',
-            $headerName,
-            2
-        );
+        return trim($name);
+    }
+
+    private function headerIsPrefixOfCurrentTitle(
+        string $currentTitle,
+        string $headerName
+    ): bool {
+        $current = $this->comparableName($currentTitle);
+        $header = $this->comparableName($headerName);
 
         if (
-            is_array($parts)
-            && count($parts) === 2
-            && trim((string) $parts[0]) !== ''
-            && strlen(trim((string) $parts[1])) >= 10
+            $current === ''
+            || $header === ''
+            || $current === $header
+            || ! str_starts_with($current, $header)
         ) {
-            return [
-                trim((string) $parts[0]),
-                trim((string) $parts[1]),
-            ];
+            return false;
         }
 
-        return [$headerName, ''];
+        $next = substr($current, strlen($header), 1);
+
+        return in_array(
+            $next,
+            [' ', '-', '(', '[', ':'],
+            true
+        );
+    }
+
+    private function suspiciousHeaderName(string $headerName): bool
+    {
+        $name = $this->comparableName($headerName);
+
+        if (in_array(
+            $name,
+            [
+                'default',
+                'moon',
+                'plugin',
+                'theme',
+                'pro',
+                'premium',
+                'wordpress',
+                'unknown',
+            ],
+            true
+        )) {
+            return true;
+        }
+
+        return preg_match(
+            '/^[a-z0-9]+(?:-[a-z0-9.]+)+$/',
+            $headerName
+        ) === 1
+            && preg_match('/\d+\.\d+/', $headerName) === 1;
     }
 }
