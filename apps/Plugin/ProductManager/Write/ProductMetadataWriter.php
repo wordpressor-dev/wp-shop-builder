@@ -209,10 +209,7 @@ final class ProductMetadataWriter implements
         ProductDraftData $data,
         string $productType
     ): ?array {
-        if (! str_contains(
-            $data->notes,
-            'Created from WP Shop Builder Import Queue.'
-        )) {
+        if (! $data->importQueueDraft) {
             return null;
         }
 

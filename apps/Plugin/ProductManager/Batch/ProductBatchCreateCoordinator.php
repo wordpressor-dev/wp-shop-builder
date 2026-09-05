@@ -44,7 +44,8 @@ final class ProductBatchCreateCoordinator
         string $uploadsBaseDir,
         string $folder,
         string $filename,
-        string $itemReference
+        string $itemReference,
+        string $notes = ''
     ): ProductDraftResult {
         try {
             $folder = $this->normalizeFolder($folder);
@@ -280,9 +281,10 @@ final class ProductBatchCreateCoordinator
                 $content['enShort'],
                 $content['enLong'],
                 $content['enMeta'],
-                'Created from WP Shop Builder Import Queue. Review before publish.',
+                trim($notes),
                 false,
-                false
+                false,
+                true
             );
             $preflight = $controller->preflightDraft($data);
 
