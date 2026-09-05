@@ -11,7 +11,9 @@ final readonly class ProductArchiveIdentityResult
         public string $productType,
         public string $name,
         public string $version,
-        public string $source
+        public string $source,
+        public string $developer = '',
+        public string $productUrl = ''
     ) {
     }
 }
