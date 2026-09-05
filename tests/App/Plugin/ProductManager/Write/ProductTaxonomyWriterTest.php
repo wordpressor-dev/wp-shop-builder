@@ -95,6 +95,96 @@ final class ProductTaxonomyWriterTest extends TestCase
         );
     }
 
+    public function testUsesVendorAsBrandAndCompany(): void
+    {
+        $setTerms = [];
+        $terms = [
+            'product_cat:plugins' => 31,
+            'product_brand:elementor' => 32,
+            'pa_categori:plugins' => 33,
+            'pa_company:elementor' => 34,
+            'pa_developer:elementor' => 35,
+        ];
+        $writer = new ProductTaxonomyWriter(
+            static function (
+                string $name,
+                mixed ...$arguments
+            ) use (&$setTerms, $terms): mixed {
+                if ($name === 'sanitize_title') {
+                    return strtolower(
+                        str_replace(
+                            ' ',
+                            '-',
+                            (string) $arguments[0]
+                        )
+                    );
+                }
+
+                if ($name === 'get_term_by') {
+                    $taxonomy = (string) $arguments[2];
+                    $value = (string) $arguments[1];
+                    $key = $taxonomy . ':' . strtolower($value);
+
+                    return isset($terms[$key])
+                        ? (object) ['term_id' => $terms[$key]]
+                        : false;
+                }
+
+                if ($name === 'wp_set_object_terms') {
+                    $setTerms[(string) $arguments[2]]
+                        = $arguments[1];
+
+                    return $arguments[1];
+                }
+
+                if ($name === 'update_post_meta') {
+                    return true;
+                }
+
+                if ($name === 'is_wp_error') {
+                    return false;
+                }
+
+                return null;
+            }
+        );
+
+        $data = new ProductDraftData(
+            'Elementor Pro WordPress Plugin',
+            'elementor-pro',
+            0,
+            '4.2.4',
+            '2026-09-05',
+            'Elementor',
+            '249',
+            'https://elementor.com/pro/',
+            'elementor-pro-4.2.4.zip',
+            '',
+            0,
+            [],
+            'RU short',
+            'RU long',
+            'RU meta',
+            'EN short',
+            'EN long',
+            'EN meta',
+            '',
+            false,
+            false
+        );
+        $logs = $writer->write(7001, $data);
+
+        self::assertSame([31], $setTerms['product_cat']);
+        self::assertSame([32], $setTerms['product_brand']);
+        self::assertSame([33], $setTerms['pa_categori']);
+        self::assertSame([34], $setTerms['pa_company']);
+        self::assertSame([35], $setTerms['pa_developer']);
+        self::assertContains(
+            'product_brand = Elementor',
+            $logs
+        );
+    }
+
     public function testRoutesTemplateKitToTemplatesCategoryAndAttribute(): void
     {
         $setTerms = [];
