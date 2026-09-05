@@ -8,8 +8,10 @@ use Closure;
 use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
+use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
@@ -696,7 +698,7 @@ final class ProductBatchIntakeScanner
             }
         }
 
-        if ($itemId <= 0) {
+        if ($itemId <= 0 && $productId <= 0) {
             $status = 'REVIEW';
             $note = $note !== ''
                 ? $note . '; ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED'
@@ -741,9 +743,9 @@ final class ProductBatchIntakeScanner
             'productType' => $productType,
             'currentVersion' => $currentVersion,
             'detectedVersion' => $detectedVersion,
-            'action' => $itemId <= 0
-                ? 'REVIEW'
-                : ($productId > 0 ? 'UPDATE' : 'CREATE'),
+            'action' => $productId > 0
+                ? 'UPDATE'
+                : ($itemId > 0 ? 'CREATE' : 'REVIEW'),
             'status' => $status,
             'note' => $note,
         ];
