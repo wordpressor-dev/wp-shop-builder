@@ -189,6 +189,52 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         self::assertSame('10.0.12', $rows[0]['detectedVersion']);
     }
 
+    public function testNewProductWithoutItemIdStillDetectsZipVersion(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'new-product-version';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'new-theme.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->themeZip($zipPath, 'New Theme', '3.4.5');
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [];
+            }
+
+            return null;
+        };
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector()
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertCount(1, $rows);
+        self::assertSame(0, $rows[0]['itemId']);
+        self::assertSame(0, $rows[0]['productId']);
+        self::assertSame('theme', $rows[0]['productType']);
+        self::assertSame('3.4.5', $rows[0]['detectedVersion']);
+        self::assertSame('REVIEW', $rows[0]['action']);
+        self::assertSame('REVIEW', $rows[0]['status']);
+        self::assertStringContainsString(
+            'ITEM ID NOT DETECTED',
+            $rows[0]['note']
+        );
+    }
+
     public function testReadyUpdateRowsKeepsOnlyReadyExistingUpdates(): void
     {
         $scanner = $this->scanner('1.0.0');

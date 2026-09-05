@@ -633,10 +633,7 @@ final class ProductBatchIntakeScanner
         $status = 'READY';
         $note = '';
 
-        if ($itemId <= 0) {
-            $status = 'REVIEW';
-            $note = 'ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED';
-        } elseif ($productType === '') {
+        if ($productType === '') {
             $status = 'REVIEW';
             $note = 'PRODUCT TYPE NOT DETECTED';
         } elseif ($productType === CatalogProductType::TEMPLATE_KIT) {
@@ -667,6 +664,13 @@ final class ProductBatchIntakeScanner
                 $detectedVersion = $inspection->version;
                 $note = $inspection->logs[2] ?? 'ZIP INSPECTION = READY';
             }
+        }
+
+        if ($itemId <= 0) {
+            $status = 'REVIEW';
+            $note = $note !== ''
+                ? $note . '; ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED'
+                : 'ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED';
         }
 
         if (
