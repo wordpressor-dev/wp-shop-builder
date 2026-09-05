@@ -49,19 +49,28 @@ final class ProductVendorSkuFilename
             . preg_quote($currentVersion, '/')
             . '(?![A-Za-z0-9])/';
 
-        $count = 0;
+        $matches = preg_match_all(
+            $pattern,
+            $currentSku
+        );
+
+        if ($matches !== 1) {
+            throw new InvalidArgumentException(
+                'Current vendor version was not found exactly once in SKU. '
+                . 'Review filename manually before update.'
+            );
+        }
+
         $updated = preg_replace(
             $pattern,
             $newVersion,
             $currentSku,
-            1,
-            $count
+            1
         );
 
-        if (! is_string($updated) || $count !== 1) {
+        if (! is_string($updated)) {
             throw new InvalidArgumentException(
-                'Current vendor version was not found exactly once in SKU. '
-                . 'Review filename manually before update.'
+                'Vendor SKU version replacement failed.'
             );
         }
 
