@@ -150,6 +150,23 @@ final class VendorProductNamingAuditService
             );
         }
 
+        $marketingCore = $this->marketingCoreName($headerName);
+
+        if ($marketingCore !== $headerName) {
+            return new VendorProductNamingAuditRow(
+                $productId,
+                $currentTitle,
+                $currentBaseTitle,
+                $headerName,
+                $marketingCore,
+                $productType,
+                'REVIEW',
+                'MEDIUM',
+                $evidence,
+                'Vendor ZIP name contains an obvious marketing tagline; review the shortened public-name candidate before any rename.'
+            );
+        }
+
         if ($headerName === '') {
             return new VendorProductNamingAuditRow(
                 $productId,
@@ -548,5 +565,39 @@ final class VendorProductNamingAuditService
             $headerName
         ) === 1
             && preg_match('/\d+\.\d+/', $headerName) === 1;
+    }
+
+    private function marketingCoreName(string $headerName): string
+    {
+        if (preg_match(
+            '/\s+[–—-]\s+(.+)$/u',
+            $headerName,
+            $matches,
+            PREG_OFFSET_CAPTURE
+        ) !== 1) {
+            return $headerName;
+        }
+
+        $tail = strtolower((string) ($matches[1][0] ?? ''));
+
+        if (
+            ! str_contains($tail, 'more than just')
+            && ! str_contains($tail, 'the best')
+            && ! str_contains($tail, '#1')
+            && ! str_contains($tail, 'simple and performant')
+            && ! str_contains($tail, 'simple and performance')
+        ) {
+            return $headerName;
+        }
+
+        $offset = (int) ($matches[0][1] ?? -1);
+
+        if ($offset <= 0) {
+            return $headerName;
+        }
+
+        $core = trim(substr($headerName, 0, $offset));
+
+        return $core !== '' ? $core : $headerName;
     }
 }
