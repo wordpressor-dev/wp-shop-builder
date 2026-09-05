@@ -117,6 +117,65 @@ final class ProductVersionUpdaterTest extends TestCase
         self::assertArrayNotHasKey('br_labels', $meta);
     }
 
+    public function testVendorUpdateDoesNotRequireEnvatoItemId(): void
+    {
+        $calls = [];
+        $updater = new ProductVersionUpdater(
+            static function (
+                string $name,
+                mixed ...$arguments
+            ) use (&$calls): mixed {
+                $calls[] = [$name, $arguments];
+
+                return match ($name) {
+                    'get_post_type' => 'product',
+                    'get_post_status' => 'publish',
+                    'get_post_meta' => match (
+                        (string) ($arguments[1] ?? '')
+                    ) {
+                        'attr_version_value' => '4.2.3',
+                        '_sku' => 'elementor-pro-4.2.3-package.zip',
+                        default => '',
+                    },
+                    'wc_get_product_id_by_sku' => 4066,
+                    'wp_update_post' => 4066,
+                    'is_wp_error' => false,
+                    default => true,
+                };
+            }
+        );
+        $data = new ProductUpdateData(
+            4066,
+            'Elementor Pro Website Builder',
+            0,
+            '4.2.3',
+            '4.2.4',
+            '2026-09-05',
+            'https://elementor.com/pro/',
+            'elementor-pro-4.2.3-package.zip',
+            'elementor-pro-4.2.4-package.zip',
+            'https://wp-shop.org/wp-content/uploads/'
+                . 'woocommerce_uploads/PLUGINS/Elementor/'
+                . 'elementor-pro-4.2.4-package.zip',
+            'vendor'
+        );
+
+        $result = $updater->update($data);
+
+        self::assertTrue($result->success);
+        self::assertContains('SOURCE TYPE = VENDOR', $result->logs);
+        self::assertContains(
+            'SKU AUTO-SYNC: elementor-pro-4.2.3-package.zip'
+                . ' -> elementor-pro-4.2.4-package.zip',
+            $result->logs
+        );
+
+        $meta = $this->metaCalls($calls);
+        self::assertSame('vendor', $meta['_wp_shop_source_type']);
+        self::assertSame('4.2.4', $meta['attr_version_value']);
+        self::assertArrayNotHasKey('_wp_shop_source_item_id', $meta);
+    }
+
     public function testSuccessfulUpdateMarksMatchingScannerReportDone(): void
     {
         $calls = [];

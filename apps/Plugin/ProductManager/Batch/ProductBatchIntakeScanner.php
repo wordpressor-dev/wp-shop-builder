@@ -8,8 +8,10 @@ use Closure;
 use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
+use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
@@ -327,46 +329,91 @@ final class ProductBatchIntakeScanner
             );
         }
 
-        $token = $this->token();
+        $sourceType = $this->productSourceType(
+            $snapshot->productId,
+            $snapshot->salesPage
+        );
+        $sourceUpdateDate = '';
 
-        if ($token === '') {
-            return $this->batchFailure(
-                'BATCH APPLY = ENVATO TOKEN REQUIRED FOR OFFICIAL UPDATE DATE'
-            );
-        }
+        if ($sourceType === ProductSourceType::ENVATO) {
+            $token = $this->token();
 
-        try {
-            $transport = new WordPressEnvatoTransport();
-            $client = new EnvatoClient($transport(...), new EnvatoItemMapper());
-            $suggestion = (new ProductUpdateEnvatoAdvisor($client))->suggest(
-                $snapshot,
-                $token
-            );
-        } catch (Throwable $exception) {
-            return $this->batchFailure(
-                'BATCH APPLY ENVATO ERROR = ' . $exception->getMessage()
-            );
-        }
+            if ($token === '') {
+                return $this->batchFailure(
+                    'BATCH APPLY = ENVATO TOKEN REQUIRED FOR OFFICIAL UPDATE DATE'
+                );
+            }
 
-        if ($suggestion->updateDate === '') {
-            return $this->batchFailure(
-                'BATCH APPLY = ENVATO UPDATE DATE NOT PROVIDED'
+            try {
+                $transport = new WordPressEnvatoTransport();
+                $client = new EnvatoClient(
+                    $transport(...),
+                    new EnvatoItemMapper()
+                );
+                $suggestion = (new ProductUpdateEnvatoAdvisor($client))->suggest(
+                    $snapshot,
+                    $token
+                );
+            } catch (Throwable $exception) {
+                return $this->batchFailure(
+                    'BATCH APPLY ENVATO ERROR = ' . $exception->getMessage()
+                );
+            }
+
+            if ($suggestion->updateDate === '') {
+                return $this->batchFailure(
+                    'BATCH APPLY = ENVATO UPDATE DATE NOT PROVIDED'
+                );
+            }
+
+            $sourceUpdateDate = $suggestion->updateDate;
+        } else {
+            $sourceUpdateDate = (string) ($this->call)(
+                'current_time',
+                'Y-m-d'
             );
+
+            if (
+                preg_match(
+                    '/^\\d{4}-\\d{2}-\\d{2}$/',
+                    $sourceUpdateDate
+                ) !== 1
+            ) {
+                return $this->batchFailure(
+                    'BATCH APPLY = VENDOR IMPORT DATE NOT AVAILABLE'
+                );
+            }
         }
 
         $productType = $row['productType'];
         $newVersion = $productType === CatalogProductType::TEMPLATE_KIT
             ? ''
             : $row['detectedVersion'];
-        $skuFilename = ProductSkuFilename::build(
-            $snapshot->itemId,
-            $snapshot->salesPage,
-            $newVersion
-        );
+
+        try {
+            $skuFilename = $sourceType === ProductSourceType::VENDOR
+                ? ProductVendorSkuFilename::synchronize(
+                    $snapshot->skuFilename,
+                    $snapshot->version,
+                    $newVersion
+                )
+                : ProductSkuFilename::build(
+                    $snapshot->itemId,
+                    $snapshot->salesPage,
+                    $newVersion
+                );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->batchFailure(
+                'BATCH APPLY SKU ERROR = ' . $exception->getMessage()
+            );
+        }
+
         $uploads = ($this->call)('wp_upload_dir');
 
         if (! is_array($uploads)) {
-            return $this->batchFailure('BATCH APPLY = WORDPRESS UPLOADS UNAVAILABLE');
+            return $this->batchFailure(
+                'BATCH APPLY = WORDPRESS UPLOADS UNAVAILABLE'
+            );
         }
 
         $baseDir = trim((string) ($uploads['basedir'] ?? ''));
@@ -382,11 +429,47 @@ final class ProductBatchIntakeScanner
             return $this->batchFailure('BATCH APPLY = INVALID ZIP SIGNATURE');
         }
 
-        $storage = CatalogProductType::storageFolder($productType);
-        $vendor = ProductDownloadUrl::vendorFolder($skuFilename);
-        $storagePath = $storage . ($vendor !== '' ? '/' . $vendor : '');
-        $directory = rtrim($baseDir, '/\\')
-            . '/woocommerce_uploads/' . $storagePath . '/' . $snapshot->itemId;
+        if ($sourceType === ProductSourceType::VENDOR) {
+            $vendorTarget = $this->vendorArchiveTarget(
+                $baseDir,
+                $snapshot->downloadUrl,
+                $skuFilename
+            );
+
+            if ($vendorTarget === null) {
+                return $this->batchFailure(
+                    'BATCH APPLY = VENDOR DOWNLOAD PATH CANNOT BE PRESERVED'
+                );
+            }
+
+            $storagePath = $vendorTarget['storagePath'];
+            $directory = $vendorTarget['directory'];
+            $downloadUrl = $vendorTarget['downloadUrl'];
+            $itemDirectory = '[preserved vendor path]';
+        } else {
+            $storage = CatalogProductType::storageFolder($productType);
+            $vendor = ProductDownloadUrl::vendorFolder($skuFilename);
+            $storagePath = $storage
+                . ($vendor !== '' ? '/' . $vendor : '');
+            $directory = rtrim($baseDir, '/\\')
+                . '/woocommerce_uploads/'
+                . $storagePath
+                . '/'
+                . $snapshot->itemId;
+            $downloadUrl = ProductDownloadUrl::build(
+                $baseUrl,
+                $productType,
+                $snapshot->itemId,
+                $skuFilename
+            );
+            $itemDirectory = (string) $snapshot->itemId;
+        }
+
+        if ($downloadUrl === '') {
+            return $this->batchFailure(
+                'BATCH APPLY = DOWNLOAD URL BUILD FAILED'
+            );
+        }
 
         if (! (bool) ($this->call)('wp_mkdir_p', $directory)) {
             return $this->batchFailure(
@@ -417,30 +500,18 @@ final class ProductBatchIntakeScanner
             return $this->batchFailure('BATCH APPLY = ZIP COPY FAILED');
         }
 
-        $downloadUrl = ProductDownloadUrl::build(
-            $baseUrl,
-            $productType,
-            $snapshot->itemId,
-            $skuFilename
-        );
-
-        if ($downloadUrl === '') {
-            $this->rollbackTarget($targetPath, $backupPath);
-
-            return $this->batchFailure('BATCH APPLY = DOWNLOAD URL BUILD FAILED');
-        }
-
         $data = new ProductUpdateData(
             $snapshot->productId,
             $snapshot->baseTitle,
             $snapshot->itemId,
             $snapshot->version,
             $newVersion,
-            $suggestion->updateDate,
+            $sourceUpdateDate,
             $snapshot->salesPage,
             $snapshot->skuFilename,
             $skuFilename,
-            $downloadUrl
+            $downloadUrl,
+            $sourceType
         );
         $preflight = $updater->preflight($data);
 
@@ -502,10 +573,15 @@ final class ProductBatchIntakeScanner
                     'BATCH ACTION = UPDATE',
                     'ZIP VERSION = SOURCE OF TRUTH: '
                         . ($newVersion !== '' ? $newVersion : '[versionless]'),
-                    'ENVATO UPDATE DATE = ' . $suggestion->updateDate,
+                    'SOURCE TYPE = ' . strtoupper($sourceType),
+                    (
+                        $sourceType === ProductSourceType::ENVATO
+                            ? 'ENVATO UPDATE DATE = '
+                            : 'VENDOR UPDATE DATE = IMPORT DATE: '
+                    ) . $sourceUpdateDate,
                     'ARCHIVE CANONICAL NAME = ' . $skuFilename,
                     'ARCHIVE STORAGE = ' . $storagePath,
-                    'ARCHIVE ITEM DIRECTORY = ' . $snapshot->itemId,
+                    'ARCHIVE ITEM DIRECTORY = ' . $itemDirectory,
                     'DOWNLOAD URL = ' . $downloadUrl,
                 ],
                 $preflight->logs,
@@ -696,7 +772,7 @@ final class ProductBatchIntakeScanner
             }
         }
 
-        if ($itemId <= 0) {
+        if ($itemId <= 0 && $productId <= 0) {
             $status = 'REVIEW';
             $note = $note !== ''
                 ? $note . '; ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED'
@@ -741,9 +817,9 @@ final class ProductBatchIntakeScanner
             'productType' => $productType,
             'currentVersion' => $currentVersion,
             'detectedVersion' => $detectedVersion,
-            'action' => $itemId <= 0
-                ? 'REVIEW'
-                : ($productId > 0 ? 'UPDATE' : 'CREATE'),
+            'action' => $productId > 0
+                ? 'UPDATE'
+                : ($itemId > 0 ? 'CREATE' : 'REVIEW'),
             'status' => $status,
             'note' => $note,
         ];
@@ -1045,7 +1121,135 @@ final class ProductBatchIntakeScanner
             }
         }
 
+        if ($result === []) {
+            $fallbackStop = [
+                'wordpress',
+                'theme',
+                'plugin',
+                'template',
+                'kit',
+                'pro',
+                'the',
+                'and',
+                'for',
+                'with',
+            ];
+
+            foreach ($tokens as $token) {
+                if (
+                    strlen($token) >= 4
+                    && ! in_array($token, $fallbackStop, true)
+                ) {
+                    $result[] = $token;
+                    break;
+                }
+            }
+        }
+
         return array_values(array_unique(array_slice($result, 0, 4)));
+    }
+
+    private function productSourceType(
+        int $productId,
+        string $salesPage
+    ): string {
+        $stored = trim((string) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_source_type',
+            true
+        ));
+
+        return ProductSourceType::normalize(
+            $stored,
+            $salesPage
+        );
+    }
+
+    /**
+     * @return array{
+     *   storagePath:string,
+     *   directory:string,
+     *   downloadUrl:string
+     * }|null
+     */
+    private function vendorArchiveTarget(
+        string $uploadsBaseDir,
+        string $currentDownloadUrl,
+        string $skuFilename
+    ): ?array {
+        $uploadsBaseDir = rtrim(trim($uploadsBaseDir), '/\\');
+        $currentDownloadUrl = trim($currentDownloadUrl);
+        $skuFilename = trim($skuFilename);
+
+        if (
+            $uploadsBaseDir === ''
+            || $currentDownloadUrl === ''
+            || $skuFilename === ''
+            || basename($skuFilename) !== $skuFilename
+        ) {
+            return null;
+        }
+
+        $path = parse_url(
+            $currentDownloadUrl,
+            PHP_URL_PATH
+        );
+
+        if (! is_string($path)) {
+            return null;
+        }
+
+        $marker = '/woocommerce_uploads/';
+        $position = strpos($path, $marker);
+
+        if ($position === false) {
+            return null;
+        }
+
+        $relative = ltrim(
+            substr(
+                $path,
+                $position + strlen($marker)
+            ),
+            '/'
+        );
+
+        if (
+            $relative === ''
+            || str_contains($relative, '../')
+            || str_contains($relative, '..\\')
+        ) {
+            return null;
+        }
+
+        $storagePath = str_replace(
+            '\\',
+            '/',
+            dirname($relative)
+        );
+
+        if ($storagePath === '.') {
+            return null;
+        }
+
+        $urlPrefix = substr(
+            $currentDownloadUrl,
+            0,
+            strrpos($currentDownloadUrl, '/') + 1
+        );
+
+        if ($urlPrefix === '') {
+            return null;
+        }
+
+        return [
+            'storagePath' => $storagePath,
+            'directory' => $uploadsBaseDir
+                . '/woocommerce_uploads/'
+                . $storagePath,
+            'downloadUrl' => $urlPrefix . $skuFilename,
+        ];
     }
 
     private function existingProductType(int $productId, string $productTitle): string

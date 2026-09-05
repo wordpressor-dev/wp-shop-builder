@@ -297,6 +297,69 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         );
     }
 
+    public function testMatchedDirectVendorProductBecomesReadyUpdateWithoutItemId(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'vendor-update';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'elementor-pro.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->pluginZip(
+            $zipPath,
+            'Elementor Pro',
+            '4.2.4'
+        );
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [4066];
+            }
+
+            if ($name === 'get_the_title') {
+                return 'Elementor Pro Website Builder 4.2.3';
+            }
+
+            if ($name === 'get_post_meta') {
+                return match ((string) ($arguments[1] ?? '')) {
+                    '_wp_shop_product_type' => 'plugin',
+                    'attr_version_value' => '4.2.3',
+                    '_wp_shop_source_item_id' => '',
+                    '_wp_shop_source_type' => 'vendor',
+                    'sales_page' => 'https://elementor.com/pro/',
+                    '_sku' => 'elementor-pro-4.2.3-package.zip',
+                    default => '',
+                };
+            }
+
+            return null;
+        };
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector()
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertCount(1, $rows);
+        self::assertSame(4066, $rows[0]['productId']);
+        self::assertSame(0, $rows[0]['itemId']);
+        self::assertSame('plugin', $rows[0]['productType']);
+        self::assertSame('4.2.3', $rows[0]['currentVersion']);
+        self::assertSame('4.2.4', $rows[0]['detectedVersion']);
+        self::assertSame('UPDATE', $rows[0]['action']);
+        self::assertSame('READY', $rows[0]['status']);
+    }
+
     public function testReadyUpdateRowsKeepsOnlyReadyExistingUpdates(): void
     {
         $scanner = $this->scanner('1.0.0');
@@ -410,6 +473,28 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         $zip->addFromString(
             'demo-theme/style.css',
             "/*\nTheme Name: {$name}\nVersion: {$version}\n*/\n"
+        );
+        $zip->close();
+    }
+
+    private function pluginZip(
+        string $path,
+        string $name,
+        string $version
+    ): void {
+        if (! class_exists(ZipArchive::class)) {
+            self::markTestSkipped('ZipArchive is required.');
+        }
+
+        $zip = new ZipArchive();
+
+        if ($zip->open($path, ZipArchive::CREATE) !== true) {
+            self::fail('Unable to create test ZIP.');
+        }
+
+        $zip->addFromString(
+            'elementor-pro/elementor-pro.php',
+            "<?php\n/*\nPlugin Name: {$name}\nVersion: {$version}\n*/\n"
         );
         $zip->close();
     }
