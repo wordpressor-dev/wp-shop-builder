@@ -15,6 +15,8 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftResult;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
+use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
@@ -45,7 +47,8 @@ final class ProductBatchCreateCoordinator
         string $folder,
         string $filename,
         string $itemReference,
-        string $notes = ''
+        string $notes = '',
+        string $sourceType = ProductSourceType::ENVATO
     ): ProductDraftResult {
         try {
             $folder = $this->normalizeFolder($folder);
@@ -84,6 +87,23 @@ final class ProductBatchCreateCoordinator
 
             if (! $this->validZipSignature($sourcePath)) {
                 return $this->failure('BATCH CREATE = INVALID ZIP SIGNATURE');
+            }
+
+            $sourceType = ProductSourceType::normalize(
+                $sourceType,
+                $itemReference
+            );
+
+            if ($sourceType === ProductSourceType::VENDOR) {
+                return $this->createVendorDraft(
+                    $uploadsBaseDir,
+                    $folder,
+                    $filename,
+                    $sourcePath,
+                    $row,
+                    $itemReference,
+                    $notes
+                );
             }
 
             $reference = $this->resolveItemReference(
@@ -379,6 +399,324 @@ final class ProductBatchCreateCoordinator
                 'BATCH CREATE EXCEPTION = ' . $exception->getMessage()
             );
         }
+    }
+
+    /**
+     * @param array{
+     *   filename: string,
+     *   relativePath: string,
+     *   itemId: int,
+     *   productId: int,
+     *   productTitle: string,
+     *   productType: string,
+     *   currentVersion: string,
+     *   detectedVersion: string,
+     *   action: string,
+     *   status: string,
+     *   note: string
+     * } $row
+     */
+    private function createVendorDraft(
+        string $uploadsBaseDir,
+        string $folder,
+        string $filename,
+        string $sourcePath,
+        array $row,
+        string $vendorUrl,
+        string $notes
+    ): ProductDraftResult {
+        $identityInspector = $this->identityInspector
+            ?? new ProductArchiveIdentityInspector();
+        $identity = $identityInspector->inspect(
+            $sourcePath,
+            $filename
+        );
+
+        if (! $identity->success || $identity->name === '') {
+            return $this->failure(
+                'BATCH CREATE VENDOR = ZIP IDENTITY NOT DETECTED'
+            );
+        }
+
+        if ($identity->productType !== $row['productType']) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = ZIP TYPE MISMATCH'
+            );
+        }
+
+        $version = trim($identity->version);
+
+        if ($version === '') {
+            $version = trim($row['detectedVersion']);
+        }
+
+        if (
+            $row['productType'] !== CatalogProductType::TEMPLATE_KIT
+            && $version === ''
+        ) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = ZIP VERSION NOT DETECTED'
+            );
+        }
+
+        $salesPage = trim($vendorUrl);
+
+        if ($salesPage === '') {
+            $salesPage = trim($identity->productUrl);
+        }
+
+        if (
+            $salesPage === ''
+            || filter_var($salesPage, FILTER_VALIDATE_URL) === false
+            || ProductSourceType::fromSalesPage($salesPage)
+                !== ProductSourceType::VENDOR
+        ) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = VENDOR PRODUCT URL REQUIRED'
+            );
+        }
+
+        $developer = trim($identity->developer);
+
+        if ($developer === '') {
+            $developer = $this->vendorNameFromUrl($salesPage);
+        }
+
+        if ($developer === '') {
+            return $this->failure(
+                'BATCH CREATE VENDOR = DEVELOPER NOT DETECTED'
+            );
+        }
+
+        $baseTitle = trim($identity->name);
+        $slug = (string) ($this->call)(
+            'sanitize_title',
+            $baseTitle
+        );
+
+        if ($slug === '') {
+            return $this->failure(
+                'BATCH CREATE VENDOR = PRODUCT SLUG NOT DETECTED'
+            );
+        }
+
+        $sourceUpdateDate = (string) ($this->call)(
+            'current_time',
+            'Y-m-d'
+        );
+
+        if (
+            preg_match(
+                '/^\d{4}-\d{2}-\d{2}$/',
+                $sourceUpdateDate
+            ) !== 1
+        ) {
+            $sourceUpdateDate = gmdate('Y-m-d');
+        }
+
+        try {
+            $skuFilename = ProductVendorSkuFilename::build(
+                $filename,
+                $baseTitle,
+                $version
+            );
+        } catch (Throwable $exception) {
+            return $this->failure(
+                'BATCH CREATE VENDOR SKU ERROR = '
+                . $exception->getMessage()
+            );
+        }
+
+        $uploads = ($this->call)('wp_upload_dir');
+
+        if (! is_array($uploads)) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = WORDPRESS UPLOADS UNAVAILABLE'
+            );
+        }
+
+        $baseDir = trim((string) ($uploads['basedir'] ?? ''));
+        $baseUrl = rtrim(
+            trim((string) ($uploads['baseurl'] ?? '')),
+            '/'
+        );
+
+        if ($baseDir === '' || $baseUrl === '') {
+            return $this->failure(
+                'BATCH CREATE VENDOR = UPLOAD BASE PATH OR URL MISSING'
+            );
+        }
+
+        $vendorSlug = (string) ($this->call)(
+            'sanitize_title',
+            $developer
+        );
+
+        if ($vendorSlug === '') {
+            return $this->failure(
+                'BATCH CREATE VENDOR = VENDOR SLUG NOT DETECTED'
+            );
+        }
+
+        $storage = CatalogProductType::storageFolder(
+            $row['productType']
+        );
+        $storagePath = $storage
+            . '/Vendor/'
+            . $vendorSlug
+            . '/'
+            . $slug;
+        $targetDir = rtrim($baseDir, '/\\')
+            . '/woocommerce_uploads/'
+            . $storagePath;
+        $targetPath = $targetDir . '/' . $skuFilename;
+        $downloadUrl = $baseUrl
+            . '/woocommerce_uploads/'
+            . $storagePath
+            . '/'
+            . rawurlencode($skuFilename);
+
+        if ((bool) ($this->call)('file_exists', $targetPath)) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = TARGET ARCHIVE ALREADY EXISTS'
+            );
+        }
+
+        $content = $this->editorialContent(
+            $baseTitle,
+            $developer,
+            $row['productType']
+        );
+        $controller = $this->controller ?? $this->buildController();
+        $data = new ProductDraftData(
+            $baseTitle,
+            $slug,
+            0,
+            $version,
+            $sourceUpdateDate,
+            $developer,
+            '249',
+            $salesPage,
+            $skuFilename,
+            $downloadUrl,
+            0,
+            [],
+            $content['ruShort'],
+            $content['ruLong'],
+            $content['ruMeta'],
+            $content['enShort'],
+            $content['enLong'],
+            $content['enMeta'],
+            trim($notes),
+            false,
+            false,
+            true
+        );
+        $preflight = $controller->preflightDraft($data);
+
+        if (! $preflight->success) {
+            return new ProductDraftResult(
+                false,
+                null,
+                array_merge(
+                    [
+                        'BATCH CREATE VENDOR = RECEIVED',
+                        'BATCH ZIP = ' . $filename,
+                    ],
+                    $preflight->logs,
+                    ['BATCH CREATE VENDOR = PREFLIGHT FAILED']
+                )
+            );
+        }
+
+        if (! (bool) ($this->call)('wp_mkdir_p', $targetDir)) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = TARGET DIRECTORY CREATE FAILED'
+            );
+        }
+
+        if (! (bool) ($this->call)('copy', $sourcePath, $targetPath)) {
+            return $this->failure(
+                'BATCH CREATE VENDOR = ZIP COPY FAILED'
+            );
+        }
+
+        $result = $controller->createDraft($data);
+
+        if (! $result->success) {
+            if ((bool) ($this->call)('file_exists', $targetPath)) {
+                ($this->call)('unlink', $targetPath);
+            }
+
+            return new ProductDraftResult(
+                false,
+                $result->productId,
+                array_merge(
+                    [
+                        'BATCH CREATE VENDOR = RECEIVED',
+                        'BATCH ZIP = ' . $filename,
+                        'BATCH ROLLBACK TARGET ARCHIVE = READY',
+                    ],
+                    $preflight->logs,
+                    $result->logs,
+                    ['BATCH CREATE VENDOR = PRODUCT DRAFT FAILED']
+                )
+            );
+        }
+
+        $cleanup = (bool) ($this->call)('unlink', $sourcePath)
+            ? 'BATCH INBOX SOURCE = REMOVED'
+            : 'BATCH INBOX SOURCE = CLEANUP FAILED';
+
+        return new ProductDraftResult(
+            true,
+            $result->productId,
+            array_merge(
+                [
+                    'BATCH CREATE VENDOR = RECEIVED',
+                    'BATCH ZIP = ' . $filename,
+                    'SOURCE TYPE = VENDOR',
+                    'PRODUCT TYPE = ' . $row['productType'],
+                    'VENDOR = ' . $developer,
+                    'VENDOR PRODUCT URL = ' . $salesPage,
+                    'ZIP VERSION = SOURCE OF TRUTH: '
+                        . ($version !== '' ? $version : '[versionless]'),
+                    'SOURCE UPDATE DATE = IMPORT DATE: '
+                        . $sourceUpdateDate,
+                    'ARCHIVE CANONICAL NAME = ' . $skuFilename,
+                    'ARCHIVE STORAGE = ' . $storagePath,
+                    'DOWNLOAD URL = ' . $downloadUrl,
+                    'EDITORIAL CONTENT = AUTO-DRAFT; REVIEW REQUIRED',
+                    'ADVANCED LABELS = NONE',
+                ],
+                $preflight->logs,
+                $result->logs,
+                [
+                    $cleanup,
+                    'BATCH CREATE VENDOR DRAFT = READY',
+                    'REVIEW PRODUCT BEFORE PUBLISH',
+                ]
+            )
+        );
+    }
+
+    private function vendorNameFromUrl(string $url): string
+    {
+        $host = strtolower(
+            (string) parse_url($url, PHP_URL_HOST)
+        );
+        $host = preg_replace('/^www\./', '', $host) ?? $host;
+
+        if ($host === '') {
+            return '';
+        }
+
+        $parts = explode('.', $host);
+        $name = trim((string) ($parts[0] ?? ''));
+
+        return $name !== ''
+            ? ucfirst(str_replace('-', ' ', $name))
+            : '';
     }
 
     /**
