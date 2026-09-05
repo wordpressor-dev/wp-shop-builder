@@ -35,6 +35,7 @@ final readonly class ProductDraftData
     public bool $hit;
     public bool $new;
     public bool $importQueueDraft;
+    public string $productType;
 
     /**
      * @param list<CatalogTag> $tags
@@ -61,19 +62,34 @@ final readonly class ProductDraftData
         string $notes,
         bool $hit,
         bool $new,
-        bool $importQueueDraft = false
+        bool $importQueueDraft = false,
+        string $productType = ''
     ) {
         $importQueueDraft = $importQueueDraft
             || str_starts_with(
                 trim($notes),
                 'Created from WP Shop Builder Import Queue.'
             );
+        $resolvedProductType = in_array(
+            $productType,
+            [
+                CatalogProductType::THEME,
+                CatalogProductType::PLUGIN,
+                CatalogProductType::TEMPLATE_KIT,
+            ],
+            true
+        )
+            ? $productType
+            : CatalogProductType::infer(
+                $baseTitle,
+                $salesPage
+            );
 
         if ($importQueueDraft) {
             $editorial = (new ProductEditorialDraftBuilder())->build(
                 $baseTitle,
                 $developer,
-                CatalogProductType::infer($baseTitle, $salesPage),
+                $resolvedProductType,
                 $this->editorialSignals($baseTitle),
                 $sourceUpdateDate
             );
@@ -107,6 +123,7 @@ final readonly class ProductDraftData
         $this->hit = $hit;
         $this->new = $new;
         $this->importQueueDraft = $importQueueDraft;
+        $this->productType = $resolvedProductType;
     }
 
     public function title(): string
@@ -157,7 +174,8 @@ final readonly class ProductDraftData
             $this->notes,
             $this->hit,
             $this->new,
-            $this->importQueueDraft
+            $this->importQueueDraft,
+            $this->productType
         );
     }
 

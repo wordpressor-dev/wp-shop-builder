@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Draft;
 
 use DateTimeImmutable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 
 final class ProductDraftValidator
 {
@@ -15,10 +16,7 @@ final class ProductDraftValidator
     public function validate(ProductDraftData $data): array
     {
         $errors = [];
-        $productType = CatalogProductType::infer(
-            $data->baseTitle,
-            $data->salesPage
-        );
+        $productType = $data->productType;
 
         foreach (
             [
@@ -46,8 +44,12 @@ final class ProductDraftValidator
             $errors[] = 'Version is required for themes and plugins.';
         }
 
-        if ($data->itemId <= 0) {
-            $errors[] = 'ThemeForest Item ID must be positive.';
+        if (
+            ProductSourceType::fromSalesPage($data->salesPage)
+                === ProductSourceType::ENVATO
+            && $data->itemId <= 0
+        ) {
+            $errors[] = 'Envato Item ID must be positive.';
         }
 
         if (

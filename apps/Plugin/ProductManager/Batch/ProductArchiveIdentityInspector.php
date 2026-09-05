@@ -33,7 +33,9 @@ final class ProductArchiveIdentityInspector
                     CatalogProductType::THEME,
                     $theme['name'],
                     $theme['version'],
-                    $theme['source']
+                    $theme['source'],
+                    $theme['developer'],
+                    $theme['productUrl']
                 );
             }
 
@@ -45,7 +47,9 @@ final class ProductArchiveIdentityInspector
                     CatalogProductType::PLUGIN,
                     $plugin['name'],
                     $plugin['version'],
-                    $plugin['source']
+                    $plugin['source'],
+                    $plugin['developer'],
+                    $plugin['productUrl']
                 );
             }
 
@@ -72,7 +76,13 @@ final class ProductArchiveIdentityInspector
     }
 
     /**
-     * @return array{name: string, version: string, source: string}|null
+     * @return array{
+     *   name: string,
+     *   version: string,
+     *   source: string,
+     *   developer: string,
+     *   productUrl: string
+     * }|null
      */
     private function themeIdentity(ZipArchive $zip): ?array
     {
@@ -121,6 +131,11 @@ final class ProductArchiveIdentityInspector
                 'name' => $name,
                 'version' => $this->headerValue($header, 'Version'),
                 'source' => (string) $candidate['source'],
+                'developer' => $this->headerValue($header, 'Author'),
+                'productUrl' => $this->firstValidUrl([
+                    $this->headerValue($header, 'Theme URI'),
+                    $this->headerValue($header, 'Author URI'),
+                ]),
             ];
         }
 
@@ -128,7 +143,13 @@ final class ProductArchiveIdentityInspector
     }
 
     /**
-     * @return array{name: string, version: string, source: string}|null
+     * @return array{
+     *   name: string,
+     *   version: string,
+     *   source: string,
+     *   developer: string,
+     *   productUrl: string
+     * }|null
      */
     private function pluginIdentity(ZipArchive $zip): ?array
     {
@@ -181,6 +202,11 @@ final class ProductArchiveIdentityInspector
                 'name' => $name,
                 'version' => $this->headerValue($header, 'Version'),
                 'source' => (string) $candidate['source'],
+                'developer' => $this->headerValue($header, 'Author'),
+                'productUrl' => $this->firstValidUrl([
+                    $this->headerValue($header, 'Plugin URI'),
+                    $this->headerValue($header, 'Author URI'),
+                ]),
             ];
         }
 
@@ -215,6 +241,25 @@ final class ProductArchiveIdentityInspector
         }
 
         return $jsonFiles >= 2 && $templateSignals >= 1;
+    }
+
+    /**
+     * @param list<string> $urls
+     */
+    private function firstValidUrl(array $urls): string
+    {
+        foreach ($urls as $url) {
+            $url = trim($url);
+
+            if (
+                $url !== ''
+                && filter_var($url, FILTER_VALIDATE_URL) !== false
+            ) {
+                return $url;
+            }
+        }
+
+        return '';
     }
 
     private function headerValue(string $content, string $field): string

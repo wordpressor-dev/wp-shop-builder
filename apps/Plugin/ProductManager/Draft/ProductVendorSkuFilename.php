@@ -8,6 +8,54 @@ use InvalidArgumentException;
 
 final class ProductVendorSkuFilename
 {
+    public static function build(
+        string $originalFilename,
+        string $baseTitle,
+        string $version
+    ): string {
+        $originalFilename = trim($originalFilename);
+        $baseTitle = trim($baseTitle);
+        $version = trim($version);
+
+        if (
+            $version === ''
+            || preg_match('/^[A-Za-z0-9._+-]+$/', $version) !== 1
+        ) {
+            throw new InvalidArgumentException(
+                'Vendor version contains unsupported characters.'
+            );
+        }
+
+        if (
+            $originalFilename !== ''
+            && basename($originalFilename) === $originalFilename
+            && strtolower((string) pathinfo(
+                $originalFilename,
+                PATHINFO_EXTENSION
+            )) === 'zip'
+        ) {
+            $pattern = '/(?<![A-Za-z0-9])'
+                . preg_quote($version, '/')
+                . '(?![A-Za-z0-9])/';
+
+            if (preg_match_all($pattern, $originalFilename) === 1) {
+                return $originalFilename;
+            }
+        }
+
+        $slug = strtolower($baseTitle);
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+        $slug = is_string($slug) ? trim($slug, '-') : '';
+
+        if ($slug === '') {
+            throw new InvalidArgumentException(
+                'Vendor product title cannot build a safe SKU.'
+            );
+        }
+
+        return $slug . '-' . $version . '.zip';
+    }
+
     public static function synchronize(
         string $currentSku,
         string $currentVersion,

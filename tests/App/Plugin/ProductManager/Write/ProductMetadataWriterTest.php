@@ -72,6 +72,48 @@ final class ProductMetadataWriterTest extends TestCase
         );
     }
 
+    public function testWritesVendorSourceAndBrandWithoutItemId(): void
+    {
+        $meta = [];
+        $writer = $this->writer($meta);
+
+        $logs = $writer->write(
+            7001,
+            new ProductDraftData(
+                'Elementor Pro',
+                'elementor-pro',
+                0,
+                '4.2.4',
+                '2026-09-05',
+                'Elementor',
+                '249',
+                'https://elementor.com/pro/',
+                'elementor-pro-4.2.4.zip',
+                'https://wp-shop.org/vendor/elementor-pro-4.2.4.zip',
+                0,
+                [],
+                'RU short',
+                'RU long',
+                'RU meta',
+                'EN short',
+                'EN long',
+                'EN meta',
+                '',
+                false,
+                false
+            )
+        );
+
+        self::assertSame('Elementor', $meta['attr_brand_value']);
+        self::assertSame('vendor', $meta['_wp_shop_source_type']);
+        self::assertArrayNotHasKey(
+            '_wp_shop_source_item_id',
+            $meta
+        );
+        self::assertContains('SOURCE TYPE = vendor', $logs);
+        self::assertContains('SOURCE ITEM ID = N/A', $logs);
+    }
+
     public function testRoutesVersionlessElementorTemplateKitToTemplates(): void
     {
         $meta = [];
@@ -129,6 +171,12 @@ final class ProductMetadataWriterTest extends TestCase
             ) use (&$meta): mixed {
                 if ($name === 'update_post_meta') {
                     $meta[(string) $arguments[1]] = $arguments[2];
+
+                    return true;
+                }
+
+                if ($name === 'delete_post_meta') {
+                    unset($meta[(string) $arguments[1]]);
 
                     return true;
                 }

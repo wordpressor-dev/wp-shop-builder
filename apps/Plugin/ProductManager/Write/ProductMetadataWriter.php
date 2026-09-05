@@ -10,6 +10,7 @@ use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftWriterInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 
 final class ProductMetadataWriter implements
     ProductDraftWriterInterface
@@ -26,16 +27,19 @@ final class ProductMetadataWriter implements
         int $productId,
         ProductDraftData $data
     ): array {
-        $productType = CatalogProductType::infer(
-            $data->baseTitle,
-            $data->salesPage
-        );
+        $productType = $data->productType;
         $categoryLabel = CatalogProductType::categoryLabel(
             $productType
         );
         $storageFolder = CatalogProductType::storageFolder(
             $productType
         );
+        $sourceType = ProductSourceType::fromSalesPage(
+            $data->salesPage
+        );
+        $brandValue = $sourceType === ProductSourceType::VENDOR
+            ? $data->developer
+            : 'Themeforest';
         $displayVersion = $data->version;
         $editorial = $this->importQueueEditorial($data, $productType);
         $editorialLogs = [];
@@ -111,7 +115,7 @@ final class ProductMetadataWriter implements
             $productId,
             'field_68d5361b6f434',
             'attr_brand_value',
-            'Themeforest'
+            $brandValue
         );
         $this->writeAcfValue(
             $productId,
@@ -143,9 +147,23 @@ final class ProductMetadataWriter implements
         );
         $this->updateMeta(
             $productId,
-            '_wp_shop_source_item_id',
-            (string) $data->itemId
+            '_wp_shop_source_type',
+            $sourceType
         );
+
+        if ($sourceType === ProductSourceType::ENVATO) {
+            $this->updateMeta(
+                $productId,
+                '_wp_shop_source_item_id',
+                (string) $data->itemId
+            );
+        } else {
+            ($this->call)(
+                'delete_post_meta',
+                $productId,
+                '_wp_shop_source_item_id'
+            );
+        }
         $this->updateMeta(
             $productId,
             '_wp_shop_product_type',
@@ -179,7 +197,10 @@ final class ProductMetadataWriter implements
                 'PRODUCT TYPE = ' . $productType,
                 'CATALOG CATEGORY = ' . $categoryLabel,
                 'STORAGE FOLDER = ' . $storageFolder,
-                'SOURCE ITEM ID = ' . $data->itemId,
+                'SOURCE TYPE = ' . $sourceType,
+                $sourceType === ProductSourceType::ENVATO
+                    ? 'SOURCE ITEM ID = ' . $data->itemId
+                    : 'SOURCE ITEM ID = N/A',
                 'SOURCE UPDATE DATE = ' . $data->sourceUpdateDate,
                 $displayVersion === '—'
                     ? 'DISPLAY VERSION = VERSIONLESS PLACEHOLDER'

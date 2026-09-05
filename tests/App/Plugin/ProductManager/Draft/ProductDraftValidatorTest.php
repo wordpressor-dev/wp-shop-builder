@@ -20,6 +20,38 @@ final class ProductDraftValidatorTest extends TestCase
         );
     }
 
+    public function testAllowsVendorDraftWithoutEnvatoItemId(): void
+    {
+        $data = new ProductDraftData(
+            'Elementor Pro',
+            'elementor-pro',
+            0,
+            '4.2.4',
+            '2026-09-05',
+            'Elementor',
+            '249',
+            'https://elementor.com/pro/',
+            'elementor-pro-4.2.4.zip',
+            'https://wp-shop.org/vendor/elementor-pro-4.2.4.zip',
+            0,
+            [],
+            'RU short',
+            'RU long',
+            'RU meta',
+            'EN short',
+            'EN long',
+            'EN meta',
+            '',
+            false,
+            false
+        );
+
+        self::assertSame(
+            [],
+            (new ProductDraftValidator())->validate($data)
+        );
+    }
+
     public function testRequiresRuEditorialContent(): void
     {
         $data = $this->validData(
