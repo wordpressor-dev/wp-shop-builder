@@ -63,6 +63,12 @@ final readonly class ProductDraftData
         bool $new,
         bool $importQueueDraft = false
     ) {
+        $importQueueDraft = $importQueueDraft
+            || str_starts_with(
+                trim($notes),
+                'Created from WP Shop Builder Import Queue.'
+            );
+
         if ($importQueueDraft) {
             $editorial = (new ProductEditorialDraftBuilder())->build(
                 $baseTitle,
