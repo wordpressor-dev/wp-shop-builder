@@ -244,6 +244,27 @@ final class VendorProductNamingAuditService
             return false;
         }
 
+        $itemId = (int) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_wp_shop_source_item_id',
+            true
+        );
+        $sku = strtolower(trim((string) ($this->call)(
+            'get_post_meta',
+            $productId,
+            '_sku',
+            true
+        )));
+
+        if (
+            $itemId > 0
+            || str_starts_with($sku, 'themeforest-')
+            || str_starts_with($sku, 'codecanyon-')
+        ) {
+            return false;
+        }
+
         if ($storedSource === ProductSourceType::VENDOR) {
             return true;
         }
