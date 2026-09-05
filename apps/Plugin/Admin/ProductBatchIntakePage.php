@@ -9,6 +9,7 @@ use Throwable;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateAllService;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateCoordinator;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class ProductBatchIntakePage implements SubmenuPageInterface
@@ -131,7 +132,10 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     $itemReference,
                     $this->posted('intake_pre_activated') === '1'
                         ? self::PREACTIVATED_NOTE
-                        : ''
+                        : '',
+                    $this->posted('intake_source_type') !== ''
+                        ? $this->posted('intake_source_type')
+                        : ProductSourceType::ENVATO
                 );
                 $logs = $result->logs;
                 $success = $result->success;
@@ -147,12 +151,15 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     $prepared = $service->prepare(
                         $scanRows,
                         $this->postedNewReferences(),
-                        $this->postedNewNotes()
+                        $this->postedNewNotes(),
+                        $this->postedNewSourceTypes()
                     );
 
                     if ($prepared['entries'] === []) {
                         throw new \RuntimeException(
-                            'No NEW PRODUCT rows have an Envato URL / Item ID.'
+                            'No NEW PRODUCT rows are ready. '
+                            . 'Envato requires URL / Item ID; '
+                            . 'Vendor requires Source = Vendor.'
                         );
                     }
 
@@ -250,7 +257,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Import Queue</h1>';
-        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди для Envato и direct Vendor товаров. Для нового Envato товара Import Queue создаёт WooCommerce Draft, переносит архив в каноническую папку и заполняет доступные данные Envato. Draft всегда нужно проверить перед публикацией.</p>';
+        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди для Envato и direct Vendor товаров. NEW PRODUCT можно создать как Envato или Vendor Draft. Для Vendor данные Name/Version/Author/Plugin URI/Theme URI берутся из ZIP, когда они доступны. Draft всегда нужно проверить перед публикацией.</p>';
 
         if ($error !== '') {
             echo '<div class="notice notice-error"><p><strong>BATCH INTAKE ERROR:</strong> '
@@ -266,7 +273,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<p><strong>INBOX ROOT</strong> = '
             . $this->escape($root !== '' ? $root : 'UNAVAILABLE')
             . '</p>';
-        echo '<p>Загрузи ZIP-файлы с исходными именами в отдельную папку внутри INBOX. Существующие direct Vendor товары сопоставляются по ZIP identity и обновляются без Envato Item ID; текущий SKU и папка загрузки сохраняются по существующему шаблону. Для нового Envato ZIP без Item ID достаточно один раз вставить ThemeForest/CodeCanyon URL или Item ID.</p>';
+        echo '<p>Загрузи ZIP-файлы с исходными именами в отдельную папку внутри INBOX. Существующие direct Vendor товары сопоставляются по ZIP identity и обновляются без Envato Item ID. Для NEW PRODUCT выбери источник: Envato или Vendor. Vendor URL можно оставить пустым, если ZIP содержит Plugin URI / Theme URI.</p>';
         echo '</div>';
 
         $this->renderScanForm($folders, $selectedFolder);
@@ -404,7 +411,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">Create ALL NEW Products as Drafts</h2>';
         echo '<p><strong>NEW PRODUCT = '
             . $this->escape((string) count($newRows))
-            . '</strong>. Для ZIP без Item ID укажи Envato URL или Item ID. Пустые строки будут пропущены. Создаются только WooCommerce Drafts; публикация вручную после проверки.</p>';
+            . '</strong>. Для каждого нового ZIP выбери источник. Envato требует URL / Item ID. Для Vendor можно указать официальный product URL или оставить пустым, если он есть в ZIP header. Создаются только WooCommerce Drafts; публикация вручную после проверки.</p>';
         echo '<p>Обработка идёт автоматически партиями по '
             . $this->escape((string) ProductBatchCreateAllService::MAX_BATCH)
             . ' товаров за HTTP-запрос. Ошибка отдельного ZIP переносит его в <code>_REVIEW</code> и не блокирует остальные Drafts.</p>';
@@ -416,7 +423,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             . $this->escapeAttr($selectedFolder)
             . '">';
         echo '<table class="widefat striped" style="max-width:1100px;">';
-        echo '<thead><tr><th>ZIP</th><th>Type</th><th>Detected</th><th>Envato URL / Item ID</th><th>Notes</th></tr></thead><tbody>';
+        echo '<thead><tr><th>ZIP</th><th>Type</th><th>Detected</th><th>Source</th><th>Source URL / Item ID</th><th>Notes</th></tr></thead><tbody>';
 
         foreach ($newRows as $row) {
             echo '<tr>';
@@ -429,21 +436,24 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                         : '—'
                 )
                 . '</td>';
-            echo '<td>';
             echo '<input type="hidden" name="intake_new_filename[]" value="'
                 . $this->escapeAttr($row['filename'])
                 . '">';
 
             if ($row['itemId'] > 0) {
-                echo '<input type="hidden" name="intake_new_reference[]" value="'
+                echo '<td><input type="hidden" name="intake_new_source_type[]" value="envato"><strong>Envato</strong></td>';
+                echo '<td><input type="hidden" name="intake_new_reference[]" value="'
                     . $this->escapeAttr((string) $row['itemId'])
-                    . '">';
-                echo '<code>' . $this->escape((string) $row['itemId']) . '</code>';
+                    . '"><code>'
+                    . $this->escape((string) $row['itemId'])
+                    . '</code></td>';
             } else {
-                echo '<input type="text" name="intake_new_reference[]" placeholder="ThemeForest/CodeCanyon URL or Item ID" style="width:100%;max-width:520px;">';
+                echo '<td><select name="intake_new_source_type[]">';
+                echo '<option value="envato" selected>Envato</option>';
+                echo '<option value="vendor">Vendor</option>';
+                echo '</select></td>';
+                echo '<td><input type="text" name="intake_new_reference[]" placeholder="Envato URL / Item ID or Vendor product URL" style="width:100%;max-width:520px;"></td>';
             }
-
-            echo '</td>';
             echo '<td><select name="intake_new_pre_activated[]">';
             echo '<option value="0" selected>Пусто</option>';
             echo '<option value="1">⚠ Продукт предварительно активирован.</option>';
@@ -452,7 +462,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         echo '</tbody></table>';
-        echo '<p style="margin-bottom:0;"><button type="submit" class="button button-primary" onclick="return confirm(\'Создать Draft для всех NEW PRODUCT, где указан Envato URL / Item ID? Товары не будут опубликованы автоматически.\');">Create ALL NEW Drafts</button></p>';
+        echo '<p style="margin-bottom:0;"><button type="submit" class="button button-primary" onclick="return confirm(\'Создать Draft для подготовленных NEW PRODUCT? Envato и Vendor товары не будут опубликованы автоматически.\');">Create ALL NEW Drafts</button></p>';
         echo '</form>';
         echo '</div>';
     }
@@ -486,13 +496,15 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 string $folder,
                 string $filename,
                 string $reference,
-                string $notes
+                string $notes,
+                string $sourceType
             ) => $coordinator->createDraft(
                 $uploadsBaseDir,
                 $folder,
                 $filename,
                 $reference,
-                $notes
+                $notes,
+                $sourceType
             ),
             fn (
                 string $uploadsBaseDir,
@@ -509,7 +521,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
     /**
      * @param array<string, mixed> $state
-     * @return list<array{filename:string,reference:string,notes:string}>
+     * @return list<array{filename:string,reference:string,notes:string,sourceType:string}>
      */
     private function autoCreatePending(array $state): array
     {
@@ -529,11 +541,13 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             $filename = $entry['filename'] ?? null;
             $reference = $entry['reference'] ?? null;
             $notes = $entry['notes'] ?? '';
+            $sourceType = $entry['sourceType'] ?? '';
 
             if (
                 ! is_string($filename)
                 || ! is_string($reference)
                 || ! is_string($notes)
+                || ! is_string($sourceType)
             ) {
                 continue;
             }
@@ -541,8 +555,23 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             $filename = trim($filename);
             $reference = trim($reference);
             $notes = trim($notes);
+            $sourceType = strtolower(trim($sourceType));
 
-            if ($filename === '' || $reference === '') {
+            if ($filename === '') {
+                continue;
+            }
+
+            if (
+                $sourceType !== ProductSourceType::ENVATO
+                && $sourceType !== ProductSourceType::VENDOR
+            ) {
+                continue;
+            }
+
+            if (
+                $sourceType === ProductSourceType::ENVATO
+                && $reference === ''
+            ) {
                 continue;
             }
 
@@ -550,6 +579,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 'filename' => $filename,
                 'reference' => $reference,
                 'notes' => $notes,
+                'sourceType' => $sourceType,
             ];
         }
 
@@ -657,7 +687,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
      *   created:int,
      *   failed:int,
      *   productIds:list<int>,
-     *   remaining:list<array{filename:string,reference:string,notes:string}>,
+     *   remaining:list<array{filename:string,reference:string,notes:string,sourceType:string}>,
      *   continue:bool,
      *   logs:list<string>
      * } $batch
@@ -1056,7 +1086,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         echo '</tbody></table>';
-        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> UPDATE выполняет внутренний Preflight и rollback. Vendor UPDATE не требует Envato API и сохраняет текущую структуру SKU/download folder. CREATE пока создаёт только Envato Draft, сверяет ZIP с Envato, не назначает Hit/New автоматически и удаляет исходник из INBOX только после успешного создания.</p>';
+        echo '<p style="margin-bottom:0;margin-top:14px;"><strong>Safety:</strong> UPDATE выполняет внутренний Preflight и rollback. Vendor UPDATE не требует Envato API и сохраняет текущую структуру SKU/download folder. NEW PRODUCT создаётся только как Draft. Envato сверяется с API; Vendor строится из ZIP identity + официального Vendor URL. Исходник удаляется из INBOX только после успешного создания.</p>';
         echo '</div>';
     }
 
@@ -1142,11 +1172,16 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             . '">';
 
         if ($row['itemId'] > 0) {
+            echo '<input type="hidden" name="intake_source_type" value="envato">';
             echo '<input type="hidden" name="intake_item_reference" value="'
                 . $this->escapeAttr((string) $row['itemId'])
                 . '">';
         } else {
-            echo '<input type="text" name="intake_item_reference" required placeholder="Envato URL / Item ID" style="width:210px;">';
+            echo '<select name="intake_source_type">';
+            echo '<option value="envato" selected>Envato</option>';
+            echo '<option value="vendor">Vendor</option>';
+            echo '</select>';
+            echo '<input type="text" name="intake_item_reference" placeholder="Envato URL / Item ID or Vendor URL" style="width:230px;">';
         }
 
         echo '<label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" name="intake_pre_activated" value="1"> Предварительно активирован</label>';
