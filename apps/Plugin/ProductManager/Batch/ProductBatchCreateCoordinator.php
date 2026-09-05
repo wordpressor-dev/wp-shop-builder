@@ -304,7 +304,8 @@ final class ProductBatchCreateCoordinator
                 trim($notes),
                 false,
                 false,
-                true
+                true,
+                $envatoType
             );
             $preflight = $controller->preflightDraft($data);
 
@@ -610,7 +611,8 @@ final class ProductBatchCreateCoordinator
             trim($notes),
             false,
             false,
-            true
+            true,
+            $row['productType']
         );
         $preflight = $controller->preflightDraft($data);
 
