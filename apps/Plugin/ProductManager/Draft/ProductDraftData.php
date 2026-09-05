@@ -34,6 +34,7 @@ final readonly class ProductDraftData
     public string $notes;
     public bool $hit;
     public bool $new;
+    public bool $importQueueDraft;
 
     /**
      * @param list<CatalogTag> $tags
@@ -59,9 +60,10 @@ final readonly class ProductDraftData
         string $enMetaDescription,
         string $notes,
         bool $hit,
-        bool $new
+        bool $new,
+        bool $importQueueDraft = false
     ) {
-        if ($this->isImportQueueDraft($notes)) {
+        if ($importQueueDraft) {
             $editorial = (new ProductEditorialDraftBuilder())->build(
                 $baseTitle,
                 $developer,
@@ -98,6 +100,7 @@ final readonly class ProductDraftData
         $this->notes = $notes;
         $this->hit = $hit;
         $this->new = $new;
+        $this->importQueueDraft = $importQueueDraft;
     }
 
     public function title(): string
@@ -147,15 +150,8 @@ final readonly class ProductDraftData
             $this->enMetaDescription,
             $this->notes,
             $this->hit,
-            $this->new
-        );
-    }
-
-    private function isImportQueueDraft(string $notes): bool
-    {
-        return str_starts_with(
-            trim($notes),
-            'Created from WP Shop Builder Import Queue.'
+            $this->new,
+            $this->importQueueDraft
         );
     }
 
