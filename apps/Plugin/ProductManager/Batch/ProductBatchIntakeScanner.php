@@ -12,6 +12,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Update\ProductArchiveVersionInspector;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateData;
@@ -23,7 +24,7 @@ final class ProductBatchIntakeScanner
 {
     public const MAX_AUTO_UPDATE_BATCH = 10;
 
-    /** @var list<array{id:int,type:string,haystack:string}>|null */
+    /** @var list<array{id:int,itemId:int,type:string,haystack:string}>|null */
     private ?array $identityCatalog = null;
 
     /**
@@ -32,7 +33,8 @@ final class ProductBatchIntakeScanner
     public function __construct(
         private readonly Closure $call,
         private readonly ProductArchiveVersionInspector $versionInspector,
-        private readonly ProductArchiveIdentityInspector $identityInspector
+        private readonly ProductArchiveIdentityInspector $identityInspector,
+        private readonly ?EnvatoItemSearchResolver $envatoSearchResolver = null
     ) {
     }
 
@@ -608,6 +610,7 @@ final class ProductBatchIntakeScanner
         $identity = $this->identityInspector->inspect($path, $filename);
         $itemId = $this->itemIdFromFilename($filename);
         $productId = $itemId > 0 ? $this->productIdByItemId($itemId) : 0;
+        $autoEnvatoNote = '';
 
         if ($productId <= 0 && $identity->success && $identity->name !== '') {
             $productId = $this->productIdByArchiveIdentity(
@@ -617,6 +620,33 @@ final class ProductBatchIntakeScanner
 
             if ($productId > 0) {
                 $itemId = $this->productItemId($productId);
+            }
+        }
+
+        if (
+            $productId <= 0
+            && $itemId <= 0
+            && $identity->success
+            && $identity->name !== ''
+            && $identity->productType !== ''
+            && $this->envatoSearchResolver !== null
+        ) {
+            $resolved = $this->envatoSearchResolver->resolve(
+                $identity->name,
+                $identity->productType,
+                $this->token()
+            );
+
+            if ($resolved->success && $resolved->itemId > 0) {
+                $itemId = $resolved->itemId;
+                $productId = $this->productIdByItemId($itemId);
+                $autoEnvatoNote = 'ENVATO AUTO-MATCH: '
+                    . $resolved->title
+                    . ' ['
+                    . $resolved->score
+                    . '%]';
+            } elseif ($resolved->message !== '') {
+                $autoEnvatoNote = $resolved->message;
             }
         }
 
@@ -671,6 +701,12 @@ final class ProductBatchIntakeScanner
             $note = $note !== ''
                 ? $note . '; ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED'
                 : 'ITEM ID NOT DETECTED; PRODUCT MATCH REQUIRED';
+        }
+
+        if ($autoEnvatoNote !== '') {
+            $note = $note !== ''
+                ? $note . '; ' . $autoEnvatoNote
+                : $autoEnvatoNote;
         }
 
         if (
@@ -850,7 +886,19 @@ final class ProductBatchIntakeScanner
             ]
         );
 
-        return is_array($ids) && $ids !== [] ? (int) reset($ids) : 0;
+        if (is_array($ids) && $ids !== []) {
+            return (int) reset($ids);
+        }
+
+        $matches = [];
+
+        foreach ($this->identityCatalog() as $candidate) {
+            if ($candidate['itemId'] === $itemId) {
+                $matches[] = $candidate['id'];
+            }
+        }
+
+        return count($matches) === 1 ? $matches[0] : 0;
     }
 
     private function productIdByArchiveIdentity(string $name, string $type): int
@@ -890,7 +938,7 @@ final class ProductBatchIntakeScanner
     }
 
     /**
-     * @return list<array{id:int,type:string,haystack:string}>
+     * @return list<array{id:int,itemId:int,type:string,haystack:string}>
      */
     private function identityCatalog(): array
     {
@@ -941,9 +989,30 @@ final class ProductBatchIntakeScanner
                 'sales_page',
                 true
             ));
+            $sourceItemId = (int) ($this->call)(
+                'get_post_meta',
+                $candidateId,
+                '_wp_shop_source_item_id',
+                true
+            );
+            $catalogItemId = $sourceItemId > 0
+                ? $sourceItemId
+                : $this->itemIdFromSalesPage($salesPage);
+
+            if (
+                $catalogItemId <= 0
+                && preg_match(
+                    '/^(?:themeforest|codecanyon)-(\d+)-/i',
+                    $sku,
+                    $itemMatches
+                ) === 1
+            ) {
+                $catalogItemId = (int) $itemMatches[1];
+            }
 
             $catalog[] = [
                 'id' => $candidateId,
+                'itemId' => $catalogItemId,
                 'type' => $this->existingProductType(
                     $candidateId,
                     $title

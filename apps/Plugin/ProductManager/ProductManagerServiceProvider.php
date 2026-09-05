@@ -27,6 +27,7 @@ use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -78,6 +79,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $mapper = new EnvatoItemMapper();
         $transport = new WordPressEnvatoTransport();
         $envatoClient = new EnvatoClient($transport(...), $mapper);
+        $envatoSearchResolver = new EnvatoItemSearchResolver(
+            $transport(...)
+        );
         $tagRepository = new WordPressCatalogTagRepository();
         $tagSelector = new ExistingTagSelector($tagRepository);
         $tagParser = new ExistingCatalogTagParser($tagRepository);
@@ -91,7 +95,8 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $batchIntakeScanner = new ProductBatchIntakeScanner(
             $functionCaller(...),
             $archiveVersionInspector,
-            $archiveIdentityInspector
+            $archiveIdentityInspector,
+            $envatoSearchResolver
         );
         $batchIntakePage = new ProductBatchIntakePage(
             $batchIntakeScanner,
@@ -208,6 +213,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(WordPressEnvatoTransport::class, $transport);
         $this->container->set(EnvatoClientInterface::class, $envatoClient);
         $this->container->set(EnvatoClient::class, $envatoClient);
+        $this->container->set(
+            EnvatoItemSearchResolver::class,
+            $envatoSearchResolver
+        );
         $this->container->set(
             CatalogTagRepositoryInterface::class,
             $tagRepository

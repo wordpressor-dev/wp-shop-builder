@@ -19,6 +19,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
+use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -64,6 +65,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             EnvatoItemMapper::class,
             $container->get(EnvatoItemMapper::class)
+        );
+        self::assertInstanceOf(
+            EnvatoItemSearchResolver::class,
+            $container->get(EnvatoItemSearchResolver::class)
         );
         self::assertInstanceOf(
             WordPressCatalogTagRepository::class,
