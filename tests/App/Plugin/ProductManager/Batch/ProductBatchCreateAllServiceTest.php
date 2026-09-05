@@ -28,6 +28,11 @@ final class ProductBatchCreateAllServiceTest extends TestCase
             [
                 'known.zip' => '⚠ Продукт предварительно активирован.',
                 'manual.zip' => '',
+            ],
+            [
+                'known.zip' => 'envato',
+                'manual.zip' => 'envato',
+                'missing.zip' => 'envato',
             ]
         );
 
@@ -37,16 +42,50 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                     'filename' => 'known.zip',
                     'reference' => '123456',
                     'notes' => '⚠ Продукт предварительно активирован.',
+                    'sourceType' => 'envato',
                 ],
                 [
                     'filename' => 'manual.zip',
                     'reference' => 'https://codecanyon.net/item/manual/654321',
                     'notes' => '',
+                    'sourceType' => 'envato',
                 ],
             ],
             $prepared['entries']
         );
         self::assertSame(['missing.zip'], $prepared['missing']);
+    }
+
+    public function testPrepareAllowsVendorWithoutEnvatoReference(): void
+    {
+        $service = $this->service();
+        $prepared = $service->prepare(
+            [
+                $this->row('vendor.zip', 0, 0, 'plugin'),
+            ],
+            [
+                'vendor.zip' => '',
+            ],
+            [
+                'vendor.zip' => '',
+            ],
+            [
+                'vendor.zip' => 'vendor',
+            ]
+        );
+
+        self::assertSame(
+            [
+                [
+                    'filename' => 'vendor.zip',
+                    'reference' => '',
+                    'notes' => '',
+                    'sourceType' => 'vendor',
+                ],
+            ],
+            $prepared['entries']
+        );
+        self::assertSame([], $prepared['missing']);
     }
 
     public function testProcessContinuesAfterFailureAndReturnsRemainingQueue(): void
@@ -59,9 +98,16 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                 string $folder,
                 string $filename,
                 string $reference,
-                string $notes
+                string $notes,
+                string $sourceType
             ) use (&$created): ProductDraftResult {
-                unset($uploadsBaseDir, $folder, $reference, $notes);
+                unset(
+                    $uploadsBaseDir,
+                    $folder,
+                    $reference,
+                    $notes,
+                    $sourceType
+                );
 
                 if ($filename === 'bad.zip') {
                     return new ProductDraftResult(
@@ -101,6 +147,7 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                 'notes' => $index === 1
                     ? '⚠ Продукт предварительно активирован.'
                     : '',
+                'sourceType' => 'envato',
             ];
         }
 
@@ -132,7 +179,8 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                 string $folder,
                 string $filename,
                 string $reference,
-                string $notes
+                string $notes,
+                string $sourceType
             ): ProductDraftResult => new ProductDraftResult(
                 true,
                 1,
@@ -142,6 +190,7 @@ final class ProductBatchCreateAllServiceTest extends TestCase
                     $filename,
                     $reference,
                     $notes,
+                    $sourceType,
                 ]
             ),
             static fn (
