@@ -732,6 +732,15 @@ final class ProductBatchIntakeScanner
         $productType = $productId > 0
             ? $this->existingProductType($productId, $productTitle)
             : ($identity->success ? $identity->productType : '');
+
+        if (
+            $productId > 0
+            && $productType === ''
+            && $identity->success
+            && $identity->productType !== ''
+        ) {
+            $productType = $identity->productType;
+        }
         $currentVersion = $productId > 0
             ? $this->currentVersion($productId)
             : '';
