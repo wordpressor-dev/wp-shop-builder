@@ -16,10 +16,7 @@ final class ProductDraftValidator
     public function validate(ProductDraftData $data): array
     {
         $errors = [];
-        $productType = CatalogProductType::infer(
-            $data->baseTitle,
-            $data->salesPage
-        );
+        $productType = $data->productType;
 
         foreach (
             [
