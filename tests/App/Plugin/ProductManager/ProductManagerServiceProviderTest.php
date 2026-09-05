@@ -10,6 +10,7 @@ use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
+use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
@@ -20,6 +21,7 @@ use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -159,6 +161,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(ProductVersionUpdater::class)
         );
         self::assertInstanceOf(
+            VendorProductNamingAuditService::class,
+            $container->get(VendorProductNamingAuditService::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingAuditPage::class,
+            $container->get(VendorProductNamingAuditPage::class)
+        );
+        self::assertInstanceOf(
             ProductBatchZipUpdateService::class,
             $container->get(ProductBatchZipUpdateService::class)
         );
@@ -213,6 +223,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-product-update',
             $registry->submenus()[4]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorProductNamingAuditPage::class),
+            $registry->submenus()[8]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-naming-audit',
+            $registry->submenus()[8]->slug()
         );
     }
 }
