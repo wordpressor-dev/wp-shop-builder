@@ -177,9 +177,9 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     }
                 }
 
-                $pending = is_array($autoCreateState['pending'] ?? null)
-                    ? $autoCreateState['pending']
-                    : [];
+                $pending = $this->autoCreatePending(
+                    $autoCreateState
+                );
                 $batch = $service->process(
                     $uploadsBaseDir,
                     $selectedFolder,
@@ -494,6 +494,48 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 '_REVIEW'
             )
         );
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return list<array{filename:string,reference:string}>
+     */
+    private function autoCreatePending(array $state): array
+    {
+        $raw = $state['pending'] ?? null;
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $pending = [];
+
+        foreach ($raw as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $filename = $entry['filename'] ?? null;
+            $reference = $entry['reference'] ?? null;
+
+            if (! is_string($filename) || ! is_string($reference)) {
+                continue;
+            }
+
+            $filename = trim($filename);
+            $reference = trim($reference);
+
+            if ($filename === '' || $reference === '') {
+                continue;
+            }
+
+            $pending[] = [
+                'filename' => $filename,
+                'reference' => $reference,
+            ];
+        }
+
+        return $pending;
     }
 
     /**
