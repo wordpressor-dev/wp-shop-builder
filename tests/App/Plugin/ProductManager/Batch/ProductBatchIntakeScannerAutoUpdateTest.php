@@ -360,6 +360,76 @@ final class ProductBatchIntakeScannerAutoUpdateTest extends TestCase
         self::assertSame('READY', $rows[0]['status']);
     }
 
+    public function testMatchedVendorUsesZipTypeWhenLegacyProductTypeIsMissing(): void
+    {
+        $baseDir = $this->uploadsBaseDir();
+        $folder = 'vendor-type-fallback';
+        $directory = $baseDir
+            . '/woocommerce_uploads/INBOX/'
+            . $folder;
+        mkdir($directory, 0777, true);
+        $filename = 'wp-all-import-pro-5.1.0.zip';
+        $zipPath = $directory . '/' . $filename;
+        $this->pluginZip(
+            $zipPath,
+            'WP All Import Pro',
+            '5.1.0'
+        );
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [3441];
+            }
+
+            if ($name === 'get_the_title') {
+                return 'WP All Import Pro – Drag & Drop Import for CSV, XML, Excel & Google Sheets 5.0.8';
+            }
+
+            if ($name === 'get_post_field') {
+                return 'wp-all-import-pro';
+            }
+
+            if ($name === 'get_post_meta') {
+                return match ((string) ($arguments[1] ?? '')) {
+                    '_wp_shop_product_type' => '',
+                    'attr_version_value' => '5.0.8',
+                    '_wp_shop_source_item_id' => '',
+                    '_wp_shop_source_type' => 'vendor',
+                    'sales_page' => 'https://www.wpallimport.com/',
+                    '_sku' => 'wp-all-import-pro-5.0.8.zip',
+                    default => '',
+                };
+            }
+
+            return null;
+        };
+        $scanner = new ProductBatchIntakeScanner(
+            $call(...),
+            new ProductArchiveVersionInspector(),
+            new ProductArchiveIdentityInspector()
+        );
+
+        try {
+            $rows = $scanner->scan($baseDir, $folder);
+        } finally {
+            $this->removeTree($baseDir);
+        }
+
+        self::assertCount(1, $rows);
+        self::assertSame(3441, $rows[0]['productId']);
+        self::assertSame('plugin', $rows[0]['productType']);
+        self::assertSame('5.0.8', $rows[0]['currentVersion']);
+        self::assertSame('5.1.0', $rows[0]['detectedVersion']);
+        self::assertSame('UPDATE', $rows[0]['action']);
+        self::assertSame('READY', $rows[0]['status']);
+        self::assertStringContainsString(
+            'MATCHED BY ZIP IDENTITY: WP All Import Pro',
+            $rows[0]['note']
+        );
+    }
+
     public function testVendorIdentityExactSlugWinsOverAmbiguousGenericToken(): void
     {
         $baseDir = $this->uploadsBaseDir();
