@@ -29,7 +29,8 @@ final class EnvatoItemSearchResolverTest extends TestCase
                     'matches' => [
                         [
                             'id' => 7758048,
-                            'name' => 'Betheme | Responsive Multipurpose WordPress & WooCommerce Theme',
+                            'name' => 'Betheme | Responsive Multipurpose '
+                                . 'WordPress & WooCommerce Theme',
                             'url' => 'https://themeforest.net/item/betheme-responsive-multipurpose-wordpress-theme/7758048',
                         ],
                         [
