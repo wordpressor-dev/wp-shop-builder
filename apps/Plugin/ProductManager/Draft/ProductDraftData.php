@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Draft;
 
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
+use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
 final readonly class ProductDraftData
@@ -128,6 +129,13 @@ final readonly class ProductDraftData
 
     public function title(): string
     {
+        if (
+            ProductSourceType::fromSalesPage($this->salesPage)
+            === ProductSourceType::VENDOR
+        ) {
+            return trim($this->baseTitle);
+        }
+
         return trim(
             $this->baseTitle . ' ' . $this->version
         );
