@@ -23,6 +23,7 @@ use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
@@ -166,6 +167,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             VendorProductNamingAuditService::class,
             $container->get(VendorProductNamingAuditService::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingMigrationService::class,
+            $container->get(VendorProductNamingMigrationService::class)
         );
         self::assertInstanceOf(
             VendorProductNamingAuditPage::class,
