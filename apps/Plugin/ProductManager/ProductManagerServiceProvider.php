@@ -17,6 +17,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
@@ -35,6 +36,7 @@ use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
 use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
 use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
@@ -238,6 +240,16 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingReview,
             $functionCaller(...)
         );
+        $vendorNamingReviewV5 = new VendorProductNamingReviewV5Service(
+            $vendorNamingAudit,
+            $vendorSalesPageNameInspector,
+            $translatePressTitleInspector,
+            $functionCaller(...)
+        );
+        $vendorNamingReviewV5Page = new VendorProductNamingReviewV5Page(
+            $vendorNamingReviewV5,
+            $functionCaller(...)
+        );
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
@@ -261,6 +273,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($vendorNamingAuditPage);
         $registry->addSubmenu($titleVersionAuditPage);
         $registry->addSubmenu($vendorNamingReviewPage);
+        $registry->addSubmenu($vendorNamingReviewV5Page);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -384,6 +397,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingReviewPage
         );
         $this->container->set(
+            VendorProductNamingReviewV5Service::class,
+            $vendorNamingReviewV5
+        );
+        $this->container->set(
+            VendorProductNamingReviewV5Page::class,
+            $vendorNamingReviewV5Page
+        );
+        $this->container->set(
             VendorProductNamingAuditPage::class,
             $vendorNamingAuditPage
         );
@@ -417,6 +438,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $vendorNamingReviewPage = $this->container->get(
             VendorProductNamingReviewPage::class
         );
+        $vendorNamingReviewV5Page = $this->container->get(
+            VendorProductNamingReviewV5Page::class
+        );
         $titleVersionAuditPage = $this->container->get(
             ProductTitleVersionAuditPage::class
         );
@@ -449,6 +473,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $vendorNamingReviewPage instanceof VendorProductNamingReviewPage) {
             throw new LogicException(
                 'VendorProductNamingReviewPage must be registered before boot.'
+            );
+        }
+
+        if (! $vendorNamingReviewV5Page instanceof VendorProductNamingReviewV5Page) {
+            throw new LogicException(
+                'VendorProductNamingReviewV5Page must be registered before boot.'
             );
         }
 
@@ -495,6 +525,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_vendor_naming_review_v4',
             [$vendorNamingReviewPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_naming_review_v5',
+            [$vendorNamingReviewV5Page, 'exportCsv']
         );
         $functionCaller(
             'add_action',
