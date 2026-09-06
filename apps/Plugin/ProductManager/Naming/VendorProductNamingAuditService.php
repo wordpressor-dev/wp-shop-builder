@@ -224,12 +224,12 @@ final class VendorProductNamingAuditService
                 $currentTitle,
                 $currentBaseTitle,
                 $headerName,
-                $headerName,
+                $currentBaseTitle,
                 $productType,
-                'RENAME',
-                'HIGH',
+                'REVIEW',
+                'MEDIUM',
                 $evidence,
-                'Current public title starts with the verified Vendor ZIP product name and then adds a descriptive/marketing suffix.'
+                'Vendor ZIP name is only a prefix of the current public title; verify the official Vendor product name before shortening it.'
             );
         }
 
