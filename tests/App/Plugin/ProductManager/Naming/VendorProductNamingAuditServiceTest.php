@@ -57,7 +57,7 @@ final class VendorProductNamingAuditServiceTest extends TestCase
 
             if ($name === 'get_post_field') {
                 return match ((int) ($arguments[1] ?? 0)) {
-                    10 => 'GutenBricks 1.1.29',
+                    10 => 'GutenBricks',
                     20 => 'Marketplace Product',
                     30 => 'Elementor Website Builder – more than just a page '
                         . 'builder 3.30.0',
@@ -136,7 +136,7 @@ final class VendorProductNamingAuditServiceTest extends TestCase
 
             self::assertCount(2, $rows);
             self::assertSame(10, $rows[0]->productId);
-            self::assertSame('RENAME', $rows[0]->action);
+            self::assertSame('KEEP', $rows[0]->action);
             self::assertSame('HIGH', $rows[0]->confidence);
             self::assertSame('GutenBricks', $rows[0]->recommendedTitle);
             self::assertSame('ZIP_PLUGIN_NAME', $rows[0]->evidence);
@@ -152,6 +152,116 @@ final class VendorProductNamingAuditServiceTest extends TestCase
         } finally {
             @unlink($gutenBricksPath);
             @unlink($elementorPath);
+            @rmdir($packageDir);
+            @rmdir(dirname($packageDir));
+            @rmdir($uploadsDir);
+        }
+    }
+
+    public function testKeepsCosmeticCaseAndDashDifferencesToProtectTranslations(): void
+    {
+        if (! class_exists(ZipArchive::class)) {
+            self::markTestSkipped('ZipArchive is required.');
+        }
+
+        $uploadsDir = sys_get_temp_dir()
+            . '/wp-shop-naming-cosmetic-'
+            . bin2hex(random_bytes(4));
+        $packageDir = $uploadsDir . '/woocommerce_uploads/vendor';
+        self::assertTrue(mkdir($packageDir, 0777, true));
+
+        $schemaPath = $packageDir . '/schema-pro.zip';
+        $importPath = $packageDir . '/wp-all-import.zip';
+        $this->createPluginZip($schemaPath, 'Schema Pro', '2.7.29');
+        $this->createPluginZip(
+            $importPath,
+            'WP All Import - User Import Add-On Pro',
+            '1.2.3'
+        );
+
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ) use ($uploadsDir): mixed {
+            if ($name === 'get_posts') {
+                return [80, 90];
+            }
+
+            if ($name === 'wp_upload_dir') {
+                return [
+                    'basedir' => $uploadsDir,
+                    'baseurl' => 'https://wp-shop.test/wp-content/uploads',
+                ];
+            }
+
+            if ($name === 'get_post_field') {
+                return match ((int) ($arguments[1] ?? 0)) {
+                    80 => 'Schema PRO',
+                    90 => 'WP All Import — User Import Add-On Pro',
+                    default => '',
+                };
+            }
+
+            if ($name === 'get_post_meta') {
+                $productId = (int) ($arguments[0] ?? 0);
+                $key = (string) ($arguments[1] ?? '');
+
+                $meta = [
+                    80 => [
+                        '_wp_shop_source_type' => 'vendor',
+                        'sales_page' => 'https://wpschema.com/',
+                        '_wp_shop_product_type' => 'plugin',
+                        '_downloadable_files' => [
+                            'a' => [
+                                'file' => 'https://wp-shop.test/wp-content/uploads/'
+                                    . 'woocommerce_uploads/vendor/schema-pro.zip',
+                            ],
+                        ],
+                    ],
+                    90 => [
+                        '_wp_shop_source_type' => 'vendor',
+                        'sales_page' => 'https://www.wpallimport.com/',
+                        '_wp_shop_product_type' => 'plugin',
+                        '_downloadable_files' => [
+                            'b' => [
+                                'file' => 'https://wp-shop.test/wp-content/uploads/'
+                                    . 'woocommerce_uploads/vendor/wp-all-import.zip',
+                            ],
+                        ],
+                    ],
+                ];
+
+                return $meta[$productId][$key] ?? '';
+            }
+
+            return null;
+        };
+
+        try {
+            $rows = (new VendorProductNamingAuditService(
+                $call(...),
+                new ProductArchiveIdentityInspector()
+            ))->scan(0, 10);
+
+            self::assertCount(2, $rows);
+
+            self::assertSame('KEEP', $rows[0]->action);
+            self::assertSame('HIGH', $rows[0]->confidence);
+            self::assertSame('Schema PRO', $rows[0]->recommendedTitle);
+            self::assertStringContainsString(
+                'translations',
+                $rows[0]->reason
+            );
+
+            self::assertSame('KEEP', $rows[1]->action);
+            self::assertSame('HIGH', $rows[1]->confidence);
+            self::assertSame(
+                'WP All Import — User Import Add-On Pro',
+                $rows[1]->recommendedTitle
+            );
+        } finally {
+            @unlink($schemaPath);
+            @unlink($importPath);
             @rmdir($packageDir);
             @rmdir(dirname($packageDir));
             @rmdir($uploadsDir);
