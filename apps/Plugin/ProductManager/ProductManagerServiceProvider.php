@@ -16,6 +16,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
@@ -34,6 +35,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorCanonicalNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
@@ -250,6 +252,17 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingReviewV5,
             $functionCaller(...)
         );
+        $vendorCanonicalNamingMigration = new VendorCanonicalNamingMigrationService(
+            $vendorNamingAudit,
+            $translatePressTitleInspector,
+            $translationDictionary,
+            $translationRegistrar,
+            $functionCaller(...)
+        );
+        $vendorCanonicalNamingMigrationPage = new VendorCanonicalNamingMigrationPage(
+            $vendorCanonicalNamingMigration,
+            $functionCaller(...)
+        );
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
@@ -274,6 +287,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($titleVersionAuditPage);
         $registry->addSubmenu($vendorNamingReviewPage);
         $registry->addSubmenu($vendorNamingReviewV5Page);
+        $registry->addSubmenu($vendorCanonicalNamingMigrationPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -403,6 +417,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             VendorProductNamingReviewV5Page::class,
             $vendorNamingReviewV5Page
+        );
+        $this->container->set(
+            VendorCanonicalNamingMigrationService::class,
+            $vendorCanonicalNamingMigration
+        );
+        $this->container->set(
+            VendorCanonicalNamingMigrationPage::class,
+            $vendorCanonicalNamingMigrationPage
         );
         $this->container->set(
             VendorProductNamingAuditPage::class,
