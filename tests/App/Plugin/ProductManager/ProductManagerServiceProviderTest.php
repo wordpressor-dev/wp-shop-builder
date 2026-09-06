@@ -24,6 +24,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -173,6 +174,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
+        );
+        self::assertInstanceOf(
+            ProductTitleVersionMigrationService::class,
+            $container->get(ProductTitleVersionMigrationService::class)
         );
         self::assertInstanceOf(
             ProductTitleVersionAuditPage::class,
