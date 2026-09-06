@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace WPShop\App\Plugin\ProductManager\Update;
 
-use WPShop\App\Plugin\ProductManager\ProductSourceType;
-
 final readonly class ProductUpdateData
 {
     public function __construct(
@@ -25,16 +23,7 @@ final readonly class ProductUpdateData
 
     public function title(): string
     {
-        $sourceType = ProductSourceType::normalize(
-            $this->sourceType,
-            $this->salesPage
-        );
-
-        if ($sourceType === ProductSourceType::VENDOR) {
-            return trim($this->baseTitle);
-        }
-
-        return trim($this->baseTitle . ' ' . $this->version);
+        return trim($this->baseTitle);
     }
 
     public function withVersion(string $version): self
