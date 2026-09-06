@@ -13,6 +13,7 @@ use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
@@ -26,6 +27,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
 use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
 use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
@@ -197,6 +199,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(VendorProductNamingReviewPage::class)
         );
         self::assertInstanceOf(
+            VendorProductNamingReviewV5Service::class,
+            $container->get(VendorProductNamingReviewV5Service::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewV5Page::class,
+            $container->get(VendorProductNamingReviewV5Page::class)
+        );
+        self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
         );
@@ -287,6 +297,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-vendor-naming-review-v4',
             $registry->submenus()[10]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorProductNamingReviewV5Page::class),
+            $registry->submenus()[11]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-naming-review-v5',
+            $registry->submenus()[11]->slug()
         );
     }
 }
