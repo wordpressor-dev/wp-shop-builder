@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Naming;
 
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
+use WPShop\App\Plugin\ProductManager\Translation\TranslationDictionaryStatus;
 
 final class ElementorProTranslatePressPreflightService
 {
@@ -40,10 +41,6 @@ final class ElementorProTranslatePressPreflightService
 
         foreach ($status->items as $item) {
             foreach ((array) ($item['rows'] ?? []) as $row) {
-                if (! is_array($row)) {
-                    continue;
-                }
-
                 $rows[] = [
                     'id' => (int) ($row['id'] ?? 0),
                     'original' => (string) ($row['original'] ?? ''),
@@ -75,7 +72,7 @@ final class ElementorProTranslatePressPreflightService
     }
 
     private function safeAction(
-        \WPShop\App\Plugin\ProductManager\Translation\TranslationDictionaryStatus $status
+        TranslationDictionaryStatus $status
     ): string {
         if (
             $status->tableOk
