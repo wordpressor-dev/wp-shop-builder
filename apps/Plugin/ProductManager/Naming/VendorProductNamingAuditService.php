@@ -216,12 +216,12 @@ final class VendorProductNamingAuditService
                 $currentTitle,
                 $currentBaseTitle,
                 $headerName,
-                $headerName,
+                $currentBaseTitle,
                 $productType,
-                'RENAME',
+                'KEEP',
                 'HIGH',
                 $evidence,
-                'Current base title matches the Vendor ZIP name; only version/case/punctuation cleanup is required.'
+                'Current public title differs from the Vendor ZIP name only by cosmetic case/dash/punctuation formatting; preserve the existing title and its translations.'
             );
         }
 
