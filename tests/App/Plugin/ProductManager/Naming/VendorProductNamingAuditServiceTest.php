@@ -158,6 +158,110 @@ final class VendorProductNamingAuditServiceTest extends TestCase
         }
     }
 
+    public function testClassifiesDashMarketingSuffixButKeepsParentheticalAliasForReview(): void
+    {
+        if (! class_exists(ZipArchive::class)) {
+            self::markTestSkipped('ZipArchive is required.');
+        }
+
+        $uploadsDir = sys_get_temp_dir()
+            . '/wp-shop-naming-v3-'
+            . bin2hex(random_bytes(4));
+        $packageDir = $uploadsDir . '/woocommerce_uploads/vendor';
+        self::assertTrue(mkdir($packageDir, 0777, true));
+
+        $rocketPath = $packageDir . '/wp-rocket.zip';
+        $solidPath = $packageDir . '/solid-backups.zip';
+        $this->createPluginZip($rocketPath, 'WP Rocket', '3.23.2.2');
+        $this->createPluginZip(
+            $solidPath,
+            'Solid Backups – Legacy',
+            '9.1.19'
+        );
+
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ) use ($uploadsDir): mixed {
+            if ($name === 'get_posts') {
+                return [60, 70];
+            }
+
+            if ($name === 'wp_upload_dir') {
+                return [
+                    'basedir' => $uploadsDir,
+                    'baseurl' => 'https://wp-shop.test/wp-content/uploads',
+                ];
+            }
+
+            if ($name === 'get_post_field') {
+                return match ((int) ($arguments[1] ?? 0)) {
+                    60 => 'WP Rocket – The Best WordPress Performance Plugin',
+                    70 => 'Solid Backups – Legacy (BackupBuddy)',
+                    default => '',
+                };
+            }
+
+            if ($name === 'get_post_meta') {
+                $productId = (int) ($arguments[0] ?? 0);
+                $key = (string) ($arguments[1] ?? '');
+
+                $meta = [
+                    60 => [
+                        '_wp_shop_source_type' => 'vendor',
+                        'sales_page' => 'https://wp-rocket.me/',
+                        '_wp_shop_product_type' => 'plugin',
+                        '_downloadable_files' => [
+                            'a' => [
+                                'file' => 'https://wp-shop.test/wp-content/uploads/'
+                                    . 'woocommerce_uploads/vendor/wp-rocket.zip',
+                            ],
+                        ],
+                    ],
+                    70 => [
+                        '_wp_shop_source_type' => 'vendor',
+                        'sales_page' => 'https://solidwp.com/',
+                        '_wp_shop_product_type' => 'plugin',
+                        '_downloadable_files' => [
+                            'b' => [
+                                'file' => 'https://wp-shop.test/wp-content/uploads/'
+                                    . 'woocommerce_uploads/vendor/solid-backups.zip',
+                            ],
+                        ],
+                    ],
+                ];
+
+                return $meta[$productId][$key] ?? '';
+            }
+
+            return null;
+        };
+
+        try {
+            $rows = (new VendorProductNamingAuditService(
+                $call(...),
+                new ProductArchiveIdentityInspector()
+            ))->scan(0, 10);
+
+            self::assertCount(2, $rows);
+            self::assertSame('RENAME', $rows[0]->action);
+            self::assertSame('HIGH', $rows[0]->confidence);
+            self::assertSame('WP Rocket', $rows[0]->recommendedTitle);
+
+            self::assertSame('REVIEW', $rows[1]->action);
+            self::assertSame(
+                'Solid Backups – Legacy (BackupBuddy)',
+                $rows[1]->recommendedTitle
+            );
+        } finally {
+            @unlink($rocketPath);
+            @unlink($solidPath);
+            @rmdir($packageDir);
+            @rmdir(dirname($packageDir));
+            @rmdir($uploadsDir);
+        }
+    }
+
     private function createPluginZip(
         string $path,
         string $name,
