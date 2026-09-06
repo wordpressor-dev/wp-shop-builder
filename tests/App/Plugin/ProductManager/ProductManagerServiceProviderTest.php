@@ -12,6 +12,7 @@ use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
@@ -25,6 +26,7 @@ use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorCanonicalNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
@@ -207,6 +209,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(VendorProductNamingReviewV5Page::class)
         );
         self::assertInstanceOf(
+            VendorCanonicalNamingMigrationService::class,
+            $container->get(VendorCanonicalNamingMigrationService::class)
+        );
+        self::assertInstanceOf(
+            VendorCanonicalNamingMigrationPage::class,
+            $container->get(VendorCanonicalNamingMigrationPage::class)
+        );
+        self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
         );
@@ -305,6 +315,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-vendor-naming-review-v5',
             $registry->submenus()[11]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorCanonicalNamingMigrationPage::class),
+            $registry->submenus()[12]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-canonical-naming-migration',
+            $registry->submenus()[12]->slug()
         );
     }
 }
