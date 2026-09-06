@@ -227,13 +227,7 @@ final class VendorProductNamingReviewV5Service
                 ];
             }
 
-            if (
-                $this->titleStartsWithName($pageTitle, $header)
-                && ! $this->pageTitleExtendsHeaderName(
-                    $pageTitle,
-                    $header
-                )
-            ) {
+            if ($this->titleStartsWithName($pageTitle, $header)) {
                 return [
                     'RENAME_CANDIDATE',
                     'MEDIUM',
@@ -293,54 +287,27 @@ final class VendorProductNamingReviewV5Service
         string $pageTitle,
         string $name
     ): bool {
-        $pageTitle = trim($pageTitle);
-        $name = trim($name);
+        $pageTitle = $this->comparable($pageTitle);
+        $name = $this->comparable($name);
 
         if ($pageTitle === '' || $name === '') {
             return false;
         }
 
-        if ($this->sameName($pageTitle, $name)) {
+        if ($pageTitle === $name) {
             return true;
         }
 
-        foreach ([' – ', ' — ', ' - ', ' | ', ' • ', ': '] as $separator) {
-            if (str_starts_with(
-                $this->comparable($pageTitle),
-                $this->comparable($name . $separator)
-            )) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function pageTitleExtendsHeaderName(
-        string $pageTitle,
-        string $header
-    ): bool {
-        $pageTitle = $this->comparable($pageTitle);
-        $header = $this->comparable($header);
-
-        if (
-            $pageTitle === ''
-            || $header === ''
-            || ! str_starts_with($pageTitle, $header)
-        ) {
+        if (! str_starts_with($pageTitle, $name)) {
             return false;
         }
 
-        $rest = ltrim(substr(
-            $pageTitle,
-            strlen($header)
-        ));
+        $rest = substr($pageTitle, strlen($name));
 
-        if ($rest === '') {
-            return false;
-        }
-
-        return preg_match('/^[a-z0-9]/i', $rest) === 1;
+        return preg_match(
+            '/^\s*(?:-|\||•|:)\s*/u',
+            $rest
+        ) === 1;
     }
 
     private function comparable(string $value): string
