@@ -100,7 +100,6 @@ final class ProductTitleVersionAuditService
                 $title,
                 $source,
                 'REVIEW',
-                'LOW',
                 'Exact version suffix matched, but removing it would leave an empty title.'
             );
         }
