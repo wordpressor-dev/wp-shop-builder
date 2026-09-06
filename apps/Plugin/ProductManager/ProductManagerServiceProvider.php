@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
+use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -43,6 +44,7 @@ use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
 use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
 use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
+use WPShop\App\Plugin\ProductManager\Naming\ElementorProTranslatePressPreflightService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
@@ -276,6 +278,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorCanonicalNamingMigrationV2,
             $functionCaller(...)
         );
+        $elementorProTranslatePressPreflight = new ElementorProTranslatePressPreflightService(
+            $translatePressTitleInspector,
+            $translationDictionary
+        );
+        $elementorProTranslatePressPreflightPage = new ElementorProTranslatePressPreflightPage(
+            $elementorProTranslatePressPreflight,
+            $functionCaller(...)
+        );
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
@@ -302,6 +312,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($vendorNamingReviewV5Page);
         $registry->addSubmenu($vendorCanonicalNamingMigrationPage);
         $registry->addSubmenu($vendorCanonicalNamingMigrationV2Page);
+        $registry->addSubmenu($elementorProTranslatePressPreflightPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -447,6 +458,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             VendorCanonicalNamingMigrationV2Page::class,
             $vendorCanonicalNamingMigrationV2Page
+        );
+        $this->container->set(
+            ElementorProTranslatePressPreflightService::class,
+            $elementorProTranslatePressPreflight
+        );
+        $this->container->set(
+            ElementorProTranslatePressPreflightPage::class,
+            $elementorProTranslatePressPreflightPage
         );
         $this->container->set(
             VendorProductNamingAuditPage::class,
