@@ -18,7 +18,8 @@ final class VendorCanonicalNamingMigrationV2ServiceTest extends TestCase
 {
     public function testAcceptsOnlyTheApprovedMalformedEnglishSnapshot(): void
     {
-        $old = 'JetWooBuilder – WordPress Plugin for Shop Page, Product, Cart & Checkout for WooCommerce';
+        $old = 'JetWooBuilder – WordPress Plugin for Shop Page, '
+            . 'Product, Cart & Checkout for WooCommerce';
         $badEnglish = 'is a WooCommerce page builder for Elementor. Visually design custom shop, single product, cart, and checkout pages with pre-made templates and widgets.';
         $post = (object) [
             'ID' => 3496,
@@ -32,7 +33,10 @@ final class VendorCanonicalNamingMigrationV2ServiceTest extends TestCase
         $call = static function (
             string $name,
             mixed ...$arguments
-        ) use (&$post, &$writes): mixed {
+        ) use (
+            &$post,
+            &$writes
+        ): mixed {
             if ($name === 'get_post') {
                 return clone $post;
             }
@@ -139,7 +143,10 @@ final class VendorCanonicalNamingMigrationV2ServiceTest extends TestCase
         $call = static function (
             string $name,
             mixed ...$arguments
-        ) use (&$post, &$writes): mixed {
+        ) use (
+            &$post,
+            &$writes
+        ): mixed {
             if ($name === 'get_post') {
                 return clone $post;
             }
