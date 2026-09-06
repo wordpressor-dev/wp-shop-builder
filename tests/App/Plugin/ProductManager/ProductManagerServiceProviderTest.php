@@ -6,6 +6,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
+use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -34,6 +35,7 @@ use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
 use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
 use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
+use WPShop\App\Plugin\ProductManager\Naming\ElementorProTranslatePressPreflightService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
@@ -227,6 +229,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(VendorCanonicalNamingMigrationV2Page::class)
         );
         self::assertInstanceOf(
+            ElementorProTranslatePressPreflightService::class,
+            $container->get(ElementorProTranslatePressPreflightService::class)
+        );
+        self::assertInstanceOf(
+            ElementorProTranslatePressPreflightPage::class,
+            $container->get(ElementorProTranslatePressPreflightPage::class)
+        );
+        self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
         );
@@ -341,6 +351,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-vendor-canonical-naming-migration-v2',
             $registry->submenus()[13]->slug()
+        );
+        self::assertSame(
+            $container->get(ElementorProTranslatePressPreflightPage::class),
+            $registry->submenus()[14]
+        );
+        self::assertSame(
+            'wp-shop-builder-elementor-pro-trp-preflight',
+            $registry->submenus()[14]->slug()
         );
     }
 }
