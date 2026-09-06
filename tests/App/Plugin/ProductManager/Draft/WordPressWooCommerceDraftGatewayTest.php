@@ -100,7 +100,7 @@ final class WordPressWooCommerceDraftGatewayTest extends TestCase
             'wp_insert_post'
         );
         self::assertSame(
-            'Aabbe – Digital Marketplace WordPress Theme 6.2.0',
+            'Aabbe – Digital Marketplace WordPress Theme',
             $insert[0]['post_title']
         );
         self::assertSame('draft', $insert[0]['post_status']);

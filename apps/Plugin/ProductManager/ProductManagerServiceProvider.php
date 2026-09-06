@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
+use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -14,6 +15,12 @@ use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
+use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
+use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
@@ -29,6 +36,17 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorCanonicalNamingMigrationService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorCanonicalNamingMigrationV2Service;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
+use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
+use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
+use WPShop\App\Plugin\ProductManager\Naming\ElementorProTranslatePressPreflightService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -199,6 +217,86 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $updateQueueReturnNavigation = new ProductUpdateQueueReturnNavigation(
             $functionCaller(...)
         );
+        $vendorNamingAudit = new VendorProductNamingAuditService(
+            $functionCaller(...),
+            $archiveIdentityInspector
+        );
+        $vendorNamingMigration = new VendorProductNamingMigrationService(
+            $vendorNamingAudit,
+            $functionCaller(...)
+        );
+        $vendorNamingAuditPage = new VendorProductNamingAuditPage(
+            $vendorNamingAudit,
+            $vendorNamingMigration,
+            $functionCaller(...)
+        );
+        $vendorSalesPageNameInspector = new VendorSalesPageNameInspector(
+            $functionCaller(...)
+        );
+        $translatePressTitleInspector = new TranslatePressTitleInspector(
+            $database
+        );
+        $vendorNamingReview = new VendorProductNamingReviewService(
+            $vendorNamingAudit,
+            $vendorSalesPageNameInspector,
+            $translatePressTitleInspector,
+            $functionCaller(...)
+        );
+        $vendorNamingReviewPage = new VendorProductNamingReviewPage(
+            $vendorNamingReview,
+            $functionCaller(...)
+        );
+        $vendorNamingReviewV5 = new VendorProductNamingReviewV5Service(
+            $vendorNamingAudit,
+            $vendorSalesPageNameInspector,
+            $translatePressTitleInspector,
+            $functionCaller(...)
+        );
+        $vendorNamingReviewV5Page = new VendorProductNamingReviewV5Page(
+            $vendorNamingReviewV5,
+            $functionCaller(...)
+        );
+        $vendorCanonicalNamingMigration = new VendorCanonicalNamingMigrationService(
+            $vendorNamingAudit,
+            $translatePressTitleInspector,
+            $translationDictionary,
+            $translationRegistrar,
+            $functionCaller(...)
+        );
+        $vendorCanonicalNamingMigrationPage = new VendorCanonicalNamingMigrationPage(
+            $vendorCanonicalNamingMigration,
+            $functionCaller(...)
+        );
+        $vendorCanonicalNamingMigrationV2 = new VendorCanonicalNamingMigrationV2Service(
+            $vendorNamingAudit,
+            $translatePressTitleInspector,
+            $translationDictionary,
+            $translationRegistrar,
+            $functionCaller(...)
+        );
+        $vendorCanonicalNamingMigrationV2Page = new VendorCanonicalNamingMigrationV2Page(
+            $vendorCanonicalNamingMigrationV2,
+            $functionCaller(...)
+        );
+        $elementorProTranslatePressPreflight = new ElementorProTranslatePressPreflightService(
+            $translatePressTitleInspector,
+            $translationDictionary
+        );
+        $elementorProTranslatePressPreflightPage = new ElementorProTranslatePressPreflightPage(
+            $elementorProTranslatePressPreflight,
+            $functionCaller(...)
+        );
+        $titleVersionAudit = new ProductTitleVersionAuditService(
+            $functionCaller(...)
+        );
+        $titleVersionMigration = new ProductTitleVersionMigrationService(
+            $functionCaller(...)
+        );
+        $titleVersionAuditPage = new ProductTitleVersionAuditPage(
+            $titleVersionAudit,
+            $titleVersionMigration,
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($batchIntakePage);
@@ -208,6 +306,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
         $registry->addSubmenu($updateQueuePage);
+        $registry->addSubmenu($vendorNamingAuditPage);
+        $registry->addSubmenu($titleVersionAuditPage);
+        $registry->addSubmenu($vendorNamingReviewPage);
+        $registry->addSubmenu($vendorNamingReviewV5Page);
+        $registry->addSubmenu($vendorCanonicalNamingMigrationPage);
+        $registry->addSubmenu($vendorCanonicalNamingMigrationV2Page);
+        $registry->addSubmenu($elementorProTranslatePressPreflightPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -307,6 +412,78 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $this->container->set(ProductUpdateQueuePage::class, $updateQueuePage);
         $this->container->set(
+            VendorProductNamingAuditService::class,
+            $vendorNamingAudit
+        );
+        $this->container->set(
+            VendorProductNamingMigrationService::class,
+            $vendorNamingMigration
+        );
+        $this->container->set(
+            VendorSalesPageNameInspector::class,
+            $vendorSalesPageNameInspector
+        );
+        $this->container->set(
+            TranslatePressTitleInspector::class,
+            $translatePressTitleInspector
+        );
+        $this->container->set(
+            VendorProductNamingReviewService::class,
+            $vendorNamingReview
+        );
+        $this->container->set(
+            VendorProductNamingReviewPage::class,
+            $vendorNamingReviewPage
+        );
+        $this->container->set(
+            VendorProductNamingReviewV5Service::class,
+            $vendorNamingReviewV5
+        );
+        $this->container->set(
+            VendorProductNamingReviewV5Page::class,
+            $vendorNamingReviewV5Page
+        );
+        $this->container->set(
+            VendorCanonicalNamingMigrationService::class,
+            $vendorCanonicalNamingMigration
+        );
+        $this->container->set(
+            VendorCanonicalNamingMigrationPage::class,
+            $vendorCanonicalNamingMigrationPage
+        );
+        $this->container->set(
+            VendorCanonicalNamingMigrationV2Service::class,
+            $vendorCanonicalNamingMigrationV2
+        );
+        $this->container->set(
+            VendorCanonicalNamingMigrationV2Page::class,
+            $vendorCanonicalNamingMigrationV2Page
+        );
+        $this->container->set(
+            ElementorProTranslatePressPreflightService::class,
+            $elementorProTranslatePressPreflight
+        );
+        $this->container->set(
+            ElementorProTranslatePressPreflightPage::class,
+            $elementorProTranslatePressPreflightPage
+        );
+        $this->container->set(
+            VendorProductNamingAuditPage::class,
+            $vendorNamingAuditPage
+        );
+        $this->container->set(
+            ProductTitleVersionAuditService::class,
+            $titleVersionAudit
+        );
+        $this->container->set(
+            ProductTitleVersionMigrationService::class,
+            $titleVersionMigration
+        );
+        $this->container->set(
+            ProductTitleVersionAuditPage::class,
+            $titleVersionAuditPage
+        );
+        $this->container->set(
             ProductUpdateQueueReturnNavigation::class,
             $updateQueueReturnNavigation
         );
@@ -317,6 +494,18 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $page = $this->container->get(ProductUpdateScannerPage::class);
         $englishContentAuditPage = $this->container->get(
             EnglishContentAuditPage::class
+        );
+        $vendorNamingAuditPage = $this->container->get(
+            VendorProductNamingAuditPage::class
+        );
+        $vendorNamingReviewPage = $this->container->get(
+            VendorProductNamingReviewPage::class
+        );
+        $vendorNamingReviewV5Page = $this->container->get(
+            VendorProductNamingReviewV5Page::class
+        );
+        $titleVersionAuditPage = $this->container->get(
+            ProductTitleVersionAuditPage::class
         );
         $returnNavigation = $this->container->get(
             ProductUpdateQueueReturnNavigation::class
@@ -335,6 +524,30 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $englishContentAuditPage instanceof EnglishContentAuditPage) {
             throw new LogicException(
                 'EnglishContentAuditPage must be registered before boot.'
+            );
+        }
+
+        if (! $vendorNamingAuditPage instanceof VendorProductNamingAuditPage) {
+            throw new LogicException(
+                'VendorProductNamingAuditPage must be registered before boot.'
+            );
+        }
+
+        if (! $vendorNamingReviewPage instanceof VendorProductNamingReviewPage) {
+            throw new LogicException(
+                'VendorProductNamingReviewPage must be registered before boot.'
+            );
+        }
+
+        if (! $vendorNamingReviewV5Page instanceof VendorProductNamingReviewV5Page) {
+            throw new LogicException(
+                'VendorProductNamingReviewV5Page must be registered before boot.'
+            );
+        }
+
+        if (! $titleVersionAuditPage instanceof ProductTitleVersionAuditPage) {
+            throw new LogicException(
+                'ProductTitleVersionAuditPage must be registered before boot.'
             );
         }
 
@@ -365,6 +578,26 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_en_content_audit',
             [$englishContentAuditPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_naming_audit',
+            [$vendorNamingAuditPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_naming_review_v4',
+            [$vendorNamingReviewPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_naming_review_v5',
+            [$vendorNamingReviewV5Page, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_title_version_audit',
+            [$titleVersionAuditPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',

@@ -91,7 +91,7 @@ final class ProductVersionUpdaterTest extends TestCase
         $update = $this->firstCall($calls, 'wp_update_post');
         self::assertSame(5034, $update[0]['ID']);
         self::assertSame(
-            'Veera – Multipurpose WooCommerce Theme 2.0.0',
+            'Veera – Multipurpose WooCommerce Theme',
             $update[0]['post_title']
         );
         self::assertArrayNotHasKey('post_date', $update[0]);

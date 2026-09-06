@@ -23,7 +23,7 @@ final readonly class ProductUpdateData
 
     public function title(): string
     {
-        return trim($this->baseTitle . ' ' . $this->version);
+        return trim($this->baseTitle);
     }
 
     public function withVersion(string $version): self

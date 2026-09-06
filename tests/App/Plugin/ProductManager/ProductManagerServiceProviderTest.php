@@ -6,10 +6,17 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
+use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
+use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
+use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
@@ -20,6 +27,17 @@ use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorCanonicalNamingMigrationService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorCanonicalNamingMigrationV2Service;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewV5Service;
+use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
+use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
+use WPShop\App\Plugin\ProductManager\Naming\ElementorProTranslatePressPreflightService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
@@ -159,6 +177,78 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(ProductVersionUpdater::class)
         );
         self::assertInstanceOf(
+            VendorProductNamingAuditService::class,
+            $container->get(VendorProductNamingAuditService::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingMigrationService::class,
+            $container->get(VendorProductNamingMigrationService::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingAuditPage::class,
+            $container->get(VendorProductNamingAuditPage::class)
+        );
+        self::assertInstanceOf(
+            VendorSalesPageNameInspector::class,
+            $container->get(VendorSalesPageNameInspector::class)
+        );
+        self::assertInstanceOf(
+            TranslatePressTitleInspector::class,
+            $container->get(TranslatePressTitleInspector::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewService::class,
+            $container->get(VendorProductNamingReviewService::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewPage::class,
+            $container->get(VendorProductNamingReviewPage::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewV5Service::class,
+            $container->get(VendorProductNamingReviewV5Service::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewV5Page::class,
+            $container->get(VendorProductNamingReviewV5Page::class)
+        );
+        self::assertInstanceOf(
+            VendorCanonicalNamingMigrationService::class,
+            $container->get(VendorCanonicalNamingMigrationService::class)
+        );
+        self::assertInstanceOf(
+            VendorCanonicalNamingMigrationPage::class,
+            $container->get(VendorCanonicalNamingMigrationPage::class)
+        );
+        self::assertInstanceOf(
+            VendorCanonicalNamingMigrationV2Service::class,
+            $container->get(VendorCanonicalNamingMigrationV2Service::class)
+        );
+        self::assertInstanceOf(
+            VendorCanonicalNamingMigrationV2Page::class,
+            $container->get(VendorCanonicalNamingMigrationV2Page::class)
+        );
+        self::assertInstanceOf(
+            ElementorProTranslatePressPreflightService::class,
+            $container->get(ElementorProTranslatePressPreflightService::class)
+        );
+        self::assertInstanceOf(
+            ElementorProTranslatePressPreflightPage::class,
+            $container->get(ElementorProTranslatePressPreflightPage::class)
+        );
+        self::assertInstanceOf(
+            ProductTitleVersionAuditService::class,
+            $container->get(ProductTitleVersionAuditService::class)
+        );
+        self::assertInstanceOf(
+            ProductTitleVersionMigrationService::class,
+            $container->get(ProductTitleVersionMigrationService::class)
+        );
+        self::assertInstanceOf(
+            ProductTitleVersionAuditPage::class,
+            $container->get(ProductTitleVersionAuditPage::class)
+        );
+        self::assertInstanceOf(
             ProductBatchZipUpdateService::class,
             $container->get(ProductBatchZipUpdateService::class)
         );
@@ -213,6 +303,62 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-product-update',
             $registry->submenus()[4]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorProductNamingAuditPage::class),
+            $registry->submenus()[8]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-naming-audit',
+            $registry->submenus()[8]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductTitleVersionAuditPage::class),
+            $registry->submenus()[9]
+        );
+        self::assertSame(
+            'wp-shop-builder-title-version-audit',
+            $registry->submenus()[9]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorProductNamingReviewPage::class),
+            $registry->submenus()[10]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-naming-review-v4',
+            $registry->submenus()[10]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorProductNamingReviewV5Page::class),
+            $registry->submenus()[11]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-naming-review-v5',
+            $registry->submenus()[11]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorCanonicalNamingMigrationPage::class),
+            $registry->submenus()[12]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-canonical-naming-migration',
+            $registry->submenus()[12]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorCanonicalNamingMigrationV2Page::class),
+            $registry->submenus()[13]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-canonical-naming-migration-v2',
+            $registry->submenus()[13]->slug()
+        );
+        self::assertSame(
+            $container->get(ElementorProTranslatePressPreflightPage::class),
+            $registry->submenus()[14]
+        );
+        self::assertSame(
+            'wp-shop-builder-elementor-pro-trp-preflight',
+            $registry->submenus()[14]->slug()
         );
     }
 }

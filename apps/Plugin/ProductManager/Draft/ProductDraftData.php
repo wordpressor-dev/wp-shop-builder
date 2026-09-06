@@ -128,9 +128,7 @@ final readonly class ProductDraftData
 
     public function title(): string
     {
-        return trim(
-            $this->baseTitle . ' ' . $this->version
-        );
+        return trim($this->baseTitle);
     }
 
     public function hasCompleteEnglishContent(): bool
