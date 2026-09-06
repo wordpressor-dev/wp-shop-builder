@@ -24,6 +24,16 @@ final class VendorProductNamingAuditService
         return count($this->vendorProductIds());
     }
 
+    public function auditCurrentVendorProduct(
+        int $productId
+    ): ?VendorProductNamingAuditRow {
+        if ($productId <= 0 || ! $this->isVendorProduct($productId)) {
+            return null;
+        }
+
+        return $this->auditProduct($productId);
+    }
+
     /**
      * @return list<VendorProductNamingAuditRow>
      */
