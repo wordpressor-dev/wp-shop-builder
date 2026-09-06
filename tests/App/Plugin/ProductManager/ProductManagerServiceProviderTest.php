@@ -12,6 +12,7 @@ use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
@@ -24,6 +25,9 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
+use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\ProductManagerServiceProvider;
@@ -177,6 +181,22 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(VendorProductNamingAuditPage::class)
         );
         self::assertInstanceOf(
+            VendorSalesPageNameInspector::class,
+            $container->get(VendorSalesPageNameInspector::class)
+        );
+        self::assertInstanceOf(
+            TranslatePressTitleInspector::class,
+            $container->get(TranslatePressTitleInspector::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewService::class,
+            $container->get(VendorProductNamingReviewService::class)
+        );
+        self::assertInstanceOf(
+            VendorProductNamingReviewPage::class,
+            $container->get(VendorProductNamingReviewPage::class)
+        );
+        self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
         );
@@ -259,6 +279,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-title-version-audit',
             $registry->submenus()[9]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorProductNamingReviewPage::class),
+            $registry->submenus()[10]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-naming-review-v4',
+            $registry->submenus()[10]->slug()
         );
     }
 }
