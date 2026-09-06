@@ -215,6 +215,24 @@ final class VendorProductNamingAuditService
             );
         }
 
+        if ($this->hasDescriptiveDashSuffix(
+            $currentBaseTitle,
+            $headerName
+        )) {
+            return new VendorProductNamingAuditRow(
+                $productId,
+                $currentTitle,
+                $currentBaseTitle,
+                $headerName,
+                $headerName,
+                $productType,
+                'RENAME',
+                'HIGH',
+                $evidence,
+                'Current Vendor title is the verified ZIP product name followed by a dash-separated descriptive marketing suffix.'
+            );
+        }
+
         if ($this->headerIsPrefixOfCurrentTitle(
             $currentBaseTitle,
             $headerName
@@ -512,6 +530,39 @@ final class VendorProductNamingAuditService
         $name = str_replace(['–', '—'], '-', $name);
 
         return trim($name);
+    }
+
+    private function hasDescriptiveDashSuffix(
+        string $currentTitle,
+        string $headerName
+    ): bool {
+        $currentTitle = $this->normalizeName($currentTitle);
+        $headerName = $this->normalizeName($headerName);
+
+        if (
+            $currentTitle === ''
+            || $headerName === ''
+            || $currentTitle === $headerName
+        ) {
+            return false;
+        }
+
+        foreach ([' – ', ' — ', ' - '] as $separator) {
+            $prefix = $headerName . $separator;
+
+            if (! str_starts_with($currentTitle, $prefix)) {
+                continue;
+            }
+
+            $tail = trim(substr(
+                $currentTitle,
+                strlen($prefix)
+            ));
+
+            return strlen($tail) >= 4;
+        }
+
+        return false;
     }
 
     private function headerIsPrefixOfCurrentTitle(
