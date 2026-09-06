@@ -265,7 +265,7 @@ final class VendorProductNamingReviewV5Service
             $current,
             $matches
         ) === 1) {
-            $core = trim((string) ($matches[1] ?? ''));
+            $core = trim((string) $matches[1]);
 
             if ($core !== '') {
                 return $core;
