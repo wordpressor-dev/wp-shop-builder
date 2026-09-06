@@ -758,9 +758,6 @@ final class ProductTitleVersionAuditPage implements SubmenuPageInterface
     }
 
     /**
-     * @return array{total:int,updated:int,skip:int,error:int}
-     */
-    /**
      * @param array<string, mixed> $migration
      * @return array{total:int,updated:int,skip:int,error:int}
      */
