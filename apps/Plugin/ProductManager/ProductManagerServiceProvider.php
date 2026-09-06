@@ -14,6 +14,7 @@ use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
+use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
@@ -31,6 +32,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -209,6 +211,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingAudit,
             $functionCaller(...)
         );
+        $titleVersionAudit = new ProductTitleVersionAuditService(
+            $functionCaller(...)
+        );
+        $titleVersionAuditPage = new ProductTitleVersionAuditPage(
+            $titleVersionAudit,
+            $functionCaller(...)
+        );
 
         $registry->addSubmenu($page);
         $registry->addSubmenu($batchIntakePage);
@@ -219,6 +228,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($updateFullScannerPage);
         $registry->addSubmenu($updateQueuePage);
         $registry->addSubmenu($vendorNamingAuditPage);
+        $registry->addSubmenu($titleVersionAuditPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -326,6 +336,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingAuditPage
         );
         $this->container->set(
+            ProductTitleVersionAuditService::class,
+            $titleVersionAudit
+        );
+        $this->container->set(
+            ProductTitleVersionAuditPage::class,
+            $titleVersionAuditPage
+        );
+        $this->container->set(
             ProductUpdateQueueReturnNavigation::class,
             $updateQueueReturnNavigation
         );
@@ -339,6 +357,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $vendorNamingAuditPage = $this->container->get(
             VendorProductNamingAuditPage::class
+        );
+        $titleVersionAuditPage = $this->container->get(
+            ProductTitleVersionAuditPage::class
         );
         $returnNavigation = $this->container->get(
             ProductUpdateQueueReturnNavigation::class
@@ -363,6 +384,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $vendorNamingAuditPage instanceof VendorProductNamingAuditPage) {
             throw new LogicException(
                 'VendorProductNamingAuditPage must be registered before boot.'
+            );
+        }
+
+        if (! $titleVersionAuditPage instanceof ProductTitleVersionAuditPage) {
+            throw new LogicException(
+                'ProductTitleVersionAuditPage must be registered before boot.'
             );
         }
 
@@ -398,6 +425,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_vendor_naming_audit',
             [$vendorNamingAuditPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_title_version_audit',
+            [$titleVersionAuditPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',
