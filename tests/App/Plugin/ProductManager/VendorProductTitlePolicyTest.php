@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateData;
 
-final class ProductTitlePolicyTest extends TestCase
+final class VendorProductTitlePolicyTest extends TestCase
 {
     public function testVendorDraftTitleDoesNotContainVersion(): void
     {
