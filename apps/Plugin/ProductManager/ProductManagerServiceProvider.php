@@ -16,6 +16,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateQueueReturnNavigation;
 use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
@@ -33,6 +34,9 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingReviewService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorSalesPageNameInspector;
+use WPShop\App\Plugin\ProductManager\Naming\TranslatePressTitleInspector;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
@@ -218,6 +222,22 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingMigration,
             $functionCaller(...)
         );
+        $vendorSalesPageNameInspector = new VendorSalesPageNameInspector(
+            $functionCaller(...)
+        );
+        $translatePressTitleInspector = new TranslatePressTitleInspector(
+            $database
+        );
+        $vendorNamingReview = new VendorProductNamingReviewService(
+            $vendorNamingAudit,
+            $vendorSalesPageNameInspector,
+            $translatePressTitleInspector,
+            $functionCaller(...)
+        );
+        $vendorNamingReviewPage = new VendorProductNamingReviewPage(
+            $vendorNamingReview,
+            $functionCaller(...)
+        );
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
@@ -240,6 +260,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($updateQueuePage);
         $registry->addSubmenu($vendorNamingAuditPage);
         $registry->addSubmenu($titleVersionAuditPage);
+        $registry->addSubmenu($vendorNamingReviewPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -347,6 +368,22 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorNamingMigration
         );
         $this->container->set(
+            VendorSalesPageNameInspector::class,
+            $vendorSalesPageNameInspector
+        );
+        $this->container->set(
+            TranslatePressTitleInspector::class,
+            $translatePressTitleInspector
+        );
+        $this->container->set(
+            VendorProductNamingReviewService::class,
+            $vendorNamingReview
+        );
+        $this->container->set(
+            VendorProductNamingReviewPage::class,
+            $vendorNamingReviewPage
+        );
+        $this->container->set(
             VendorProductNamingAuditPage::class,
             $vendorNamingAuditPage
         );
@@ -377,6 +414,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $vendorNamingAuditPage = $this->container->get(
             VendorProductNamingAuditPage::class
         );
+        $vendorNamingReviewPage = $this->container->get(
+            VendorProductNamingReviewPage::class
+        );
         $titleVersionAuditPage = $this->container->get(
             ProductTitleVersionAuditPage::class
         );
@@ -403,6 +443,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $vendorNamingAuditPage instanceof VendorProductNamingAuditPage) {
             throw new LogicException(
                 'VendorProductNamingAuditPage must be registered before boot.'
+            );
+        }
+
+        if (! $vendorNamingReviewPage instanceof VendorProductNamingReviewPage) {
+            throw new LogicException(
+                'VendorProductNamingReviewPage must be registered before boot.'
             );
         }
 
@@ -444,6 +490,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_vendor_naming_audit',
             [$vendorNamingAuditPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_naming_review_v4',
+            [$vendorNamingReviewPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',
