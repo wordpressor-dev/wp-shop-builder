@@ -33,6 +33,7 @@ use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemSearchResolver;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
 use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\ProductTitleVersionMigrationService;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -214,8 +215,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
+        $titleVersionMigration = new ProductTitleVersionMigrationService(
+            $functionCaller(...)
+        );
         $titleVersionAuditPage = new ProductTitleVersionAuditPage(
             $titleVersionAudit,
+            $titleVersionMigration,
             $functionCaller(...)
         );
 
@@ -338,6 +343,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             ProductTitleVersionAuditService::class,
             $titleVersionAudit
+        );
+        $this->container->set(
+            ProductTitleVersionMigrationService::class,
+            $titleVersionMigration
         );
         $this->container->set(
             ProductTitleVersionAuditPage::class,
