@@ -23,7 +23,10 @@ final class ProductTitleVersionMigrationServiceTest extends TestCase
         $call = static function (
             string $name,
             mixed ...$arguments
-        ) use (&$post, &$writes): mixed {
+        ) use (
+            &$post,
+            &$writes
+        ): mixed {
             if ($name === 'get_post') {
                 return clone $post;
             }
