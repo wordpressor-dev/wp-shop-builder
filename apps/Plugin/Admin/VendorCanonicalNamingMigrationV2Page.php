@@ -12,15 +12,15 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 final class VendorCanonicalNamingMigrationV2Page implements SubmenuPageInterface
 {
     private const REPORT_META_KEY =
-        'wp_shop_pm_vendor_canonical_naming_v2_migration_v2';
+        'wp_shop_pm_vendor_canonical_naming_migration_v2';
     private const STATE_META_KEY =
-        'wp_shop_pm_vendor_canonical_naming_v2_migration_state_v2';
+        'wp_shop_pm_vendor_canonical_naming_migration_state_v2';
 
     /**
      * @param Closure(string, mixed...): mixed $call
      */
     public function __construct(
-        private readonly VendorCanonicalNamingMigrationService $migration,
+        private readonly VendorCanonicalNamingMigrationV2Service $migration,
         private readonly Closure $call
     ) {
     }
@@ -37,7 +37,7 @@ final class VendorCanonicalNamingMigrationV2Page implements SubmenuPageInterface
 
     public function title(): string
     {
-        return 'Vendor Canonical Naming Migration V2 V2';
+        return 'Vendor Canonical Naming Migration V2';
     }
 
     public function capability(): string
@@ -161,7 +161,7 @@ final class VendorCanonicalNamingMigrationV2Page implements SubmenuPageInterface
             echo '<form method="post">';
             $this->nonceField();
             echo '<input type="hidden" name="wp_shop_pm_vendor_canonical_v2_action" value="migration_resume">';
-            echo '<button type="submit" class="button button-secondary">Продолжить Vendor Canonical Migration</button>';
+            echo '<button type="submit" class="button button-secondary">Продолжить Vendor Canonical Migration V2</button>';
             echo '</form>';
         }
 
