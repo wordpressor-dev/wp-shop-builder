@@ -20,7 +20,9 @@ final class VendorCanonicalNamingMigrationV2ServiceTest extends TestCase
     {
         $old = 'JetWooBuilder – WordPress Plugin for Shop Page, '
             . 'Product, Cart & Checkout for WooCommerce';
-        $badEnglish = 'is a WooCommerce page builder for Elementor. Visually design custom shop, single product, cart, and checkout pages with pre-made templates and widgets.';
+        $badEnglish = 'is a WooCommerce page builder for Elementor. '
+            . 'Visually design custom shop, single product, cart, and checkout '
+            . 'pages with pre-made templates and widgets.';
         $post = (object) [
             'ID' => 3496,
             'post_type' => 'product',
