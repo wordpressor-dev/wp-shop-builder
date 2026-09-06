@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 use WPShop\App\Plugin\ProductManager\Update\ProductUpdateData;
 
-final class VendorProductTitlePolicyTest extends TestCase
+final class ProductTitlePolicyTest extends TestCase
 {
     public function testVendorDraftTitleDoesNotContainVersion(): void
     {
@@ -39,7 +39,7 @@ final class VendorProductTitlePolicyTest extends TestCase
         self::assertSame('Elementor Pro', $data->title());
     }
 
-    public function testEnvatoDraftTitleKeepsExistingVersionPolicy(): void
+    public function testEnvatoDraftTitleDoesNotContainVersion(): void
     {
         $data = new ProductDraftData(
             'Example Theme',
@@ -65,7 +65,7 @@ final class VendorProductTitlePolicyTest extends TestCase
             false
         );
 
-        self::assertSame('Example Theme 2.4.0', $data->title());
+        self::assertSame('Example Theme', $data->title());
     }
 
     public function testVendorUpdateTitleStaysVersionless(): void
@@ -87,7 +87,7 @@ final class VendorProductTitlePolicyTest extends TestCase
         self::assertSame('Elementor Pro', $data->title());
     }
 
-    public function testEnvatoUpdateTitleKeepsExistingVersionPolicy(): void
+    public function testEnvatoUpdateTitleStaysVersionless(): void
     {
         $data = new ProductUpdateData(
             20,
@@ -103,6 +103,6 @@ final class VendorProductTitlePolicyTest extends TestCase
             'envato'
         );
 
-        self::assertSame('Example Plugin 1.1.0', $data->title());
+        self::assertSame('Example Plugin', $data->title());
     }
 }
