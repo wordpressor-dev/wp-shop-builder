@@ -12,8 +12,8 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class VendorProductNamingAuditPage implements SubmenuPageInterface
 {
-    private const REPORT_META_KEY = 'wp_shop_pm_vendor_naming_audit_report_v1';
-    private const STATE_META_KEY = 'wp_shop_pm_vendor_naming_audit_state_v1';
+    private const REPORT_META_KEY = 'wp_shop_pm_vendor_naming_audit_report_v2';
+    private const STATE_META_KEY = 'wp_shop_pm_vendor_naming_audit_state_v2';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -85,7 +85,7 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Vendor Product Naming Audit</h1>';
-        echo '<p><strong>DRY RUN ONLY.</strong> Audits published Vendor products and compares the current WooCommerce title with Plugin Name / Theme Name read from the current local Vendor ZIP. Product posts, slugs, SEO fields, content, images and metadata are never written.</p>';
+        echo '<p><strong>RULESET = V2 / DRY RUN ONLY.</strong> Audits published Vendor products and compares the current WooCommerce title with Plugin Name / Theme Name read from the current local Vendor ZIP. Material name differences are REVIEW, not automatic RENAME. Product posts, slugs, SEO fields, content, images and metadata are never written.</p>';
         echo '<p><strong>Marketplace protection:</strong> ThemeForest, CodeCanyon and Envato sales pages are unconditionally excluded, even if legacy source metadata is missing or incorrect.</p>';
 
         if ($message !== '') {
@@ -190,7 +190,7 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
         );
         $report = $this->loadReport();
         $rows = $this->allRows($report['rows']);
-        $filename = 'wp-shop-vendor-product-naming-audit-'
+        $filename = 'wp-shop-vendor-product-naming-audit-v2-'
             . (string) ($this->call)('current_time', 'Y-m-d-His')
             . '.csv';
 
