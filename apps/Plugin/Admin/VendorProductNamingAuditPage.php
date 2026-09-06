@@ -8,18 +8,22 @@ use Closure;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditRow;
 use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingAuditService;
+use WPShop\App\Plugin\ProductManager\Naming\VendorProductNamingMigrationService;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class VendorProductNamingAuditPage implements SubmenuPageInterface
 {
     private const REPORT_META_KEY = 'wp_shop_pm_vendor_naming_audit_report_v3';
     private const STATE_META_KEY = 'wp_shop_pm_vendor_naming_audit_state_v3';
+    private const MIGRATION_META_KEY = 'wp_shop_pm_vendor_naming_migration_v1';
+    private const MIGRATION_STATE_META_KEY = 'wp_shop_pm_vendor_naming_migration_state_v1';
 
     /**
      * @param Closure(string, mixed...): mixed $call
      */
     public function __construct(
         private readonly VendorProductNamingAuditService $audit,
+        private readonly VendorProductNamingMigrationService $migration,
         private readonly Closure $call
     ) {
     }
@@ -51,6 +55,9 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
         $message = '';
         $error = '';
         $autoContinue = false;
+        $migrationMessage = '';
+        $migrationError = '';
+        $migrationAutoContinue = false;
 
         if ($action === 'audit_start') {
             $this->checkNonce();
@@ -77,11 +84,53 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
                 [$state, $message, $error] = $this->processNextBatch($state);
                 $autoContinue = $error === '' && $state['status'] === 'RUNNING';
             }
+        } elseif ($action === 'migration_start') {
+            $this->checkNonce();
+
+            if ($state['status'] !== 'READY') {
+                $migrationError = 'Run and finish Vendor Naming Audit V3 before applying migration.';
+            } else {
+                $report = $this->loadReport();
+                $candidates = $this->safeMigrationRows($report['rows']);
+                $this->resetMigration($candidates);
+                $migrationState = $this->newMigrationState(
+                    count($candidates)
+                );
+                $this->saveMigrationState($migrationState);
+                [
+                    $migrationState,
+                    $migrationMessage,
+                    $migrationError,
+                ] = $this->processMigrationBatch($migrationState);
+                $migrationAutoContinue = $migrationError === ''
+                    && $migrationState['status'] === 'RUNNING';
+            }
+        } elseif (
+            $action === 'migration_next'
+            || $action === 'migration_resume'
+        ) {
+            $this->checkNonce();
+            $migrationState = $this->loadMigrationState();
+
+            if ($migrationState['status'] !== 'RUNNING') {
+                $migrationError = 'No running Safe Vendor Naming Migration was found.';
+            } else {
+                [
+                    $migrationState,
+                    $migrationMessage,
+                    $migrationError,
+                ] = $this->processMigrationBatch($migrationState);
+                $migrationAutoContinue = $migrationError === ''
+                    && $migrationState['status'] === 'RUNNING';
+            }
         }
 
         $report = $this->loadReport();
         $summary = $this->summary($report);
         $attention = $this->attentionRows($report['rows']);
+        $migrationState = $this->loadMigrationState();
+        $migrationReport = $this->loadMigration();
+        $migrationSummary = $this->migrationSummary($migrationReport);
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Vendor Product Naming Audit</h1>';
@@ -100,8 +149,25 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
                 . '</p></div>';
         }
 
+        if ($migrationMessage !== '') {
+            echo '<div class="notice notice-success"><p><strong>'
+                . $this->escape($migrationMessage)
+                . '</strong></p></div>';
+        }
+
+        if ($migrationError !== '') {
+            echo '<div class="notice notice-error"><p><strong>SAFE VENDOR NAMING MIGRATION ERROR:</strong> '
+                . $this->escape($migrationError)
+                . '</p></div>';
+        }
+
         $this->renderProgress($state, $summary);
         $this->renderControls($state);
+        $this->renderMigrationControls(
+            $state,
+            $migrationState,
+            $migrationSummary
+        );
 
         if ($state['status'] === 'READY') {
             $this->renderExport();
@@ -168,8 +234,16 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
 
         echo '</div>';
 
+        if ($migrationSummary['total'] > 0) {
+            $this->renderMigrationExceptions($migrationReport);
+        }
+
         if ($autoContinue) {
             $this->renderAutoContinue();
+        }
+
+        if ($migrationAutoContinue) {
+            $this->renderMigrationAutoContinue();
         }
 
         echo '</div>';
@@ -468,6 +542,369 @@ final class VendorProductNamingAuditPage implements SubmenuPageInterface
         }
 
         echo '</div>';
+    }
+
+    /**
+     * @param array<string, int|string> $auditState
+     * @param array<string, int|string> $migrationState
+     * @param array{total:int,updated:int,skip:int,error:int} $summary
+     */
+    private function renderMigrationControls(
+        array $auditState,
+        array $migrationState,
+        array $summary
+    ): void {
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Safe Vendor Naming Migration</h2>';
+        echo '<p>Eligible rows are only V3 <strong>RENAME / HIGH</strong> items where the current title is the verified ZIP product name followed by a dash-separated descriptive suffix. Before every write the product is re-audited, marketplace protection is rechecked, the current ZIP header must still match, and the slug is preserved and verified.</p>';
+
+        if ($auditState['status'] !== 'READY') {
+            echo '<p><strong>Run Vendor Naming Audit V3 to READY first.</strong></p>';
+            echo '</div>';
+
+            return;
+        }
+
+        echo '<p><strong>MIGRATION = '
+            . $this->escape((string) $migrationState['status'])
+            . '</strong> &nbsp; TOTAL = '
+            . $this->escape((string) $summary['total'])
+            . ' &nbsp; UPDATED = '
+            . $this->escape((string) $summary['updated'])
+            . ' &nbsp; SKIP = '
+            . $this->escape((string) $summary['skip'])
+            . ' &nbsp; ERROR = '
+            . $this->escape((string) $summary['error'])
+            . '</p>';
+
+        if ($migrationState['status'] !== 'RUNNING') {
+            echo '<form method="post">';
+            $this->nonceField();
+            echo '<input type="hidden" name="wp_shop_pm_vendor_naming_action" value="migration_start">';
+            echo '<button type="submit" class="button button-primary">Apply Safe Vendor Naming Migration</button>';
+            echo '</form>';
+        } else {
+            echo '<form method="post">';
+            $this->nonceField();
+            echo '<input type="hidden" name="wp_shop_pm_vendor_naming_action" value="migration_resume">';
+            echo '<button type="submit" class="button button-secondary">Продолжить Safe Vendor Naming Migration</button>';
+            echo '</form>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * @param array<string, mixed> $migration
+     */
+    private function renderMigrationExceptions(array $migration): void
+    {
+        $exceptions = [];
+
+        foreach ((array) ($migration['results'] ?? []) as $row) {
+            if (
+                is_array($row)
+                && (string) ($row['status'] ?? '') !== 'UPDATED'
+            ) {
+                $exceptions[] = $row;
+            }
+        }
+
+        if ($exceptions === []) {
+            return;
+        }
+
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Migration SKIP / ERROR</h2>';
+        echo '<table class="widefat striped"><thead><tr>';
+        foreach (['ID', 'Status', 'Old title', 'New title', 'Slug', 'Reason'] as $heading) {
+            echo '<th>' . $this->escape($heading) . '</th>';
+        }
+        echo '</tr></thead><tbody>';
+
+        foreach ($exceptions as $row) {
+            echo '<tr>';
+            echo '<td>' . $this->escape((string) ($row['productId'] ?? '')) . '</td>';
+            echo '<td><strong>' . $this->escape((string) ($row['status'] ?? '')) . '</strong></td>';
+            echo '<td>' . $this->escape((string) ($row['oldTitle'] ?? '')) . '</td>';
+            echo '<td>' . $this->escape((string) ($row['newTitle'] ?? '')) . '</td>';
+            echo '<td><code>' . $this->escape((string) ($row['slug'] ?? '')) . '</code></td>';
+            echo '<td>' . $this->escape((string) ($row['reason'] ?? '')) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table></div>';
+    }
+
+    /**
+     * @param array<string, int|string> $state
+     * @return array{array<string, int|string>, string, string}
+     */
+    private function processMigrationBatch(array $state): array
+    {
+        $migration = $this->loadMigration();
+        $candidates = is_array($migration['candidates'] ?? null)
+            ? array_values($migration['candidates'])
+            : [];
+        $offset = (int) $state['next_offset'];
+        $batch = array_slice($candidates, $offset, 10);
+
+        foreach ($batch as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            try {
+                $result = $this->migration->apply($candidate);
+            } catch (Throwable $exception) {
+                $result = [
+                    'productId' => (int) ($candidate['productId'] ?? 0),
+                    'status' => 'ERROR',
+                    'oldTitle' => (string) ($candidate['currentTitle'] ?? ''),
+                    'newTitle' => (string) ($candidate['currentTitle'] ?? ''),
+                    'slug' => '',
+                    'reason' => $exception->getMessage(),
+                ];
+            }
+
+            $productId = (int) $result['productId'];
+
+            if ($productId > 0) {
+                $migration['results'][$productId] = $result;
+            }
+        }
+
+        $state['processed'] = count((array) ($migration['results'] ?? []));
+        $state['next_offset'] = $offset + count($batch);
+        $state['updated_at'] = $this->currentTime();
+        $state['error'] = '';
+
+        $finished = $batch === []
+            || $state['next_offset'] >= count($candidates);
+
+        if ($finished) {
+            $state['status'] = 'READY';
+            $message = 'SAFE VENDOR NAMING MIGRATION = READY';
+        } else {
+            $state['status'] = 'RUNNING';
+            $message = 'SAFE VENDOR NAMING MIGRATION BATCH = SAVED';
+        }
+
+        $migration['updated_at'] = $this->currentTime();
+        $this->saveMigration($migration);
+        $this->saveMigrationState($state);
+
+        return [$state, $message, ''];
+    }
+
+    /**
+     * @param array<int|string, mixed> $stored
+     * @return list<array<string, mixed>>
+     */
+    private function safeMigrationRows(array $stored): array
+    {
+        return array_values(array_filter(
+            $this->allRows($stored),
+            fn (array $row): bool =>
+                $this->migration->eligibleSnapshotRow($row)
+        ));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $candidates
+     */
+    private function resetMigration(array $candidates): void
+    {
+        $this->saveMigration([
+            'candidates' => $candidates,
+            'results' => [],
+            'started_at' => $this->currentTime(),
+            'updated_at' => $this->currentTime(),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadMigration(): array
+    {
+        $empty = [
+            'candidates' => [],
+            'results' => [],
+            'started_at' => '',
+            'updated_at' => '',
+        ];
+        $userId = $this->currentUserId();
+
+        if ($userId <= 0) {
+            return $empty;
+        }
+
+        $stored = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::MIGRATION_META_KEY,
+            true
+        );
+
+        if (! is_array($stored)) {
+            return $empty;
+        }
+
+        foreach (['candidates', 'results'] as $key) {
+            if (isset($stored[$key]) && is_array($stored[$key])) {
+                $empty[$key] = $stored[$key];
+            }
+        }
+
+        foreach (['started_at', 'updated_at'] as $key) {
+            if (isset($stored[$key]) && is_string($stored[$key])) {
+                $empty[$key] = $stored[$key];
+            }
+        }
+
+        return $empty;
+    }
+
+    /**
+     * @param array<string, mixed> $migration
+     */
+    private function saveMigration(array $migration): void
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::MIGRATION_META_KEY,
+                $migration
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $migration
+     * @return array{total:int,updated:int,skip:int,error:int}
+     */
+    private function migrationSummary(array $migration): array
+    {
+        $summary = [
+            'total' => count((array) ($migration['candidates'] ?? [])),
+            'updated' => 0,
+            'skip' => 0,
+            'error' => 0,
+        ];
+
+        foreach ((array) ($migration['results'] ?? []) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $status = (string) ($row['status'] ?? '');
+
+            if ($status === 'UPDATED') {
+                ++$summary['updated'];
+            } elseif ($status === 'ERROR') {
+                ++$summary['error'];
+            } elseif ($status === 'SKIP') {
+                ++$summary['skip'];
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function newMigrationState(int $total): array
+    {
+        $now = $this->currentTime();
+
+        return [
+            'status' => $total === 0 ? 'READY' : 'RUNNING',
+            'total' => max(0, $total),
+            'processed' => 0,
+            'next_offset' => 0,
+            'started_at' => $now,
+            'updated_at' => $now,
+            'error' => '',
+        ];
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function loadMigrationState(): array
+    {
+        $state = [
+            'status' => 'IDLE',
+            'total' => 0,
+            'processed' => 0,
+            'next_offset' => 0,
+            'started_at' => '',
+            'updated_at' => '',
+            'error' => '',
+        ];
+        $userId = $this->currentUserId();
+
+        if ($userId <= 0) {
+            return $state;
+        }
+
+        $stored = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::MIGRATION_STATE_META_KEY,
+            true
+        );
+
+        if (! is_array($stored)) {
+            return $state;
+        }
+
+        foreach (['status', 'started_at', 'updated_at', 'error'] as $key) {
+            if (isset($stored[$key]) && is_string($stored[$key])) {
+                $state[$key] = $stored[$key];
+            }
+        }
+
+        foreach (['total', 'processed', 'next_offset'] as $key) {
+            if (isset($stored[$key])) {
+                $state[$key] = max(0, (int) $stored[$key]);
+            }
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, int|string> $state
+     */
+    private function saveMigrationState(array $state): void
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::MIGRATION_STATE_META_KEY,
+                $state
+            );
+        }
+    }
+
+    private function renderMigrationAutoContinue(): void
+    {
+        echo '<form id="wp-shop-vendor-naming-migration-next" method="post" style="display:none;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_vendor_naming_action" value="migration_next">';
+        echo '</form>';
+        echo '<script>';
+        echo 'window.setTimeout(function(){var f=document.getElementById("wp-shop-vendor-naming-migration-next");if(f){f.submit();}},900);';
+        echo '</script>';
     }
 
     private function renderExport(): void
