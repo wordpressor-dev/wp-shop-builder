@@ -126,10 +126,6 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $archiveIdentityInspector,
             $envatoSearchResolver
         );
-        $batchIntakePage = new ProductBatchIntakePage(
-            $batchIntakeScanner,
-            $functionCaller(...)
-        );
         $draftGateway = new WordPressWooCommerceDraftGateway(
             $functionCaller(...)
         );
@@ -220,6 +216,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $tagParser,
             $archiveUploader,
             $vendorAiCover
+        );
+        $batchIntakePage = new ProductBatchIntakePage(
+            $batchIntakeScanner,
+            $functionCaller(...),
+            $controller
         );
         $page = new ProductManagerPage($controller, $functionCaller(...));
         $versionUpdater = new ProductVersionUpdater($functionCaller(...));
