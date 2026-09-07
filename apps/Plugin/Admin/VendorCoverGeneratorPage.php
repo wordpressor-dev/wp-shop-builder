@@ -582,11 +582,6 @@ HTML;
         return (string) ($this->call)('wp_unslash', $value);
     }
 
-    private function yesNo(bool $value): string
-    {
-        return $value ? 'YES' : 'NO';
-    }
-
     private function escape(string $value): string
     {
         return (string) ($this->call)('esc_html', $value);
@@ -597,8 +592,4 @@ HTML;
         return (string) ($this->call)('esc_attr', $value);
     }
 
-    private function escapeUrl(string $value): string
-    {
-        return (string) ($this->call)('esc_url', $value);
-    }
 }
