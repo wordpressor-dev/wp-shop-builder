@@ -63,12 +63,22 @@ final class VendorAiCoverPromptBuilder
             'UTF-8'
         );
 
+        $titleLower = mb_strtolower(trim($title), 'UTF-8');
+
+        if (
+            str_contains($titleLower, 'elementor')
+            && ! str_contains($titleLower, 'addon')
+            && ! str_contains($titleLower, 'add-on')
+        ) {
+            return 'Visual page builder for WordPress';
+        }
+
         $rules = [
             '/ajax.+search|search.+woocommerce/u' => 'AJAX product search for WooCommerce',
             '/multilingual|translation|translate/u' => 'Multilingual translation for WordPress',
             '/seo|search engine optimization/u' => 'SEO optimization for WordPress',
-            '/woocommerce.+builder|builder.+woocommerce/u' => 'WooCommerce page builder',
             '/page builder|website builder|visual builder/u' => 'Visual page builder for WordPress',
+            '/woocommerce.+builder|builder.+woocommerce/u' => 'WooCommerce page builder',
             '/security|firewall|malware/u' => 'WordPress security and protection',
             '/backup|restore/u' => 'WordPress backup and restore',
             '/form|forms/u' => 'Form builder for WordPress',
