@@ -8,6 +8,7 @@ use Closure;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateAllService;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchCreateCoordinator;
+use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
@@ -23,7 +24,8 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
      */
     public function __construct(
         private readonly ProductBatchIntakeScanner $scanner,
-        private readonly Closure $call
+        private readonly Closure $call,
+        private readonly ?ProductManagerController $controller = null
     ) {
     }
 
@@ -76,7 +78,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
             if (
                 in_array(
                     $action,
-                    ['scan', 'apply', 'apply_all_ready', 'create', 'create_all_new', 'skip', 'review'],
+                    ['scan', 'apply', 'apply_all_ready', 'create', 'create_all_new', 'skip', 'review', 'save_ai_cover_settings'],
                     true
                 )
             ) {
@@ -84,7 +86,21 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 $showResults = true;
             }
 
-            if ($action === 'apply') {
+            if ($action === 'save_ai_cover_settings') {
+                $this->saveAiCoverSettings();
+                $logs = [
+                    'VENDOR AI COVER SETTINGS = SAVED',
+                    'AUTO GENERATION = '
+                        . ($this->aiCoverEnabled() ? 'ENABLED' : 'DISABLED'),
+                    'OPENAI API KEY = '
+                        . ($this->openAiApiKeyConfigured()
+                            ? 'CONFIGURED'
+                            : 'NOT CONFIGURED'),
+                    'MODEL = gpt-image-2',
+                    'IMPORT QUEUE INTEGRATION = READY',
+                ];
+                $success = true;
+            } elseif ($action === 'apply') {
                 $result = $this->scanner->applyUpdate(
                     $uploadsBaseDir,
                     $selectedFolder,
@@ -121,10 +137,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 $success = $batch['failed'] === 0;
                 $autoContinue = $batch['continue'];
             } elseif ($action === 'create') {
-                $coordinator = new ProductBatchCreateCoordinator(
-                    $this->call,
-                    $this->scanner
-                );
+                $coordinator = $this->createCoordinator();
                 $result = $coordinator->createDraft(
                     $uploadsBaseDir,
                     $selectedFolder,
@@ -196,7 +209,9 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     $uploadsBaseDir,
                     $selectedFolder,
                     $pending,
-                    ProductBatchCreateAllService::MAX_BATCH
+                    $this->aiCoverEnabled()
+                        ? 1
+                        : ProductBatchCreateAllService::MAX_BATCH
                 );
                 $autoCreateState = $this->accumulateAutoCreateState(
                     $selectedFolder,
@@ -257,7 +272,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Import Queue</h1>';
-        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди для Envato и direct Vendor товаров. NEW PRODUCT можно создать как Envato или Vendor Draft. Для Vendor данные Name/Version/Author/Plugin URI/Theme URI берутся из ZIP, когда они доступны. Draft всегда нужно проверить перед публикацией.</p>';
+        echo '<p>Пакетный вход для ZIP-архивов. UPDATE применяется прямо из очереди для Envato и direct Vendor товаров. NEW PRODUCT можно создать как Envato или Vendor Draft. Для Vendor данные Name/Version/Author/Plugin URI/Theme URI берутся из ZIP, когда они доступны. Если Vendor AI Cover включён, индивидуальная AI-обложка создаётся автоматически после нового Vendor Draft. Draft всегда нужно проверить перед публикацией.</p>';
 
         if ($error !== '') {
             echo '<div class="notice notice-error"><p><strong>BATCH INTAKE ERROR:</strong> '
@@ -266,6 +281,7 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         }
 
         $this->renderLogs($logs, $success);
+        $this->renderAiCoverSettings();
         $this->renderAutoUpdateState($autoState, $selectedFolder);
         $this->renderAutoCreateState($autoCreateState, $selectedFolder);
 
@@ -483,12 +499,129 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<script>window.setTimeout(function(){var f=document.getElementById("wp-shop-auto-create-continue");if(f){f.submit();}},900);</script>';
     }
 
+    private function createCoordinator(): ProductBatchCreateCoordinator
+    {
+        return new ProductBatchCreateCoordinator(
+            $this->call,
+            $this->scanner,
+            null,
+            $this->controller
+        );
+    }
+
+    private function renderAiCoverSettings(): void
+    {
+        $configured = $this->openAiApiKeyConfigured();
+        $constant = $this->openAiApiKeyFromConstant();
+        $enabled = $this->aiCoverEnabled();
+
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">Vendor AI Cover — настройка один раз</h2>';
+        echo '<p><strong>Новые Vendor Drafts:</strong> после создания из ZIP автоматически генерируется одна индивидуальная AI cover, затем сохраняется как 590×300 WebP и ставится Featured Image. Envato/ThemeForest/CodeCanyon всегда пропускаются.</p>';
+        echo '<p><strong>OPENAI API KEY = '
+            . ($configured ? 'CONFIGURED' : 'NOT CONFIGURED')
+            . '</strong> &nbsp; | &nbsp; AUTO GENERATION = '
+            . ($enabled ? 'ENABLED' : 'DISABLED')
+            . ' &nbsp; | &nbsp; MODEL = gpt-image-2</p>';
+        echo '<form method="post" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="save_ai_cover_settings">';
+
+        if ($constant !== '') {
+            echo '<p style="margin:0;"><strong>API key source:</strong> <code>WP_SHOP_OPENAI_API_KEY</code></p>';
+        } else {
+            echo '<label><strong>OpenAI API Key</strong><br>';
+            echo '<input type="password" name="openai_api_key" style="width:390px;" placeholder="'
+                . ($configured
+                    ? 'Key already saved — leave empty to keep it'
+                    : 'Paste OpenAI API key')
+                . '"></label>';
+        }
+
+        echo '<label style="padding-bottom:6px;"><input type="checkbox" name="ai_cover_enabled" value="1" '
+            . ($enabled ? 'checked' : '')
+            . '> Автоматически создавать AI cover для нового Vendor Draft</label>';
+        echo '<button type="submit" class="button button-secondary">Сохранить AI Cover настройки</button>';
+        echo '</form>';
+
+        if (! $configured) {
+            echo '<p class="description" style="margin-bottom:0;">Без API key товар всё равно создастся как Draft, но cover будет пропущена со статусом <code>SKIP_NOT_CONFIGURED</code>.</p>';
+        }
+
+        echo '</div>';
+    }
+
+    private function saveAiCoverSettings(): void
+    {
+        ($this->call)(
+            'update_option',
+            'wp_shop_vendor_ai_cover_enabled',
+            $this->posted('ai_cover_enabled') === '1'
+                ? '1'
+                : '0',
+            false
+        );
+
+        if ($this->openAiApiKeyFromConstant() !== '') {
+            return;
+        }
+
+        $key = trim($this->posted('openai_api_key'));
+
+        if ($key === '') {
+            return;
+        }
+
+        ($this->call)(
+            'update_option',
+            'wp_shop_openai_api_key',
+            $key,
+            false
+        );
+    }
+
+    private function aiCoverEnabled(): bool
+    {
+        $value = (string) ($this->call)(
+            'get_option',
+            'wp_shop_vendor_ai_cover_enabled',
+            '1'
+        );
+
+        return ! in_array(
+            strtolower(trim($value)),
+            ['0', 'no', 'false', 'off'],
+            true
+        );
+    }
+
+    private function openAiApiKeyConfigured(): bool
+    {
+        if ($this->openAiApiKeyFromConstant() !== '') {
+            return true;
+        }
+
+        return trim((string) ($this->call)(
+            'get_option',
+            'wp_shop_openai_api_key',
+            ''
+        )) !== '';
+    }
+
+    private function openAiApiKeyFromConstant(): string
+    {
+        if (! defined('WP_SHOP_OPENAI_API_KEY')) {
+            return '';
+        }
+
+        $value = constant('WP_SHOP_OPENAI_API_KEY');
+
+        return is_string($value) ? trim($value) : '';
+    }
+
     private function createAllService(): ProductBatchCreateAllService
     {
-        $coordinator = new ProductBatchCreateCoordinator(
-            $this->call,
-            $this->scanner
-        );
+        $coordinator = $this->createCoordinator();
 
         return new ProductBatchCreateAllService(
             static fn (
