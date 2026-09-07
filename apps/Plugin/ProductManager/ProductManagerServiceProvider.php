@@ -19,6 +19,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
+use WPShop\App\Plugin\Admin\VendorAiCoverCandidateBox;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
 use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
 use WPShop\App\Plugin\Admin\VendorCoverGeneratorPage;
@@ -207,6 +208,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorAiImageGenerator,
             $vendorAiCoverPromptBuilder,
             $vendorAiCoverMedia,
+            $functionCaller(...)
+        );
+        $vendorAiCoverCandidateBox = new VendorAiCoverCandidateBox(
             $functionCaller(...)
         );
         $controller = new ProductManagerController(
@@ -477,6 +481,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             VendorAiCoverService::class,
             $vendorAiCover
         );
+        $this->container->set(
+            VendorAiCoverCandidateBox::class,
+            $vendorAiCoverCandidateBox
+        );
         $this->container->set(ProductManagerController::class, $controller);
         $this->container->set(ProductManagerPage::class, $page);
         $this->container->set(
@@ -634,6 +642,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $menuOptimizer = $this->container->get(
             ProductManagerMenuOptimizer::class
         );
+        $vendorAiCoverCandidateBox = $this->container->get(
+            VendorAiCoverCandidateBox::class
+        );
 
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
@@ -701,11 +712,37 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             );
         }
 
+        if (! $vendorAiCoverCandidateBox instanceof VendorAiCoverCandidateBox) {
+            throw new LogicException(
+                'VendorAiCoverCandidateBox must be registered before boot.'
+            );
+        }
+
         $functionCaller(
             'add_action',
             'admin_menu',
             [$menuOptimizer, 'optimize'],
             999
+        );
+        $functionCaller(
+            'add_action',
+            'add_meta_boxes_product',
+            [$vendorAiCoverCandidateBox, 'register']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_vendor_cover_approve',
+            [$vendorAiCoverCandidateBox, 'approve']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_vendor_cover_discard',
+            [$vendorAiCoverCandidateBox, 'discard']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_vendor_cover_restore',
+            [$vendorAiCoverCandidateBox, 'restore']
         );
         $functionCaller(
             'add_action',
