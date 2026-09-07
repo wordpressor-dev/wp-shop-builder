@@ -9,8 +9,11 @@ use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
 use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
+use WPShop\App\Plugin\Admin\ProductManagerMenuOptimizer;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
+use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
@@ -314,45 +317,65 @@ final class ProductManagerServiceProviderTest extends TestCase
             ProductManagerController::class,
             $container->get(ProductManagerController::class)
         );
-        self::assertSame(
-            $container->get(ProductManagerPage::class),
-            $registry->submenus()[0]
-        );
-        self::assertSame(
-            'wp-shop-builder-product-manager',
-            $registry->submenus()[0]->slug()
+        self::assertInstanceOf(
+            ProductManagerMenuOptimizer::class,
+            $container->get(ProductManagerMenuOptimizer::class)
         );
         self::assertSame(
             $container->get(ProductBatchIntakePage::class),
-            $registry->submenus()[1]
+            $registry->submenus()[0]
         );
         self::assertSame(
             'wp-shop-builder-product-batch-intake',
+            $registry->submenus()[0]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdateQueuePage::class),
+            $registry->submenus()[1]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update-queue',
             $registry->submenus()[1]->slug()
         );
         self::assertSame(
-            $container->get(ProductEditorialMigrationPage::class),
+            $container->get(ProductUpdateFullScannerPage::class),
             $registry->submenus()[2]
         );
         self::assertSame(
-            'wp-shop-builder-product-editorial-migration',
+            'wp-shop-builder-product-update-full-scan',
             $registry->submenus()[2]->slug()
         );
         self::assertSame(
-            $container->get(EnglishContentAuditPage::class),
+            $container->get(ProductManagerPage::class),
             $registry->submenus()[3]
         );
         self::assertSame(
-            'wp-shop-builder-en-content-audit',
+            'wp-shop-builder-product-manager',
             $registry->submenus()[3]->slug()
         );
         self::assertSame(
-            $container->get(ProductUpdatePage::class),
+            $container->get(ProductEditorialMigrationPage::class),
             $registry->submenus()[4]
         );
         self::assertSame(
-            'wp-shop-builder-product-update',
+            'wp-shop-builder-product-editorial-migration',
             $registry->submenus()[4]->slug()
+        );
+        self::assertSame(
+            $container->get(EnglishContentAuditPage::class),
+            $registry->submenus()[5]
+        );
+        self::assertSame(
+            'wp-shop-builder-en-content-audit',
+            $registry->submenus()[5]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[6]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[6]->slug()
         );
         self::assertSame(
             $container->get(VendorProductNamingAuditPage::class),
