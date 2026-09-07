@@ -19,12 +19,14 @@ use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
+use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
@@ -286,6 +288,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $elementorProTranslatePressPreflight,
             $functionCaller(...)
         );
+        $vendorCoverAudit = new VendorCoverAuditService(
+            $functionCaller(...)
+        );
+        $vendorCoverAuditPage = new VendorCoverAuditPage(
+            $vendorCoverAudit,
+            $functionCaller(...)
+        );
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
@@ -313,6 +322,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($vendorCanonicalNamingMigrationPage);
         $registry->addSubmenu($vendorCanonicalNamingMigrationV2Page);
         $registry->addSubmenu($elementorProTranslatePressPreflightPage);
+        $registry->addSubmenu($vendorCoverAuditPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -468,6 +478,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $elementorProTranslatePressPreflightPage
         );
         $this->container->set(
+            VendorCoverAuditService::class,
+            $vendorCoverAudit
+        );
+        $this->container->set(
+            VendorCoverAuditPage::class,
+            $vendorCoverAuditPage
+        );
+        $this->container->set(
             VendorProductNamingAuditPage::class,
             $vendorNamingAuditPage
         );
@@ -503,6 +521,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $vendorNamingReviewV5Page = $this->container->get(
             VendorProductNamingReviewV5Page::class
+        );
+        $vendorCoverAuditPage = $this->container->get(
+            VendorCoverAuditPage::class
         );
         $titleVersionAuditPage = $this->container->get(
             ProductTitleVersionAuditPage::class
@@ -542,6 +563,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $vendorNamingReviewV5Page instanceof VendorProductNamingReviewV5Page) {
             throw new LogicException(
                 'VendorProductNamingReviewV5Page must be registered before boot.'
+            );
+        }
+
+        if (! $vendorCoverAuditPage instanceof VendorCoverAuditPage) {
+            throw new LogicException(
+                'VendorCoverAuditPage must be registered before boot.'
             );
         }
 
@@ -593,6 +620,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_vendor_naming_review_v5',
             [$vendorNamingReviewV5Page, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_vendor_cover_audit',
+            [$vendorCoverAuditPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',
