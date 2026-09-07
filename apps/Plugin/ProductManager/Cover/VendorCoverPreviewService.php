@@ -226,7 +226,7 @@ final class VendorCoverPreviewService
                 2
             );
             $first = is_array($sentence)
-                ? trim((string) ($sentence[0] ?? ''))
+                ? trim((string) $sentence[0])
                 : $english;
 
             return $this->shorten(
