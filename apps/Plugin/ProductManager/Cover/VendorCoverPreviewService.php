@@ -182,26 +182,81 @@ final class VendorCoverPreviewService
             '_wp_shop_en_short_description',
             true
         ));
+        $title = trim((string) ($this->call)(
+            'get_post_field',
+            'post_title',
+            $productId
+        ));
 
-        if ($english !== '') {
-            $sentence = preg_split(
-                '/(?<=[.!?])\s+/u',
-                $english,
+        return $this->purpose(
+            $title,
+            $english,
+            $productType
+        );
+    }
+
+    private function purpose(
+        string $title,
+        string $english,
+        string $productType
+    ): string {
+        $haystack = mb_strtolower(
+            trim($title . ' ' . $english),
+            'UTF-8'
+        );
+
+        $rules = [
+            '/ajax.+search|search.+woocommerce/u' => 'AJAX product search for WooCommerce',
+            '/multilingual|translation|translate/u' => 'Multilingual translation for WordPress',
+            '/seo|search engine optimization/u' => 'SEO optimization for WordPress',
+            '/woocommerce.+builder|builder.+woocommerce/u' => 'WooCommerce page builder',
+            '/page builder|website builder|visual builder/u' => 'Visual page builder for WordPress',
+            '/security|firewall|malware/u' => 'WordPress security and protection',
+            '/backup|restore/u' => 'WordPress backup and restore',
+            '/form|forms/u' => 'Form builder for WordPress',
+            '/gallery|portfolio/u' => 'Gallery and portfolio builder',
+            '/filter|faceted/u' => 'Product filtering for WooCommerce',
+            '/currency/u' => 'Currency switcher for WooCommerce',
+            '/table/u' => 'Product tables for WooCommerce',
+            '/dark mode/u' => 'Dark mode for WordPress',
+        ];
+
+        foreach ($rules as $pattern => $purpose) {
+            if (preg_match($pattern, $haystack) === 1) {
+                return $purpose;
+            }
+        }
+
+        $clean = $english;
+
+        if ($clean !== '' && $title !== '') {
+            $clean = preg_replace(
+                '/^' . preg_quote($title, '/') . '\s*(?:[-—:]+|is\s+(?:an?\s+)?)?/iu',
+                '',
+                $clean
+            ) ?? $clean;
+        }
+
+        $clean = trim($clean, " \t\n\r\0\x0B-—:;,.");
+
+        if ($clean !== '') {
+            $parts = preg_split(
+                '/(?:[.;]|\s+[—–]\s+|,\s+)/u',
+                $clean,
                 2
             );
-            $first = is_array($sentence)
-                ? trim((string) $sentence[0])
-                : $english;
+            $first = is_array($parts)
+                ? trim((string) $parts[0])
+                : $clean;
 
-            return $this->shorten(
-                $first !== '' ? $first : $english,
-                86
-            );
+            if ($first !== '') {
+                return $this->shorten($first, 58);
+            }
         }
 
         return strtolower(trim($productType)) === 'theme'
-            ? 'Premium WordPress theme for modern websites'
-            : 'Premium WordPress plugin for your website';
+            ? 'Premium WordPress theme'
+            : 'Premium WordPress plugin';
     }
 
     private function plainText(string $value): string
