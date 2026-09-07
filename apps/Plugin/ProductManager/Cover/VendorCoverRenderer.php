@@ -35,13 +35,14 @@ final class VendorCoverRenderer
         $bold = $this->firstFont(self::BOLD_FONTS);
         $regular = $this->firstFont(self::REGULAR_FONTS);
 
+        $gd = extension_loaded('gd');
+        $info = $gd ? gd_info() : [];
+
         return [
-            'gd' => is_callable('imagecreatetruecolor')
-                && is_callable('imagecolorallocate')
-                && is_callable('imagefilledrectangle'),
-            'webp' => is_callable('imagewebp'),
-            'ttf' => is_callable('imagettftext')
-                && is_callable('imagettfbbox')
+            'gd' => $gd,
+            'webp' => $gd && (bool) ($info['WebP Support'] ?? false),
+            'ttf' => $gd
+                && (bool) ($info['FreeType Support'] ?? false)
                 && $bold !== ''
                 && $regular !== '',
             'boldFont' => $bold,
@@ -109,9 +110,7 @@ final class VendorCoverRenderer
                 );
             }
         } finally {
-            if (is_callable('imagedestroy')) {
-                $this->gd('imagedestroy', $image);
-            }
+            $this->gd('imagedestroy', $image);
         }
     }
 
@@ -809,22 +808,13 @@ final class VendorCoverRenderer
         int $blue,
         int $alpha
     ): int {
-        if (is_callable('imagecolorallocatealpha')) {
-            return (int) $this->gd(
-                'imagecolorallocatealpha',
-                $image,
-                $red,
-                $green,
-                $blue,
-                max(0, min(127, $alpha))
-            );
-        }
-
-        return $this->color(
+        return (int) $this->gd(
+            'imagecolorallocatealpha',
             $image,
             $red,
             $green,
-            $blue
+            $blue,
+            max(0, min(127, $alpha))
         );
     }
 
@@ -846,13 +836,6 @@ final class VendorCoverRenderer
         string $function,
         mixed ...$arguments
     ): mixed {
-        if (! is_callable($function)) {
-            throw new RuntimeException(
-                'Required image function is unavailable: '
-                . $function
-            );
-        }
-
         return $function(...$arguments);
     }
 }
