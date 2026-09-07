@@ -27,6 +27,11 @@ use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\Cover\OpenAIVendorAiImageGenerator;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverMediaService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverPromptBuilder;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverService;
+use WPShop\App\Plugin\ProductManager\Cover\Contracts\VendorAiImageGeneratorInterface;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverPreviewService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverRenderer;
@@ -175,13 +180,46 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $editorialMigrationService,
             $functionCaller(...)
         );
+        $openAiApiKey = static function () use ($functionCaller): string {
+            if (defined('WP_SHOP_OPENAI_API_KEY')) {
+                $configured = constant('WP_SHOP_OPENAI_API_KEY');
+
+                if (
+                    is_string($configured)
+                    && trim($configured) !== ''
+                ) {
+                    return trim($configured);
+                }
+            }
+
+            return trim((string) $functionCaller(
+                'get_option',
+                'wp_shop_openai_api_key',
+                ''
+            ));
+        };
+        $vendorAiImageGenerator = new OpenAIVendorAiImageGenerator(
+            $functionCaller(...),
+            $openAiApiKey
+        );
+        $vendorAiCoverPromptBuilder = new VendorAiCoverPromptBuilder();
+        $vendorAiCoverMedia = new VendorAiCoverMediaService(
+            $functionCaller(...)
+        );
+        $vendorAiCover = new VendorAiCoverService(
+            $vendorAiImageGenerator,
+            $vendorAiCoverPromptBuilder,
+            $vendorAiCoverMedia,
+            $functionCaller(...)
+        );
         $controller = new ProductManagerController(
             $envatoClient,
             $tagSelector,
             $draftCreator,
             $translator,
             $tagParser,
-            $archiveUploader
+            $archiveUploader,
+            $vendorAiCover
         );
         $page = new ProductManagerPage($controller, $functionCaller(...));
         $versionUpdater = new ProductVersionUpdater($functionCaller(...));
@@ -410,6 +448,26 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             EnglishContentAuditPage::class,
             $englishContentAuditPage
+        );
+        $this->container->set(
+            VendorAiImageGeneratorInterface::class,
+            $vendorAiImageGenerator
+        );
+        $this->container->set(
+            OpenAIVendorAiImageGenerator::class,
+            $vendorAiImageGenerator
+        );
+        $this->container->set(
+            VendorAiCoverPromptBuilder::class,
+            $vendorAiCoverPromptBuilder
+        );
+        $this->container->set(
+            VendorAiCoverMediaService::class,
+            $vendorAiCoverMedia
+        );
+        $this->container->set(
+            VendorAiCoverService::class,
+            $vendorAiCover
         );
         $this->container->set(ProductManagerController::class, $controller);
         $this->container->set(ProductManagerPage::class, $page);
