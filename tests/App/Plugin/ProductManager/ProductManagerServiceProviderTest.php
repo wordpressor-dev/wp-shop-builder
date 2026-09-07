@@ -22,6 +22,11 @@ use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\Cover\OpenAIVendorAiImageGenerator;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverMediaService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverPromptBuilder;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverService;
+use WPShop\App\Plugin\ProductManager\Cover\Contracts\VendorAiImageGeneratorInterface;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverPreviewService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverRenderer;
@@ -176,6 +181,26 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             EnglishContentAuditPage::class,
             $container->get(EnglishContentAuditPage::class)
+        );
+        self::assertInstanceOf(
+            OpenAIVendorAiImageGenerator::class,
+            $container->get(VendorAiImageGeneratorInterface::class)
+        );
+        self::assertInstanceOf(
+            OpenAIVendorAiImageGenerator::class,
+            $container->get(OpenAIVendorAiImageGenerator::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverPromptBuilder::class,
+            $container->get(VendorAiCoverPromptBuilder::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverMediaService::class,
+            $container->get(VendorAiCoverMediaService::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverService::class,
+            $container->get(VendorAiCoverService::class)
         );
         self::assertInstanceOf(
             ProductVersionUpdater::class,
