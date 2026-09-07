@@ -16,12 +16,15 @@ use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
 use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
+use WPShop\App\Plugin\Admin\VendorCoverGeneratorPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorCoverPreviewService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorCoverRenderer;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -247,6 +250,18 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(VendorCoverAuditPage::class)
         );
         self::assertInstanceOf(
+            VendorCoverRenderer::class,
+            $container->get(VendorCoverRenderer::class)
+        );
+        self::assertInstanceOf(
+            VendorCoverPreviewService::class,
+            $container->get(VendorCoverPreviewService::class)
+        );
+        self::assertInstanceOf(
+            VendorCoverGeneratorPage::class,
+            $container->get(VendorCoverGeneratorPage::class)
+        );
+        self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
         );
@@ -377,6 +392,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-vendor-cover-audit',
             $registry->submenus()[15]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorCoverGeneratorPage::class),
+            $registry->submenus()[16]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-cover-generator',
+            $registry->submenus()[16]->slug()
         );
     }
 }
