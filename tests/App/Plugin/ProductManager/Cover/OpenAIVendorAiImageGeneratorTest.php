@@ -17,7 +17,10 @@ final class OpenAIVendorAiImageGeneratorTest extends TestCase
         $call = static function (
             string $name,
             mixed ...$arguments
-        ) use (&$requestUrl, &$requestArgs): mixed {
+        ) use (
+            &$requestUrl,
+            &$requestArgs
+        ): mixed {
             if ($name === 'wp_remote_post') {
                 $requestUrl = (string) ($arguments[0] ?? '');
                 $requestArgs = is_array($arguments[1] ?? null)
