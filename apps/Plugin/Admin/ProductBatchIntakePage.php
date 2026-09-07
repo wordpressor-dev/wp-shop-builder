@@ -1369,8 +1369,8 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                 . '">';
         } else {
             echo '<select name="intake_source_type">';
-            echo '<option value="envato" selected>Envato</option>';
-            echo '<option value="vendor">Vendor</option>';
+            echo '<option value="vendor" selected>Vendor</option>';
+            echo '<option value="envato">Envato</option>';
             echo '</select>';
             echo '<input type="text" name="intake_item_reference" placeholder="Envato URL / Item ID or Vendor URL" style="width:230px;">';
         }
