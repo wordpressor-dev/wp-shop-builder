@@ -117,7 +117,7 @@ final class VendorCoverRenderer
             $image = new $class();
             $formats = $image->queryFormats('WEBP');
 
-            return is_array($formats) && $formats !== [];
+            return $formats !== [];
         } catch (\Throwable) {
             return false;
         }
