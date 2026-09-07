@@ -60,7 +60,21 @@ final class ProductManagerPage implements SubmenuPageInterface
             $translationProductId
         );
 
-        if ($action === 'autofill') {
+        if ($action === 'save_ai_cover_settings') {
+            $this->verifyNonce('wp_shop_pm_ai_cover_settings');
+            $this->saveAiCoverSettings();
+            $logs = [
+                'VENDOR AI COVER SETTINGS = SAVED',
+                'AUTO GENERATION = '
+                    . ($this->aiCoverEnabled() ? 'ENABLED' : 'DISABLED'),
+                'OPENAI API KEY = '
+                    . ($this->openAiApiKeyConfigured()
+                        ? 'CONFIGURED'
+                        : 'NOT CONFIGURED'),
+                'MODEL = gpt-image-2',
+            ];
+            $success = true;
+        } elseif ($action === 'autofill') {
             $this->verifyNonce('wp_shop_pm_autofill');
             $postedToken = trim($this->posted('envato_token'));
 
@@ -168,6 +182,7 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '<p>Permanent admin workflow migrated from the validated Product Manager v1.4.2 prototype.</p>';
         $this->renderLogs($logs, $success);
         $this->renderAutofillForm($envatoUrl);
+        $this->renderAiCoverSettings();
         $this->renderDraftForm($fields);
         $this->renderTranslationForm(
             $translationProductId,
@@ -338,17 +353,127 @@ final class ProductManagerPage implements SubmenuPageInterface
         echo '</div>';
     }
 
+    private function renderAiCoverSettings(): void
+    {
+        $configured = $this->openAiApiKeyConfigured();
+        $constant = $this->openAiApiKeyFromConstant();
+        $enabled = $this->aiCoverEnabled();
+
+        echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">2. Vendor AI Cover</h2>';
+        echo '<p><strong>New Vendor products only.</strong> Generates one individual premium cover with GPT-Image-2 after successful Draft creation. Marketplace products are protected and skipped.</p>';
+        echo '<p><strong>Status:</strong> OPENAI API KEY = '
+            . ($configured ? 'CONFIGURED' : 'NOT CONFIGURED')
+            . ' &nbsp; | &nbsp; AUTO GENERATION = '
+            . ($enabled ? 'ENABLED' : 'DISABLED')
+            . '</p>';
+        echo '<form method="post">';
+        $this->nonceField('wp_shop_pm_ai_cover_settings');
+        $this->hiddenAction('save_ai_cover_settings');
+
+        if ($constant !== '') {
+            echo '<p><strong>API key source:</strong> <code>WP_SHOP_OPENAI_API_KEY</code>. The key itself is never displayed.</p>';
+        } else {
+            $this->input(
+                'OpenAI API Key',
+                'openai_api_key',
+                '',
+                'password',
+                $configured
+                    ? 'Key already saved — leave empty to keep it'
+                    : 'Paste OpenAI API key'
+            );
+            echo '<p class="description">The key is stored in this WordPress installation with autoload disabled. You can alternatively define <code>WP_SHOP_OPENAI_API_KEY</code> in wp-config.php.</p>';
+        }
+
+        echo '<p><label><input type="checkbox" name="ai_cover_enabled" value="1" '
+            . ($enabled ? 'checked' : '')
+            . '> Automatically generate AI cover for each newly created Vendor Draft</label></p>';
+        $this->submit('Сохранить AI Cover настройки', 'secondary');
+        echo '</form>';
+        echo '</div>';
+    }
+
+    private function saveAiCoverSettings(): void
+    {
+        ($this->call)(
+            'update_option',
+            'wp_shop_vendor_ai_cover_enabled',
+            $this->posted('ai_cover_enabled') === '1'
+                ? '1'
+                : '0',
+            false
+        );
+
+        if ($this->openAiApiKeyFromConstant() !== '') {
+            return;
+        }
+
+        $key = trim($this->posted('openai_api_key'));
+
+        if ($key === '') {
+            return;
+        }
+
+        ($this->call)(
+            'update_option',
+            'wp_shop_openai_api_key',
+            $key,
+            false
+        );
+    }
+
+    private function aiCoverEnabled(): bool
+    {
+        $value = (string) ($this->call)(
+            'get_option',
+            'wp_shop_vendor_ai_cover_enabled',
+            '1'
+        );
+
+        return ! in_array(
+            strtolower(trim($value)),
+            ['0', 'no', 'false', 'off'],
+            true
+        );
+    }
+
+    private function openAiApiKeyConfigured(): bool
+    {
+        if ($this->openAiApiKeyFromConstant() !== '') {
+            return true;
+        }
+
+        return trim((string) ($this->call)(
+            'get_option',
+            'wp_shop_openai_api_key',
+            ''
+        )) !== '';
+    }
+
+    private function openAiApiKeyFromConstant(): string
+    {
+        if (! defined('WP_SHOP_OPENAI_API_KEY')) {
+            return '';
+        }
+
+        $value = constant('WP_SHOP_OPENAI_API_KEY');
+
+        return is_string($value) ? trim($value) : '';
+    }
+
     /**
      * @param array<string, string> $fields
      */
     private function renderDraftForm(array $fields): void
     {
         echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
-        echo '<h2 style="margin-top:0;">2. Review & Create Draft</h2>';
+        echo '<h2 style="margin-top:0;">3. Review & Create Draft</h2>';
         echo '<p><strong>Safety:</strong> RU Short + Long + SureRank Meta are required. Tags must already exist in both <code>product_tag</code> and <code>pa_tags</code>. Hit/New are editorial only.</p>';
         echo '<p><strong>Version check:</strong> before creating the Draft, compare the Version field with the ThemeForest changelog. Envato machine-readable version metadata can lag behind the author changelog.</p>';
         echo '<p><strong>ZIP upload:</strong> choose the original ZIP before creating the Draft. Product Manager validates it, renames it to the canonical SKU, moves it to the correct storage folder and attaches the resulting URL to WooCommerce.</p>';
         echo '<p><strong>Preflight:</strong> checks Version → SKU, required fields, slug, SKU conflicts, Item ID and existing tags without writing a WooCommerce product or moving the selected ZIP.</p>';
+        echo '<p><strong>Vendor AI Cover:</strong> for a new Vendor Draft, when enabled and configured, one GPT-Image-2 cover is generated after the Draft is created, converted to 590×300 WebP, added to Media Library and set as Featured Image. ThemeForest / CodeCanyon / Envato are always skipped. If generation fails, the Draft remains and the original Featured Image is preserved.</p>';
         echo '<form method="post" enctype="multipart/form-data">';
         $this->nonceField('wp_shop_pm_create_draft');
         $this->hiddenAction('create_draft');
@@ -586,7 +711,7 @@ HTML;
         array $english
     ): void {
         echo '<div class="postbox" style="max-width:1100px;padding:18px 20px;">';
-        echo '<h2 style="margin-top:0;">3. Universal EN Translation</h2>';
+        echo '<h2 style="margin-top:0;">4. Universal EN Translation</h2>';
         echo '<p>Run only after the product is published. Existing finished TranslatePress EN strings are preserved.</p>';
         echo '<form method="post">';
         $this->nonceField('wp_shop_pm_translate');
