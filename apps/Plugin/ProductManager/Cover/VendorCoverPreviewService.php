@@ -70,51 +70,6 @@ final class VendorCoverPreviewService
             $eligible[$row->productId] = true;
         }
 
-        $uploads = ($this->call)('wp_upload_dir');
-
-        if (! is_array($uploads)) {
-            throw new RuntimeException(
-                'WordPress uploads directory is unavailable.'
-            );
-        }
-
-        $baseDir = rtrim(
-            trim((string) ($uploads['basedir'] ?? '')),
-            '/\\'
-        );
-        $baseUrl = rtrim(
-            trim((string) ($uploads['baseurl'] ?? '')),
-            '/'
-        );
-
-        if ($baseDir === '' || $baseUrl === '') {
-            throw new RuntimeException(
-                'WordPress uploads directory is incomplete.'
-            );
-        }
-
-        $relativeDir = 'wp-shop-builder/vendor-cover-previews';
-        $directory = $baseDir
-            . DIRECTORY_SEPARATOR
-            . str_replace(
-                '/',
-                DIRECTORY_SEPARATOR,
-                $relativeDir
-            );
-
-        if (! is_dir($directory)) {
-            $created = (bool) ($this->call)(
-                'wp_mkdir_p',
-                $directory
-            );
-
-            if (! $created && ! is_dir($directory)) {
-                throw new RuntimeException(
-                    'Unable to create Vendor cover preview directory.'
-                );
-            }
-        }
-
         $result = [];
 
         foreach ($productIds as $productId) {
@@ -146,20 +101,6 @@ final class VendorCoverPreviewService
             ));
             $subtitle = $this->subtitle($productId, $productType);
             $slug = $this->slug($title, $productId);
-            $filename = $productId
-                . '-'
-                . $slug
-                . '-preview.webp';
-            $path = $directory
-                . DIRECTORY_SEPARATOR
-                . $filename;
-
-            $this->renderer->render(
-                $path,
-                $title,
-                $subtitle,
-                $productType
-            );
 
             $result[] = [
                 'productId' => $productId,
@@ -167,15 +108,12 @@ final class VendorCoverPreviewService
                 'title' => $title,
                 'subtitle' => $subtitle,
                 'productType' => $productType,
-                'url' => $baseUrl
-                    . '/'
-                    . $relativeDir
-                    . '/'
-                    . rawurlencode($filename)
-                    . '?v='
-                    . rawurlencode((string) filemtime($path)),
-                'filename' => $filename,
-                'reason' => 'Preview only. Featured image was not changed.',
+                'url' => '',
+                'filename' => $productId
+                    . '-'
+                    . $slug
+                    . '-preview.webp',
+                'reason' => 'Browser Canvas preview only. No server image file was written.',
             ];
         }
 
