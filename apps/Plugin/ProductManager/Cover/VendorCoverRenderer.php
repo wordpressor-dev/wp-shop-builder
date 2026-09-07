@@ -28,23 +28,42 @@ final class VendorCoverRenderer
     ];
 
     /**
-     * @return array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string}
+     * @return array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * }
      */
     public function capabilities(): array
     {
         $bold = $this->firstFont(self::BOLD_FONTS);
         $regular = $this->firstFont(self::REGULAR_FONTS);
-
         $gd = extension_loaded('gd');
         $info = $gd ? gd_info() : [];
+        $freetype = $gd
+            && (bool) ($info['FreeType Support'] ?? false);
+        $imagick = class_exists('Imagick');
+        $imagickWebp = $imagick && $this->imagickHasWebp();
 
         return [
             'gd' => $gd,
-            'webp' => $gd && (bool) ($info['WebP Support'] ?? false),
-            'ttf' => $gd
-                && (bool) ($info['FreeType Support'] ?? false)
+            'webp' => $gd
+                && (bool) ($info['WebP Support'] ?? false),
+            'freetype' => $freetype,
+            'ttf' => $freetype
                 && $bold !== ''
                 && $regular !== '',
+            'imagick' => $imagick,
+            'imagickWebp' => $imagickWebp,
+            'engine' => $imagickWebp
+                ? 'IMAGICK_SVG'
+                : 'GD',
             'boldFont' => $bold,
             'regularFont' => $regular,
         ];
@@ -58,18 +77,223 @@ final class VendorCoverRenderer
     ): void {
         $capabilities = $this->capabilities();
 
+        if ($capabilities['imagickWebp']) {
+            $this->renderWithImagick(
+                $path,
+                trim($title),
+                trim($subtitle),
+                trim($productType)
+            );
+
+            return;
+        }
+
         if (! $capabilities['gd']) {
             throw new RuntimeException(
-                'GD image functions are unavailable on this server.'
+                'Neither Imagick nor GD is available for Vendor cover rendering.'
             );
         }
 
         if (! $capabilities['webp']) {
             throw new RuntimeException(
-                'GD WebP support is unavailable on this server.'
+                'No WebP-capable image engine is available on this server.'
             );
         }
 
+        $this->renderWithGd(
+            $path,
+            trim($title),
+            trim($subtitle),
+            trim($productType),
+            $capabilities
+        );
+    }
+
+    private function imagickHasWebp(): bool
+    {
+        $class = 'Imagick';
+
+        try {
+            /** @var object $image */
+            $image = new $class();
+            $formats = $image->queryFormats('WEBP');
+
+            return is_array($formats) && $formats !== [];
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function renderWithImagick(
+        string $path,
+        string $title,
+        string $subtitle,
+        string $productType
+    ): void {
+        $class = 'Imagick';
+        $title = $title !== ''
+            ? $title
+            : 'Premium WordPress Product';
+        $subtitle = $subtitle !== ''
+            ? $subtitle
+            : $this->genericSubtitle($productType);
+        $titleLines = $this->wrapByCharacters(
+            $title,
+            $this->titleCharacterLimit($title),
+            2
+        );
+        $subtitleLines = $this->wrapByCharacters(
+            $subtitle,
+            39,
+            2
+        );
+        $monogram = $this->monogram($title);
+        $pill = $this->pillText($productType);
+        $typeLabel = strtolower($productType) === 'theme'
+            ? 'WordPress theme'
+            : 'WordPress plugin';
+
+        $titleSize = $this->svgTitleSize($title);
+        $titleY = 98;
+        $titleText = '';
+
+        foreach ($titleLines as $line) {
+            $titleText .= '<tspan x="32" y="'
+                . $titleY
+                . '">'
+                . $this->xml($line)
+                . '</tspan>';
+            $titleY += $titleSize + 8;
+        }
+
+        $subtitleY = max(178, $titleY + 8);
+        $subtitleText = '';
+
+        foreach ($subtitleLines as $line) {
+            $subtitleText .= '<tspan x="32" y="'
+                . $subtitleY
+                . '">'
+                . $this->xml($line)
+                . '</tspan>';
+            $subtitleY += 22;
+        }
+
+        $svg = '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<svg xmlns="http://www.w3.org/2000/svg" width="590" height="300" viewBox="0 0 590 300">'
+            . '<defs>'
+            . '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0d1830"/><stop offset="55%" stop-color="#172452"/><stop offset="100%" stop-color="#402479"/></linearGradient>'
+            . '<linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#31d0aa"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>'
+            . '<filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity=".22"/></filter>'
+            . '</defs>'
+            . '<rect width="590" height="300" rx="0" fill="url(#bg)"/>'
+            . '<circle cx="545" cy="45" r="110" fill="#31d0aa" opacity=".16"/>'
+            . '<circle cx="410" cy="290" r="145" fill="#7c3aed" opacity=".17"/>'
+            . '<path d="M0 25 C110 52 198 12 315 36 C424 58 508 10 590 22 L590 0 L0 0 Z" fill="#ffffff" opacity=".04"/>'
+            . '<circle cx="35" cy="30" r="13" fill="#31d0aa"/>'
+            . '<text x="35" y="35" text-anchor="middle" fill="#ffffff" font-family="Arial,DejaVu Sans,sans-serif" font-size="10" font-weight="700">WP</text>'
+            . '<text x="56" y="35" fill="#ffffff" font-family="Arial,DejaVu Sans,sans-serif" font-size="13" font-weight="700" letter-spacing=".6">WP SHOP</text>'
+            . '<text fill="#ffffff" font-family="Arial,DejaVu Sans,sans-serif" font-size="'
+            . $titleSize
+            . '" font-weight="700">'
+            . $titleText
+            . '</text>'
+            . '<text fill="#d7deef" font-family="Arial,DejaVu Sans,sans-serif" font-size="15" font-weight="400">'
+            . $subtitleText
+            . '</text>'
+            . '<rect x="32" y="247" width="204" height="31" rx="15.5" fill="#31d0aa" opacity=".18" stroke="#31d0aa" stroke-opacity=".48"/>'
+            . '<text x="47" y="267" fill="#5ee6c5" font-family="Arial,DejaVu Sans,sans-serif" font-size="11" font-weight="700" letter-spacing=".4">'
+            . $this->xml($pill)
+            . '</text>'
+            . '<g filter="url(#shadow)">'
+            . '<rect x="356" y="43" width="208" height="218" rx="18" fill="#fbfcff"/>'
+            . '<rect x="374" y="62" width="58" height="58" rx="14" fill="url(#accent)"/>'
+            . '<text x="403" y="99" text-anchor="middle" fill="#ffffff" font-family="Arial,DejaVu Sans,sans-serif" font-size="23" font-weight="700">'
+            . $this->xml($monogram)
+            . '</text>'
+            . '<text x="448" y="78" fill="#7b849b" font-family="Arial,DejaVu Sans,sans-serif" font-size="10">'
+            . $this->xml($typeLabel)
+            . '</text>'
+            . '<text x="448" y="101" fill="#17223b" font-family="Arial,DejaVu Sans,sans-serif" font-size="14" font-weight="700">Premium</text>'
+            . '<line x1="374" y1="137" x2="546" y2="137" stroke="#e1e6f0"/>'
+            . $this->svgFeatureRow(374, 164, 'Clean product package')
+            . $this->svgFeatureRow(374, 195, 'Unified WP Shop cover')
+            . $this->svgFeatureRow(374, 226, 'Ready for catalog')
+            . '<rect x="374" y="241" width="172" height="10" rx="5" fill="#e7ebf4"/>'
+            . '<rect x="374" y="241" width="102" height="10" rx="5" fill="#31d0aa"/>'
+            . '</g>'
+            . '</svg>';
+
+        try {
+            /** @var object $image */
+            $image = new $class();
+            $image->setBackgroundColor('transparent');
+            $image->readImageBlob($svg);
+            $image->setImageFormat('webp');
+            $image->setImageCompressionQuality(90);
+            $image->stripImage();
+            $saved = $image->writeImage($path);
+            $image->clear();
+            $image->destroy();
+
+            if ($saved !== true) {
+                throw new RuntimeException(
+                    'Imagick could not save the Vendor cover WebP.'
+                );
+            }
+        } catch (\Throwable $exception) {
+            throw new RuntimeException(
+                'Imagick Vendor cover render failed: '
+                . $exception->getMessage(),
+                0,
+                $exception
+            );
+        }
+    }
+
+    private function svgFeatureRow(
+        int $x,
+        int $y,
+        string $label
+    ): string {
+        return '<circle cx="'
+            . ($x + 6)
+            . '" cy="'
+            . ($y - 4)
+            . '" r="6" fill="#31d0aa"/>'
+            . '<path d="M'
+            . ($x + 3)
+            . ' '
+            . ($y - 4)
+            . ' l2 2 l4 -5" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+            . '<text x="'
+            . ($x + 20)
+            . '" y="'
+            . $y
+            . '" fill="#17223b" font-family="Arial,DejaVu Sans,sans-serif" font-size="10.5">'
+            . $this->xml($label)
+            . '</text>';
+    }
+
+    /**
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $capabilities
+     */
+    private function renderWithGd(
+        string $path,
+        string $title,
+        string $subtitle,
+        string $productType,
+        array $capabilities
+    ): void {
         $image = $this->gd(
             'imagecreatetruecolor',
             self::WIDTH,
@@ -85,15 +309,15 @@ final class VendorCoverRenderer
             $this->drawBrand($image, $capabilities);
             $this->drawProductCopy(
                 $image,
-                trim($title),
-                trim($subtitle),
-                trim($productType),
+                $title,
+                $subtitle,
+                $productType,
                 $capabilities
             );
             $this->drawProductCard(
                 $image,
-                trim($title),
-                trim($productType),
+                $title,
+                $productType,
                 $capabilities
             );
 
@@ -171,7 +395,17 @@ final class VendorCoverRenderer
 
     /**
      * @param mixed $image
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function drawBrand(mixed $image, array $caps): void
     {
@@ -212,7 +446,17 @@ final class VendorCoverRenderer
 
     /**
      * @param mixed $image
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function drawProductCopy(
         mixed $image,
@@ -314,7 +558,17 @@ final class VendorCoverRenderer
 
     /**
      * @param mixed $image
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function drawProductCard(
         mixed $image,
@@ -433,8 +687,8 @@ final class VendorCoverRenderer
             );
             $this->drawSingleLine(
                 $image,
-                '✓',
-                389,
+                '+',
+                390,
                 $rowY,
                 9,
                 $this->color($image, 255, 255, 255),
@@ -472,6 +726,92 @@ final class VendorCoverRenderer
             9,
             $accent
         );
+    }
+
+    private function svgTitleSize(string $title): int
+    {
+        $length = mb_strlen($title, 'UTF-8');
+
+        if ($length <= 18) {
+            return 34;
+        }
+
+        if ($length <= 31) {
+            return 30;
+        }
+
+        if ($length <= 44) {
+            return 27;
+        }
+
+        return 24;
+    }
+
+    private function titleCharacterLimit(string $title): int
+    {
+        return mb_strlen($title, 'UTF-8') <= 30
+            ? 22
+            : 28;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function wrapByCharacters(
+        string $text,
+        int $limit,
+        int $maxLines
+    ): array {
+        $words = preg_split('/\s+/u', trim($text)) ?: [];
+        $lines = [];
+        $line = '';
+        $consumed = 0;
+
+        foreach ($words as $word) {
+            $candidate = $line === ''
+                ? (string) $word
+                : $line . ' ' . $word;
+
+            if (
+                $line !== ''
+                && mb_strlen($candidate, 'UTF-8') > $limit
+            ) {
+                $lines[] = $line;
+                $consumed += count(
+                    preg_split('/\s+/u', $line) ?: []
+                );
+                $line = (string) $word;
+
+                if (count($lines) >= $maxLines - 1) {
+                    break;
+                }
+
+                continue;
+            }
+
+            $line = $candidate;
+        }
+
+        if ($line !== '' && count($lines) < $maxLines) {
+            $lines[] = $line;
+            $consumed += count(
+                preg_split('/\s+/u', $line) ?: []
+            );
+        }
+
+        if ($consumed < count($words) && $lines !== []) {
+            $last = count($lines) - 1;
+            $lines[$last] = rtrim(
+                mb_substr(
+                    $lines[$last],
+                    0,
+                    max(1, $limit - 1),
+                    'UTF-8'
+                )
+            ) . '…';
+        }
+
+        return $lines;
     }
 
     private function titleSize(string $title): int
@@ -537,7 +877,17 @@ final class VendorCoverRenderer
     }
 
     /**
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      * @return list<string>
      */
     private function wrapText(
@@ -608,7 +958,17 @@ final class VendorCoverRenderer
     }
 
     /**
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function ellipsize(
         string $text,
@@ -642,7 +1002,17 @@ final class VendorCoverRenderer
 
     /**
      * @param mixed $image
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function drawSingleLine(
         mixed $image,
@@ -675,8 +1045,8 @@ final class VendorCoverRenderer
         }
 
         $fallback = str_replace(
-            ['–', '—', '…', '✓'],
-            ['-', '-', '...', '+'],
+            ['–', '—', '…'],
+            ['-', '-', '...'],
             $text
         );
         $this->gd(
@@ -691,7 +1061,17 @@ final class VendorCoverRenderer
     }
 
     /**
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function measureText(
         string $text,
@@ -830,6 +1210,15 @@ final class VendorCoverRenderer
         }
 
         return '';
+    }
+
+    private function xml(string $value): string
+    {
+        return htmlspecialchars(
+            $value,
+            ENT_QUOTES | ENT_XML1,
+            'UTF-8'
+        );
     }
 
     /**
