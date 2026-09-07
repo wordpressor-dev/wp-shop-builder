@@ -15,11 +15,13 @@ use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
+use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftValidator;
@@ -237,6 +239,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(ElementorProTranslatePressPreflightPage::class)
         );
         self::assertInstanceOf(
+            VendorCoverAuditService::class,
+            $container->get(VendorCoverAuditService::class)
+        );
+        self::assertInstanceOf(
+            VendorCoverAuditPage::class,
+            $container->get(VendorCoverAuditPage::class)
+        );
+        self::assertInstanceOf(
             ProductTitleVersionAuditService::class,
             $container->get(ProductTitleVersionAuditService::class)
         );
@@ -359,6 +369,14 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertSame(
             'wp-shop-builder-elementor-pro-trp-preflight',
             $registry->submenus()[14]->slug()
+        );
+        self::assertSame(
+            $container->get(VendorCoverAuditPage::class),
+            $registry->submenus()[15]
+        );
+        self::assertSame(
+            'wp-shop-builder-vendor-cover-audit',
+            $registry->submenus()[15]->slug()
         );
     }
 }
