@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\CatalogProductType;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverService;
 use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDownloadUrl;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
@@ -32,7 +33,8 @@ final class ProductManagerController
         private readonly ?ProductDraftCreator $draftCreator = null,
         private readonly ?TranslatePressProductTranslator $translator = null,
         private readonly ?ExistingCatalogTagParser $tagParser = null,
-        private readonly ?ProductArchiveUploader $archiveUploader = null
+        private readonly ?ProductArchiveUploader $archiveUploader = null,
+        private readonly ?VendorAiCoverService $vendorAiCover = null
     ) {
     }
 
@@ -487,6 +489,19 @@ final class ProductManagerController
                 : $this->archiveUploader->rollback($archiveResult);
         }
 
+        $coverLogs = [];
+
+        if (
+            $result->success
+            && $result->productId !== null
+            && $this->vendorAiCover !== null
+        ) {
+            $coverLogs = $this->vendorAiCover->generateForNewProduct(
+                $result->productId,
+                $preparedData
+            );
+        }
+
         return new ProductDraftResult(
             $result->success,
             $result->productId,
@@ -494,7 +509,8 @@ final class ProductManagerController
                 $identityLogs,
                 $archiveLogs,
                 $result->logs,
-                $archiveFinishLogs
+                $archiveFinishLogs,
+                $coverLogs
             )
         );
     }
