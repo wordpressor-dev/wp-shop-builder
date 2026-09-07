@@ -832,6 +832,9 @@ final class VendorCoverRenderer
         return '';
     }
 
+    /**
+     * @param callable-string $function
+     */
     private function gd(
         string $function,
         mixed ...$arguments
