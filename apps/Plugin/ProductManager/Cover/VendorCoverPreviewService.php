@@ -29,7 +29,17 @@ final class VendorCoverPreviewService
     }
 
     /**
-     * @return array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string}
+     * @return array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * }
      */
     public function capabilities(): array
     {
