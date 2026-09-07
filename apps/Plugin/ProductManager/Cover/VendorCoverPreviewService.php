@@ -101,6 +101,21 @@ final class VendorCoverPreviewService
             ));
             $subtitle = $this->subtitle($productId, $productType);
             $slug = $this->slug($title, $productId);
+            $featuredImageId = max(
+                0,
+                (int) ($this->call)('get_post_thumbnail_id', $productId)
+            );
+            $currentImageUrl = '';
+
+            if ($featuredImageId > 0) {
+                $rawImageUrl = ($this->call)(
+                    'wp_get_attachment_url',
+                    $featuredImageId
+                );
+                $currentImageUrl = is_string($rawImageUrl)
+                    ? trim($rawImageUrl)
+                    : '';
+            }
 
             $result[] = [
                 'productId' => $productId,
@@ -108,6 +123,7 @@ final class VendorCoverPreviewService
                 'title' => $title,
                 'subtitle' => $subtitle,
                 'productType' => $productType,
+                'currentImageUrl' => $currentImageUrl,
                 'url' => '',
                 'filename' => $productId
                     . '-'
