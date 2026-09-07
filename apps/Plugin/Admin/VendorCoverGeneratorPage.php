@@ -157,6 +157,8 @@ final class VendorCoverGeneratorPage implements SubmenuPageInterface
                     . $this->escapeAttr((string) ($row['subtitle'] ?? ''))
                     . '" data-product-type="'
                     . $this->escapeAttr((string) ($row['productType'] ?? ''))
+                    . '" data-image-url="'
+                    . $this->escapeAttr((string) ($row['currentImageUrl'] ?? ''))
                     . '" style="display:block;max-width:100%;height:auto;border-radius:6px;"></canvas>';
                 echo '<p><strong>Subtitle:</strong> '
                     . $this->escape((string) ($row['subtitle'] ?? ''))
@@ -414,41 +416,88 @@ final class VendorCoverGeneratorPage implements SubmenuPageInterface
         ctx.shadowColor = "rgba(0,0,0,.24)";
         ctx.shadowBlur = 18;
         ctx.shadowOffsetY = 8;
-        roundedRect(ctx, 356, 43, 208, 218, 18, "#fbfcff");
+        roundedRect(ctx, 350, 43, 216, 218, 18, "#fbfcff");
         ctx.restore();
 
-        var accent = ctx.createLinearGradient(374, 62, 432, 120);
-        accent.addColorStop(0, "#31d0aa");
-        accent.addColorStop(1, "#7c3aed");
-        roundedRect(ctx, 374, 62, 58, 58, 14, accent);
+        // Product-specific artwork area. The current Vendor featured image is
+        // used only as visual source for this preview; nothing is overwritten.
+        roundedRect(ctx, 360, 53, 196, 132, 14, "#eef2f8");
 
-        ctx.fillStyle = "#ffffff";
-        ctx.textAlign = "center";
-        ctx.font = "700 23px Segoe UI, Arial, Helvetica, sans-serif";
-        ctx.fillText(monogram(title), 403, 99);
-
-        ctx.textAlign = "left";
         ctx.fillStyle = "#7b849b";
         ctx.font = "400 10px Segoe UI, Arial, Helvetica, sans-serif";
-        ctx.fillText(typeLabel, 448, 78);
+        ctx.fillText(typeLabel, 371, 207);
 
         ctx.fillStyle = "#17223b";
         ctx.font = "700 14px Segoe UI, Arial, Helvetica, sans-serif";
-        ctx.fillText("Premium", 448, 101);
+        ctx.fillText("Premium", 371, 229);
 
-        ctx.strokeStyle = "#e1e6f0";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(374, 137);
-        ctx.lineTo(546, 137);
-        ctx.stroke();
+        ctx.fillStyle = "#31d0aa";
+        roundedRect(ctx, 486, 204, 56, 25, 12.5, "#e7fbf6");
+        ctx.fillStyle = "#168f73";
+        ctx.font = "700 9.5px Segoe UI, Arial, Helvetica, sans-serif";
+        ctx.fillText("WP SHOP", 497, 221);
 
-        featureRow(ctx, 374, 164, "Clean product package");
-        featureRow(ctx, 374, 195, "Unified WP Shop cover");
-        featureRow(ctx, 374, 226, "Ready for catalog");
+        var imageUrl = canvas.dataset.imageUrl || "";
 
-        roundedRect(ctx, 374, 241, 172, 10, 5, "#e7ebf4");
-        roundedRect(ctx, 374, 241, 102, 10, 5, "#31d0aa");
+        if (imageUrl) {
+            var image = new Image();
+
+            image.onload = function () {
+                var boxX = 360;
+                var boxY = 53;
+                var boxW = 196;
+                var boxH = 132;
+                var scale = Math.max(
+                    boxW / image.naturalWidth,
+                    boxH / image.naturalHeight
+                );
+                var drawW = image.naturalWidth * scale;
+                var drawH = image.naturalHeight * scale;
+                var drawX = boxX + (boxW - drawW) / 2;
+                var drawY = boxY + (boxH - drawH) / 2;
+
+                ctx.save();
+                roundedRect(ctx, boxX, boxY, boxW, boxH, 14, null);
+                ctx.clip();
+                ctx.drawImage(image, drawX, drawY, drawW, drawH);
+                ctx.restore();
+
+                // A subtle frame keeps arbitrary legacy artwork visually tied
+                // to the unified cover system.
+                ctx.strokeStyle = "rgba(255,255,255,.8)";
+                ctx.lineWidth = 1;
+                roundedRect(
+                    ctx,
+                    boxX,
+                    boxY,
+                    boxW,
+                    boxH,
+                    14,
+                    null,
+                    "rgba(255,255,255,.75)"
+                );
+            };
+
+            image.onerror = function () {
+                ctx.fillStyle = "#7c3aed";
+                roundedRect(ctx, 381, 80, 58, 58, 14, "#7c3aed");
+                ctx.fillStyle = "#ffffff";
+                ctx.textAlign = "center";
+                ctx.font = "700 22px Segoe UI, Arial, Helvetica, sans-serif";
+                ctx.fillText(monogram(title), 410, 117);
+                ctx.textAlign = "left";
+            };
+
+            image.src = imageUrl;
+        } else {
+            ctx.fillStyle = "#7c3aed";
+            roundedRect(ctx, 381, 80, 58, 58, 14, "#7c3aed");
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.font = "700 22px Segoe UI, Arial, Helvetica, sans-serif";
+            ctx.fillText(monogram(title), 410, 117);
+            ctx.textAlign = "left";
+        }
     }
 
     var test = document.createElement("canvas");
