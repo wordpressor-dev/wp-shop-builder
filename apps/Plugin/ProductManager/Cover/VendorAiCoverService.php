@@ -116,13 +116,16 @@ final class VendorAiCoverService
             );
 
             return [
-                'VENDOR AI COVER = READY',
+                'VENDOR AI COVER = CANDIDATE',
                 'VENDOR AI COVER MODEL = '
                     . OpenAIVendorAiImageGenerator::MODEL,
                 'VENDOR AI COVER PURPOSE = ' . $purpose,
                 'VENDOR AI COVER SIZE = 590x300 WEBP',
-                'VENDOR AI COVER ATTACHMENT ID = '
+                'VENDOR AI COVER WATERMARK = wp-shop.org',
+                'VENDOR AI COVER CANDIDATE ATTACHMENT ID = '
                     . $attachmentId,
+                'FEATURED IMAGE = UNCHANGED',
+                'ACTION: open the Draft and approve or discard the AI Cover candidate.',
             ];
         } catch (Throwable $exception) {
             ($this->call)(
