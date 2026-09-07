@@ -282,20 +282,22 @@ final class VendorAiCoverMediaService
             $height = imagefontheight($font);
             $x = max(8, self::WIDTH - $width - 12);
             $y = max(8, self::HEIGHT - $height - 10);
-            $shadow = imagecolorallocatealpha(
+            $shadowRaw = imagecolorallocatealpha(
                 $image,
                 0,
                 0,
                 0,
                 58
             );
-            $white = imagecolorallocatealpha(
+            $whiteRaw = imagecolorallocatealpha(
                 $image,
                 255,
                 255,
                 255,
                 26
             );
+            $shadow = $shadowRaw === false ? 0 : $shadowRaw;
+            $white = $whiteRaw === false ? 0 : $whiteRaw;
 
             imagestring(
                 $image,
