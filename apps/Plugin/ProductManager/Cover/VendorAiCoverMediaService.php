@@ -201,19 +201,9 @@ final class VendorAiCoverMediaService
                 trim($title)
             );
 
-            $thumbnailSet = (bool) ($this->call)(
-                'set_post_thumbnail',
-                $productId,
-                $attachmentId
-            );
+            $this->applyWatermark($savedPath);
 
-            if (! $thumbnailSet) {
-                throw new RuntimeException(
-                    'WordPress could not set the generated AI cover as Featured Image.'
-                );
-            }
-
-            $this->writeReadyMeta(
+            $this->writeCandidateMeta(
                 $productId,
                 $previousAttachmentId,
                 $attachmentId,
@@ -228,14 +218,6 @@ final class VendorAiCoverMediaService
                 );
             }
 
-            if ($previousAttachmentId > 0) {
-                ($this->call)(
-                    'set_post_thumbnail',
-                    $productId,
-                    $previousAttachmentId
-                );
-            }
-
             throw $exception;
         } finally {
             @unlink($sourcePath);
@@ -244,14 +226,14 @@ final class VendorAiCoverMediaService
         return $attachmentId;
     }
 
-    private function writeReadyMeta(
+    private function writeCandidateMeta(
         int $productId,
         int $previousAttachmentId,
         int $attachmentId,
         string $inputHash
     ): void {
         $values = [
-            '_wp_shop_vendor_cover_generated' => '1',
+            '_wp_shop_vendor_cover_generated' => '0',
             '_wp_shop_vendor_cover_locked' => '0',
             '_wp_shop_vendor_cover_source' => 'vendor_ai_cover_v1',
             '_wp_shop_vendor_cover_prompt_version' => VendorAiCoverPromptBuilder::VERSION,
@@ -260,8 +242,9 @@ final class VendorAiCoverMediaService
                 'mysql'
             ),
             '_wp_shop_vendor_cover_previous_attachment_id' => (string) $previousAttachmentId,
-            '_wp_shop_vendor_cover_current_attachment_id' => (string) $attachmentId,
-            '_wp_shop_vendor_cover_status' => 'ready',
+            '_wp_shop_vendor_cover_candidate_attachment_id' => (string) $attachmentId,
+            '_wp_shop_vendor_cover_current_attachment_id' => '',
+            '_wp_shop_vendor_cover_status' => 'candidate',
             '_wp_shop_vendor_cover_error' => '',
             '_wp_shop_vendor_cover_input_hash' => $inputHash,
         ];
@@ -273,6 +256,66 @@ final class VendorAiCoverMediaService
                 $key,
                 $value
             );
+        }
+    }
+
+    private function applyWatermark(string $path): void
+    {
+        if (
+            ! function_exists('imagecreatefromwebp')
+            || ! function_exists('imagestring')
+            || ! function_exists('imagewebp')
+        ) {
+            return;
+        }
+
+        $image = imagecreatefromwebp($path);
+
+        if ($image === false) {
+            return;
+        }
+
+        try {
+            $label = 'wp-shop.org';
+            $font = 4;
+            $width = imagefontwidth($font) * strlen($label);
+            $height = imagefontheight($font);
+            $x = max(8, self::WIDTH - $width - 12);
+            $y = max(8, self::HEIGHT - $height - 10);
+            $shadow = imagecolorallocatealpha(
+                $image,
+                0,
+                0,
+                0,
+                58
+            );
+            $white = imagecolorallocatealpha(
+                $image,
+                255,
+                255,
+                255,
+                26
+            );
+
+            imagestring(
+                $image,
+                $font,
+                $x + 1,
+                $y + 1,
+                $label,
+                $shadow
+            );
+            imagestring(
+                $image,
+                $font,
+                $x,
+                $y,
+                $label,
+                $white
+            );
+            imagewebp($image, $path, 90);
+        } finally {
+            imagedestroy($image);
         }
     }
 
