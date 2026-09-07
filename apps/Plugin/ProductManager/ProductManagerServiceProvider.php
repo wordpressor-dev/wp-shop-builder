@@ -20,6 +20,7 @@ use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
 use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
+use WPShop\App\Plugin\Admin\VendorCoverGeneratorPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
@@ -27,6 +28,8 @@ use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorCoverPreviewService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorCoverRenderer;
 use WPShop\App\Plugin\ProductManager\Draft\Contracts\ProductDraftGatewayInterface;
 use WPShop\App\Plugin\ProductManager\Draft\ProductArchiveUploader;
 use WPShop\App\Plugin\ProductManager\Draft\ProductDraftCreator;
@@ -295,6 +298,16 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $vendorCoverAudit,
             $functionCaller(...)
         );
+        $vendorCoverRenderer = new VendorCoverRenderer();
+        $vendorCoverPreview = new VendorCoverPreviewService(
+            $vendorCoverAudit,
+            $vendorCoverRenderer,
+            $functionCaller(...)
+        );
+        $vendorCoverGeneratorPage = new VendorCoverGeneratorPage(
+            $vendorCoverPreview,
+            $functionCaller(...)
+        );
         $titleVersionAudit = new ProductTitleVersionAuditService(
             $functionCaller(...)
         );
@@ -323,6 +336,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($vendorCanonicalNamingMigrationV2Page);
         $registry->addSubmenu($elementorProTranslatePressPreflightPage);
         $registry->addSubmenu($vendorCoverAuditPage);
+        $registry->addSubmenu($vendorCoverGeneratorPage);
 
         $this->container->set(EnvatoItemMapper::class, $mapper);
         $this->container->set(WordPressEnvatoTransport::class, $transport);
@@ -484,6 +498,18 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $this->container->set(
             VendorCoverAuditPage::class,
             $vendorCoverAuditPage
+        );
+        $this->container->set(
+            VendorCoverRenderer::class,
+            $vendorCoverRenderer
+        );
+        $this->container->set(
+            VendorCoverPreviewService::class,
+            $vendorCoverPreview
+        );
+        $this->container->set(
+            VendorCoverGeneratorPage::class,
+            $vendorCoverGeneratorPage
         );
         $this->container->set(
             VendorProductNamingAuditPage::class,
