@@ -9,6 +9,7 @@ use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
 use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
+use WPShop\App\Plugin\Admin\ProductManagerMenuOptimizer;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
@@ -223,6 +224,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $controller
         );
         $page = new ProductManagerPage($controller, $functionCaller(...));
+        $menuOptimizer = new ProductManagerMenuOptimizer(
+            $functionCaller(...)
+        );
         $versionUpdater = new ProductVersionUpdater($functionCaller(...));
         $archiveUpdateCoordinator = new ProductArchiveUpdateCoordinator(
             $versionUpdater,
@@ -359,14 +363,17 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $functionCaller(...)
         );
 
-        $registry->addSubmenu($page);
+        // Daily workflow first. Legacy/diagnostic pages stay registered
+        // for direct access but are hidden from the WordPress sidebar.
         $registry->addSubmenu($batchIntakePage);
+        $registry->addSubmenu($updateQueuePage);
+        $registry->addSubmenu($updateFullScannerPage);
+        $registry->addSubmenu($page);
         $registry->addSubmenu($editorialMigrationPage);
         $registry->addSubmenu($englishContentAuditPage);
+
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
-        $registry->addSubmenu($updateFullScannerPage);
-        $registry->addSubmenu($updateQueuePage);
         $registry->addSubmenu($vendorNamingAuditPage);
         $registry->addSubmenu($titleVersionAuditPage);
         $registry->addSubmenu($vendorNamingReviewPage);
@@ -472,6 +479,10 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $this->container->set(ProductManagerController::class, $controller);
         $this->container->set(ProductManagerPage::class, $page);
+        $this->container->set(
+            ProductManagerMenuOptimizer::class,
+            $menuOptimizer
+        );
         $this->container->set(ProductVersionUpdater::class, $versionUpdater);
         $this->container->set(
             ProductArchiveUpdateCoordinator::class,
@@ -620,6 +631,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $preparedEnglishContent = $this->container->get(
             PreparedEnglishProductContent::class
         );
+        $menuOptimizer = $this->container->get(
+            ProductManagerMenuOptimizer::class
+        );
 
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
@@ -681,6 +695,18 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             );
         }
 
+        if (! $menuOptimizer instanceof ProductManagerMenuOptimizer) {
+            throw new LogicException(
+                'ProductManagerMenuOptimizer must be registered before boot.'
+            );
+        }
+
+        $functionCaller(
+            'add_action',
+            'admin_menu',
+            [$menuOptimizer, 'optimize'],
+            999
+        );
         $functionCaller(
             'add_action',
             'admin_post_wp_shop_pm_export_update_report',
