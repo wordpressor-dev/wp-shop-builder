@@ -16,6 +16,7 @@ use WPShop\App\Plugin\Admin\ProductUpdatePage;
 use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorAiCoverCandidateBox;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
 use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
@@ -204,6 +205,10 @@ final class ProductManagerServiceProviderTest extends TestCase
         self::assertInstanceOf(
             VendorAiCoverService::class,
             $container->get(VendorAiCoverService::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverCandidateBox::class,
+            $container->get(VendorAiCoverCandidateBox::class)
         );
         self::assertInstanceOf(
             ProductVersionUpdater::class,
