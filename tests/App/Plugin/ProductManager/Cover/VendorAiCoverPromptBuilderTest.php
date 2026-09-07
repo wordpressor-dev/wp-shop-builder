@@ -53,6 +53,10 @@ final class VendorAiCoverPromptBuilderTest extends TestCase
             'render only the exact title and exact purpose',
             $prompt
         );
+        self::assertStringContainsString(
+            'final exact wp-shop.org watermark is added after generation by the plugin',
+            $prompt
+        );
         self::assertSame(
             'Visual page builder for WordPress',
             $builder->purposeFor($data)
