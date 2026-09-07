@@ -109,7 +109,9 @@ final class VendorAiCoverMediaService
                 );
             }
 
-            $resize = $editor->resize(
+            $resize = $this->objectCall(
+                $editor,
+                'resize',
                 self::WIDTH,
                 self::HEIGHT,
                 true
@@ -122,7 +124,9 @@ final class VendorAiCoverMediaService
                 );
             }
 
-            $saved = $editor->save(
+            $saved = $this->objectCall(
+                $editor,
+                'save',
                 $finalPath,
                 'image/webp'
             );
@@ -234,9 +238,7 @@ final class VendorAiCoverMediaService
 
             throw $exception;
         } finally {
-            if (is_file($sourcePath)) {
-                @unlink($sourcePath);
-            }
+            @unlink($sourcePath);
         }
 
         return $attachmentId;
@@ -276,13 +278,6 @@ final class VendorAiCoverMediaService
 
     private function ensureImageFunctions(): void
     {
-        if (
-            is_callable('wp_get_image_editor')
-            && is_callable('wp_generate_attachment_metadata')
-        ) {
-            return;
-        }
-
         if (! defined('ABSPATH')) {
             return;
         }
@@ -290,6 +285,21 @@ final class VendorAiCoverMediaService
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
+    }
+
+    private function objectCall(
+        object $object,
+        string $method,
+        mixed ...$arguments
+    ): mixed {
+        if (! method_exists($object, $method)) {
+            throw new RuntimeException(
+                'WordPress image editor method is unavailable: '
+                . $method
+            );
+        }
+
+        return $object->{$method}(...$arguments);
     }
 
     private function errorMessage(mixed $error): string
