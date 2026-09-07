@@ -427,10 +427,8 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
         echo '<h2 style="margin-top:0;">Create ALL NEW Products as Drafts</h2>';
         echo '<p><strong>NEW PRODUCT = '
             . $this->escape((string) count($newRows))
-            . '</strong>. Для каждого нового ZIP выбери источник. Envato требует URL / Item ID. Для Vendor можно указать официальный product URL или оставить пустым, если он есть в ZIP header. Создаются только WooCommerce Drafts; публикация вручную после проверки.</p>';
-        echo '<p>Обработка идёт автоматически партиями по '
-            . $this->escape((string) ProductBatchCreateAllService::MAX_BATCH)
-            . ' товаров за HTTP-запрос. Ошибка отдельного ZIP переносит его в <code>_REVIEW</code> и не блокирует остальные Drafts.</p>';
+            . '</strong>. Если Item ID в ZIP не найден, источник по умолчанию = <strong>Vendor</strong>. Обычно достаточно оставить Vendor и пустой URL, если Plugin URI / Theme URI есть в ZIP header. Envato выбирай только для настоящего ThemeForest/CodeCanyon товара и укажи URL / Item ID. Создаются только WooCommerce Drafts; публикация вручную после проверки.</p>';
+        echo '<p>Обработка идёт автоматически. При включённом Vendor AI Cover новые товары создаются по одному за HTTP-запрос, чтобы каждая AI-обложка генерировалась отдельно и безопасно. При выключенной AI-генерации используется обычный batch limit. Ошибка отдельного ZIP переносит его в <code>_REVIEW</code> и не блокирует остальные Drafts.</p>';
         echo '<form method="post">';
         $this->nonceField();
         echo '<input type="hidden" name="wp_shop_pm_batch_intake_action" value="create_all_new">';
@@ -465,8 +463,8 @@ final class ProductBatchIntakePage implements SubmenuPageInterface
                     . '</code></td>';
             } else {
                 echo '<td><select name="intake_new_source_type[]">';
-                echo '<option value="envato" selected>Envato</option>';
-                echo '<option value="vendor">Vendor</option>';
+                echo '<option value="vendor" selected>Vendor</option>';
+                echo '<option value="envato">Envato</option>';
                 echo '</select></td>';
                 echo '<td><input type="text" name="intake_new_reference[]" placeholder="Envato URL / Item ID or Vendor product URL" style="width:100%;max-width:520px;"></td>';
             }
