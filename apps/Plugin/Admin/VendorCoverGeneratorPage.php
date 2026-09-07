@@ -97,21 +97,42 @@ final class VendorCoverGeneratorPage implements SubmenuPageInterface
     }
 
     /**
-     * @param array{gd:bool,webp:bool,ttf:bool,boldFont:string,regularFont:string} $caps
+     * @param array{
+     *   gd:bool,
+     *   webp:bool,
+     *   freetype:bool,
+     *   ttf:bool,
+     *   imagick:bool,
+     *   imagickWebp:bool,
+     *   engine:string,
+     *   boldFont:string,
+     *   regularFont:string
+     * } $caps
      */
     private function renderCapabilities(array $caps): void
     {
         echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
-        echo '<p><strong>RENDER ENGINE</strong> &nbsp; GD = '
+        echo '<p><strong>RENDER ENGINE = '
+            . $this->escape($caps['engine'])
+            . '</strong> &nbsp; IMAGICK = '
+            . $this->escape($this->yesNo($caps['imagick']))
+            . ' &nbsp; IMAGICK WEBP = '
+            . $this->escape($this->yesNo($caps['imagickWebp']))
+            . ' &nbsp; GD = '
             . $this->escape($this->yesNo($caps['gd']))
-            . ' &nbsp; WEBP = '
+            . ' &nbsp; GD WEBP = '
             . $this->escape($this->yesNo($caps['webp']))
-            . ' &nbsp; TTF = '
+            . ' &nbsp; FREETYPE = '
+            . $this->escape($this->yesNo($caps['freetype']))
+            . ' &nbsp; LOCAL TTF = '
             . $this->escape($this->yesNo($caps['ttf']))
             . '</p>';
 
-        if (! $caps['ttf']) {
-            echo '<p><strong>Warning:</strong> no supported server TrueType font was found. Preview can still render with a basic fallback font, but typography quality will be lower.</p>';
+        if (
+            $caps['engine'] === 'GD'
+            && ! $caps['ttf']
+        ) {
+            echo '<p><strong>Warning:</strong> server is using the basic GD fallback without a readable TrueType font. Do not approve mass migration from this renderer.</p>';
         }
 
         echo '</div>';
