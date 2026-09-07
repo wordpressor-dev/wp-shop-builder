@@ -8,7 +8,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 
 final class VendorAiCoverPromptBuilder
 {
-    public const VERSION = 'vendor-ai-cover-v1';
+    public const VERSION = 'vendor-ai-cover-v1.1';
 
     public function build(ProductDraftData $data): string
     {
@@ -32,7 +32,7 @@ final class VendorAiCoverPromptBuilder
                 'Use a polished modern SaaS / WordPress product-marketing aesthetic: clean vector + UI mockup composition, crisp typography, rich but controlled gradients, premium depth, no photo-realistic people.',
                 'Layout: product title large on the left; one short functional purpose directly below; one strong product-specific illustration or believable UI/product visual on the right. The right side should visually communicate what the product does.',
                 'Use a product-appropriate accent palette while keeping the overall family consistent across WP Shop Vendor products.',
-                'READABLE TEXT RULE: render only the exact title and exact purpose supplied below. Do not add feature lists, badges, pricing, versions, URLs, watermarks, tiny UI copy, or any other readable text.',
+                'READABLE TEXT RULE: render only the exact title and exact purpose supplied below. Do not add feature lists, badges, pricing, versions, URLs, tiny UI copy, or any other readable text. The final exact wp-shop.org watermark is added after generation by the plugin, so do not render any watermark yourself.',
                 'If you are uncertain about an official logo, do not invent a fake trademark. Prefer abstract product-relevant iconography or a clean interface mockup instead.',
                 'Do not include the words "WP Shop", "Premium Plugin", "Premium Theme", or "WordPress plugin/theme" in the image unless they are part of the exact product title.',
                 'Exact title: ' . $title,
