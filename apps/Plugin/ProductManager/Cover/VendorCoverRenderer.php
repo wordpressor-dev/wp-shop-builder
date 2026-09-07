@@ -114,7 +114,6 @@ final class VendorCoverRenderer
         $class = 'Imagick';
 
         try {
-            /** @var object $image */
             $image = new $class();
             $formats = $image->queryFormats('WEBP');
 
@@ -224,7 +223,6 @@ final class VendorCoverRenderer
             . '</svg>';
 
         try {
-            /** @var object $image */
             $image = new $class();
             $image->setBackgroundColor('transparent');
             $image->readImageBlob($svg);
