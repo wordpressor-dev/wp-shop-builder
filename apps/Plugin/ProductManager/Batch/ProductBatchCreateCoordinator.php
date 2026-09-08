@@ -332,7 +332,11 @@ final class ProductBatchCreateCoordinator
                 );
             }
 
-            if (! (bool) ($this->call)('copy', $sourcePath, $targetPath)) {
+            if (! $this->copyInstallableArchive(
+                $sourcePath,
+                $targetPath,
+                $identity->packageEntry
+            )) {
                 return $this->failure('BATCH CREATE = ZIP COPY FAILED');
             }
 
@@ -379,6 +383,10 @@ final class ProductBatchCreateCoordinator
                             . ($version !== '' ? $version : '[versionless]'),
                         'ENVATO UPDATE DATE = ' . $sourceUpdateDate,
                         'ARCHIVE CANONICAL NAME = ' . $skuFilename,
+                        'INSTALLABLE ZIP SOURCE = '
+                            . ($identity->packageEntry !== ''
+                                ? 'NESTED: ' . $identity->packageEntry
+                                : 'OUTER ZIP'),
                         'ARCHIVE STORAGE = ' . $storagePath,
                         'ARCHIVE ITEM DIRECTORY = ' . $itemId,
                         'DOWNLOAD URL = ' . $downloadUrl,
@@ -516,8 +524,11 @@ final class ProductBatchCreateCoordinator
         }
 
         try {
+            $installableFilename = $identity->packageEntry !== ''
+                ? basename($identity->packageEntry)
+                : $filename;
             $skuFilename = ProductVendorSkuFilename::build(
-                $filename,
+                $installableFilename,
                 $baseTitle,
                 $version
             );
@@ -637,7 +648,11 @@ final class ProductBatchCreateCoordinator
             );
         }
 
-        if (! (bool) ($this->call)('copy', $sourcePath, $targetPath)) {
+        if (! $this->copyInstallableArchive(
+            $sourcePath,
+            $targetPath,
+            $identity->packageEntry
+        )) {
             return $this->failure(
                 'BATCH CREATE VENDOR = ZIP COPY FAILED'
             );
@@ -686,6 +701,10 @@ final class ProductBatchCreateCoordinator
                     'SOURCE UPDATE DATE = IMPORT DATE: '
                         . $sourceUpdateDate,
                     'ARCHIVE CANONICAL NAME = ' . $skuFilename,
+                    'INSTALLABLE ZIP SOURCE = '
+                        . ($identity->packageEntry !== ''
+                            ? 'NESTED: ' . $identity->packageEntry
+                            : 'OUTER ZIP'),
                     'ARCHIVE STORAGE = ' . $storagePath,
                     'DOWNLOAD URL = ' . $downloadUrl,
                     'EDITORIAL CONTENT = AUTO-DRAFT; REVIEW REQUIRED',
@@ -779,6 +798,87 @@ final class ProductBatchCreateCoordinator
             : 'https://themeforest.net/item/product/';
 
         return $host . $itemId;
+    }
+
+    private function copyInstallableArchive(
+        string $outerPath,
+        string $targetPath,
+        string $packageEntry
+    ): bool {
+        $packageEntry = trim($packageEntry);
+
+        if ($packageEntry === '') {
+            return (bool) ($this->call)(
+                'copy',
+                $outerPath,
+                $targetPath
+            );
+        }
+
+        if (
+            ! class_exists(\ZipArchive::class)
+            || ! is_file($outerPath)
+        ) {
+            return false;
+        }
+
+        $zip = new \ZipArchive();
+        $opened = false;
+        $temp = tempnam(
+            sys_get_temp_dir(),
+            'wp-shop-installable-'
+        );
+
+        if ($temp === false) {
+            return false;
+        }
+
+        try {
+            if ($zip->open($outerPath) !== true) {
+                return false;
+            }
+
+            $opened = true;
+            $stream = $zip->getStream($packageEntry);
+
+            if ($stream === false) {
+                return false;
+            }
+
+            $output = fopen($temp, 'wb');
+
+            if ($output === false) {
+                fclose($stream);
+
+                return false;
+            }
+
+            try {
+                $copied = stream_copy_to_stream(
+                    $stream,
+                    $output
+                );
+            } finally {
+                fclose($stream);
+                fclose($output);
+            }
+
+            if (! is_int($copied) || $copied <= 0) {
+                return false;
+            }
+
+            return (bool) ($this->call)(
+                'copy',
+                $temp,
+                $targetPath
+            );
+        } finally {
+            if ($opened) {
+                $zip->close();
+            }
+
+            @unlink($temp);
+        }
     }
 
     private function sourcePath(
