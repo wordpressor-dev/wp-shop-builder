@@ -273,7 +273,7 @@ final class RussianMixedContentAuditService
                 continue;
             }
 
-            foreach ((array) ($matches[0] ?? []) as $rawFragment) {
+            foreach ($matches[0] as $rawFragment) {
                 $fragment = $this->cleanFragment((string) $rawFragment);
 
                 if ($fragment === '') {
