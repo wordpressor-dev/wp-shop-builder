@@ -13,13 +13,13 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class RussianMixedContentAuditPage implements SubmenuPageInterface
 {
-    private const RULESET_ID = 'V30.2-20260908-R2';
-    private const PLUGIN_BUILD = '0.3.5';
+    private const RULESET_ID = 'V30.3-20260908-R3';
+    private const PLUGIN_BUILD = '0.3.6';
     private const CLEANUP_PACK_VERSION = '1';
-    private const CLEANUP_STAGE_META_KEY = 'wp_shop_pm_ru_cleanup_stage_v2';
+    private const CLEANUP_STAGE_META_KEY = 'wp_shop_pm_ru_cleanup_stage_v3';
     private const CLEANUP_BACKUP_META_KEY = '_wp_shop_ru_cleanup_backup_v1';
-    private const REPORT_META_KEY = 'wp_shop_pm_ru_visual_purity_report_v2';
-    private const STATE_META_KEY = 'wp_shop_pm_ru_visual_purity_state_v2';
+    private const REPORT_META_KEY = 'wp_shop_pm_ru_visual_purity_report_v3';
+    private const STATE_META_KEY = 'wp_shop_pm_ru_visual_purity_state_v3';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -1029,10 +1029,10 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
                 $state['processed'],
                 $state['total']
             );
-            $message = 'VISUAL RU PURITY V30.2 = READY';
+            $message = 'VISUAL RU PURITY V30.3 = READY';
         } else {
             $state['status'] = 'RUNNING';
-            $message = 'VISUAL RU PURITY V30.2 BATCH = SAVED';
+            $message = 'VISUAL RU PURITY V30.3 BATCH = SAVED';
         }
 
         $this->saveState($state);
@@ -1221,7 +1221,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
             : ($state['status'] === 'READY' ? 100 : 0);
 
         echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
-        echo '<p><strong>VISUAL RU PURITY V30.2 = '
+        echo '<p><strong>VISUAL RU PURITY V30.3 = '
             . $this->escape((string) $state['status'])
             . '</strong> &nbsp; PROCESSED = '
             . $this->escape((string) $processed)
