@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager;
 
 use LogicException;
 use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
+use WPShop\App\Plugin\Admin\RussianMixedContentAuditPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -36,6 +37,7 @@ use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
 use WPShop\App\Plugin\ProductManager\Translation\EnglishContentAuditService;
+use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditService;
 use WPShop\App\Plugin\ProductManager\Translation\PreparedEnglishProductContent;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
@@ -143,6 +145,13 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $englishContentAudit,
             $functionCaller(...)
         );
+        $russianMixedContentAudit = new RussianMixedContentAuditService(
+            $functionCaller(...)
+        );
+        $russianMixedContentAuditPage = new RussianMixedContentAuditPage(
+            $russianMixedContentAudit,
+            $functionCaller(...)
+        );
         $editorialMigrationService = new ProductEditorialMigrationService(
             $functionCaller(...),
             $envatoClient,
@@ -204,6 +213,7 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $registry->addSubmenu($batchIntakePage);
         $registry->addSubmenu($editorialMigrationPage);
         $registry->addSubmenu($englishContentAuditPage);
+        $registry->addSubmenu($russianMixedContentAuditPage);
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
         $registry->addSubmenu($updateFullScannerPage);
@@ -282,6 +292,14 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             EnglishContentAuditPage::class,
             $englishContentAuditPage
         );
+        $this->container->set(
+            RussianMixedContentAuditService::class,
+            $russianMixedContentAudit
+        );
+        $this->container->set(
+            RussianMixedContentAuditPage::class,
+            $russianMixedContentAuditPage
+        );
         $this->container->set(ProductManagerController::class, $controller);
         $this->container->set(ProductManagerPage::class, $page);
         $this->container->set(ProductVersionUpdater::class, $versionUpdater);
@@ -318,6 +336,9 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $englishContentAuditPage = $this->container->get(
             EnglishContentAuditPage::class
         );
+        $russianMixedContentAuditPage = $this->container->get(
+            RussianMixedContentAuditPage::class
+        );
         $returnNavigation = $this->container->get(
             ProductUpdateQueueReturnNavigation::class
         );
@@ -335,6 +356,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         if (! $englishContentAuditPage instanceof EnglishContentAuditPage) {
             throw new LogicException(
                 'EnglishContentAuditPage must be registered before boot.'
+            );
+        }
+
+        if (! $russianMixedContentAuditPage instanceof RussianMixedContentAuditPage) {
+            throw new LogicException(
+                'RussianMixedContentAuditPage must be registered before boot.'
             );
         }
 
@@ -365,6 +392,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             'add_action',
             'admin_post_wp_shop_pm_export_en_content_audit',
             [$englishContentAuditPage, 'exportCsv']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_pm_export_ru_mixed_audit',
+            [$russianMixedContentAuditPage, 'exportCsv']
         );
         $functionCaller(
             'add_action',
