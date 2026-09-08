@@ -629,17 +629,11 @@ final class RussianMixedContentAuditService
             }
 
             foreach ($terms as $term) {
-                if (is_scalar($term)) {
-                    $value = trim((string) $term);
-                } elseif (
-                    is_object($term)
-                    && isset($term->name)
-                    && is_scalar($term->name)
-                ) {
-                    $value = trim((string) $term->name);
-                } else {
+                if (! is_scalar($term)) {
                     continue;
                 }
+
+                $value = trim((string) $term);
 
                 if ($value !== '') {
                     $names[] = $value;
