@@ -71,44 +71,87 @@ final class RussianMixedContentAuditService
     ];
 
     /**
-     * Common technical noun phrases that are acceptable untranslated.
+     * Technical identifiers and technology names that are acceptable
+     * untranslated inside otherwise Russian editorial copy.
+     *
+     * Ordinary English UI/feature wording is intentionally NOT listed here.
      *
      * @var list<string>
      */
-    private const TECHNICAL_TERMS = [
-        'backup profiles',
-        'browser cache',
-        'cache preload',
-        'child theme',
-        'checkout fields',
-        'critical css',
-        'custom fields',
-        'custom post types',
-        'custom taxonomy',
-        'dynamic content',
-        'dynamic tags',
-        'email templates',
-        'faceted search',
-        'header builder',
-        'footer builder',
-        'lazy load',
-        'license key',
-        'live search',
-        'magic links',
-        'mega menu',
-        'object cache',
-        'page cache',
-        'popup builder',
-        'product bundles',
-        'quick view',
+    private const ALLOWED_TECHNICAL_TOKENS = [
+        'ajax',
+        'api',
+        'avif',
+        'cdn',
+        'cron',
+        'css',
+        'csv',
+        'dns',
+        'ean',
+        'ftp',
+        'gtin',
+        'html',
+        'http',
+        'https',
+        'imap',
+        'javascript',
+        'jpeg',
+        'jpg',
+        'jquery',
+        'json',
+        'json-ld',
+        'jwt',
+        'mariadb',
+        'memcached',
+        'mysql',
+        'oauth',
+        'php',
+        'png',
+        'pop3',
+        'redis',
+        'rest',
+        'rss',
+        'schema.org',
+        'seo',
+        'sftp',
+        'sku',
+        'smtp',
+        'sql',
+        'ssh',
+        'ssl',
+        'svg',
+        'tls',
+        'upc',
+        'uri',
+        'url',
+        'webp',
+        'xml',
+        'xls',
+        'xlsx',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const ALLOWED_TECHNICAL_TERMS = [
+        'open graph',
         'rest api',
-        'role editor',
-        'social login',
-        'starter sites',
-        'sticky header',
-        'theme builder',
-        'variation swatches',
-        'white label',
+    ];
+
+    /**
+     * Generic title words must not make an ordinary English word look like
+     * a one-word product name.
+     *
+     * @var list<string>
+     */
+    private const GENERIC_TITLE_WORDS = [
+        'addon',
+        'extension',
+        'plugin',
+        'premium',
+        'pro',
+        'template',
+        'theme',
     ];
 
     /**
@@ -209,7 +252,7 @@ final class RussianMixedContentAuditService
             $status = 'CLEAN';
 
             foreach ($findings as $finding) {
-                if ($finding->classification === 'MIXED_PROSE') {
+                if ($finding->classification === 'TRANSLATE') {
                     $status = 'REVIEW';
                     break;
                 }
@@ -354,7 +397,7 @@ final class RussianMixedContentAuditService
         ) ?? trim($fragment);
         $fragment = trim(
             $fragment,
-            " \t\n\r\0\x0B.,:;!?()[]{}<>\"“”'’"
+            " \t\n\r\0\x0B.,:;!?()[]{}<>\"“”'’–—-"
         );
 
         return $fragment;
@@ -364,9 +407,7 @@ final class RussianMixedContentAuditService
         string $fragment,
         string $productTitle
     ): string {
-        $wordCount = $this->wordCount($fragment);
-
-        if ($wordCount <= 0) {
+        if ($this->wordCount($fragment) <= 0) {
             return '';
         }
 
@@ -377,27 +418,11 @@ final class RussianMixedContentAuditService
             return 'BRAND_NAME';
         }
 
-        if ($wordCount === 1) {
-            return '';
+        if ($this->isAllowedTechnicalFragment($fragment)) {
+            return 'TECH_ALLOWED';
         }
 
-        if ($this->isTechnicalTerm($fragment)) {
-            return 'TERM_ONLY';
-        }
-
-        if ($this->containsKnownBrand($fragment)) {
-            return 'TERM_ONLY';
-        }
-
-        if (
-            $wordCount >= 5
-            || ($wordCount >= 3 && $this->hasConnector($fragment))
-            || $wordCount >= 4
-        ) {
-            return 'MIXED_PROSE';
-        }
-
-        return 'TERM_ONLY';
+        return 'TRANSLATE';
     }
 
     private function isProductName(
@@ -421,8 +446,21 @@ final class RussianMixedContentAuditService
         $fragmentWords = $this->titleWords($fragment);
         $titleWords = $this->titleWords($productTitle);
 
-        if (count($fragmentWords) < 2 || count($titleWords) < 1) {
+        if (count($fragmentWords) < 1 || count($titleWords) < 1) {
             return false;
+        }
+
+        if (count($fragmentWords) === 1) {
+            $word = $fragmentWords[0];
+            $firstTitleWord = $titleWords[0] ?? '';
+
+            return $word === $firstTitleWord
+                && strlen($word) >= 3
+                && ! in_array(
+                    $word,
+                    self::GENERIC_TITLE_WORDS,
+                    true
+                );
         }
 
         $fragmentCompact = $this->compactLatin($fragment);
@@ -570,12 +608,33 @@ final class RussianMixedContentAuditService
         return false;
     }
 
-    private function isTechnicalTerm(string $fragment): bool
-    {
+    private function isAllowedTechnicalFragment(
+        string $fragment
+    ): bool {
         $normalized = $this->normalize($fragment);
 
-        foreach (self::TECHNICAL_TERMS as $term) {
-            if ($normalized === $term) {
+        if ($this->isAllowedTechnicalTail($normalized)) {
+            return true;
+        }
+
+        foreach (self::KNOWN_BRANDS as $brand) {
+            $brandNormalized = $this->normalize($brand);
+
+            if (
+                ! str_starts_with(
+                    $normalized,
+                    $brandNormalized . ' '
+                )
+            ) {
+                continue;
+            }
+
+            $tail = trim(substr(
+                $normalized,
+                strlen($brandNormalized)
+            ));
+
+            if ($this->isAllowedTechnicalTail($tail)) {
                 return true;
             }
         }
@@ -583,31 +642,49 @@ final class RussianMixedContentAuditService
         return false;
     }
 
-    private function hasConnector(string $fragment): bool
+    private function isAllowedTechnicalTail(string $value): bool
     {
-        $normalized = preg_replace(
-            '/[^a-z]+/',
-            ' ',
-            $this->normalize($fragment)
-        ) ?? '';
-        $tokens = array_values(array_filter(
-            explode(' ', trim($normalized)),
-            static fn(string $token): bool => $token !== ''
-        ));
-        $connectors = [
-            'a', 'an', 'and', 'are', 'be', 'been', 'being', 'by',
-            'can', 'for', 'from', 'helps', 'into', 'is', 'of', 'or',
-            'our', 'that', 'the', 'to', 'using', 'was', 'we', 'were',
-            'which', 'who', 'will', 'with', 'without', 'you', 'your',
-        ];
+        $value = $this->normalize($value);
+
+        if ($value === '') {
+            return false;
+        }
+
+        if (
+            in_array(
+                $value,
+                self::ALLOWED_TECHNICAL_TERMS,
+                true
+            )
+        ) {
+            return true;
+        }
+
+        $tokens = preg_split(
+            '/[\\s,\/]+/u',
+            $value
+        );
+
+        if (! is_array($tokens) || $tokens === []) {
+            return false;
+        }
 
         foreach ($tokens as $token) {
-            if (in_array($token, $connectors, true)) {
-                return true;
+            $token = trim($token);
+
+            if (
+                $token === ''
+                || ! in_array(
+                    $token,
+                    self::ALLOWED_TECHNICAL_TOKENS,
+                    true
+                )
+            ) {
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
 
     private function context(
