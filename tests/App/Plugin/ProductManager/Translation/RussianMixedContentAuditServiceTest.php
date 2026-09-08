@@ -9,7 +9,7 @@ use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditService
 
 final class RussianMixedContentAuditServiceTest extends TestCase
 {
-    public function testClassifiesBrandsTermsAndProseWithoutProductWrites(): void
+    public function testVisualPurityClassifiesBrandTechAndTranslateWithoutWrites(): void
     {
         $writes = [];
         $call = static function (
@@ -26,8 +26,8 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
                 if ($field === 'post_title') {
                     return match ($productId) {
-                        10 => 'Yoast Local SEO',
-                        20 => 'Example Product',
+                        10 => 'Goya — минималистичная WooCommerce-тема',
+                        20 => 'Technical Test',
                         30 => 'Code Only Product',
                         default => '',
                     };
@@ -35,19 +35,19 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
                 if ($field === 'post_excerpt') {
                     return match ($productId) {
-                        10 => '<p>Интеграция с Google Maps и page cache.</p>',
-                        20 => '<p>Удобный Development Tool for Non-Devs для магазина.</p>',
-                        30 => '<code>Performance focused toolkit</code> Русское описание.',
+                        10 => '<p>Goya использует WooCommerce и AJAX, '
+                            . 'но Quick View и zoom нужно перевести.</p>',
+                        20 => '<p>Поддерживаются REST API, SEO, CSS, HTML, PHP, '
+                            . 'JSON-LD, Open Graph и Google Maps API.</p>',
+                        30 => '<code>Quick View storefront</code> Русское описание.',
                         default => '',
                     };
                 }
 
                 if ($field === 'post_content') {
                     return match ($productId) {
-                        10 => '<p>Полностью русский текст.</p>',
-                        20 => '<p>The Best Backup and Migration для ежедневной работы.</p>',
-                        30 => '[demo text="Advanced With Real-Time Guidance and"] '
-                            . 'Документация https://example.com/english-page',
+                        30 => '[demo text="Mega Menu"] '
+                            . 'Документация https://example.com/quick-view',
                         default => '',
                     };
                 }
@@ -56,20 +56,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                $productId = (int) ($arguments[0] ?? 0);
-                $key = (string) ($arguments[1] ?? '');
-
-                if ($key !== 'surerank_settings_general') {
-                    return '';
-                }
-
-                return match ($productId) {
-                    20 => [
-                        'page_description' =>
-                            'Customer Support Ticket System для сайта.',
-                    ],
-                    default => ['page_description' => 'Русское meta описание.'],
-                };
+                return ['page_description' => 'Русское meta описание.'];
             }
 
             if (
@@ -87,50 +74,25 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
         self::assertCount(3, $rows);
 
-        self::assertSame('INFO', $rows[0]->status);
+        self::assertSame('REVIEW', $rows[0]->status);
+        $first = [];
+        foreach ($rows[0]->findings as $finding) {
+            $first[$finding->fragment] = $finding->classification;
+        }
+
+        self::assertSame('BRAND_NAME', $first['Goya'] ?? null);
+        self::assertSame('BRAND_NAME', $first['WooCommerce'] ?? null);
+        self::assertSame('TECH_ALLOWED', $first['AJAX'] ?? null);
+        self::assertSame('TRANSLATE', $first['Quick View'] ?? null);
+        self::assertSame('TRANSLATE', $first['zoom'] ?? null);
+
+        self::assertSame('INFO', $rows[1]->status);
         self::assertSame(
-            ['BRAND_NAME', 'TERM_ONLY'],
+            ['TECH_ALLOWED'],
             array_values(array_unique(array_map(
                 static fn($finding): string => $finding->classification,
-                $rows[0]->findings
+                $rows[1]->findings
             )))
-        );
-        self::assertSame(
-            ['Google Maps', 'page cache'],
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[0]->findings
-            )
-        );
-
-        self::assertSame('REVIEW', $rows[1]->status);
-        self::assertContains(
-            'Development Tool for Non-Devs',
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[1]->findings
-            )
-        );
-        self::assertContains(
-            'The Best Backup and Migration',
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[1]->findings
-            )
-        );
-        self::assertContains(
-            'Customer Support Ticket System',
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[1]->findings
-            )
-        );
-        self::assertNotContains(
-            'TERM_ONLY',
-            array_map(
-                static fn($finding): string => $finding->classification,
-                $rows[1]->findings
-            )
         );
 
         self::assertSame('CLEAN', $rows[2]->status);
@@ -138,7 +100,87 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         self::assertSame([], $writes);
     }
 
-    public function testTreatsTitleDerivedFragmentsAsBrandNamesButKeepsTaglineProse(): void
+    public function testGoyaUiAndFeatureTermsAreTranslateCandidates(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [100];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Goya — минималистичная WooCommerce-тема для магазина';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Для каталога предусмотрены AJAX Add-to-Cart, '
+                        . 'Quick View, разные swatches и sticky bar товара.</p>';
+                }
+
+                if ($field === 'post_content') {
+                    return '<p>В навигации доступны Mega Menu и Header. '
+                        . 'Также используются featured video, zoom и storefront.</p>'
+                        . '<p>WooCommerce, AJAX, API, SEO и CSS допустимы.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское meta описание.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $translate = [];
+        $allowed = [];
+        $brands = [];
+
+        foreach ($rows[0]->findings as $finding) {
+            if ($finding->classification === 'TRANSLATE') {
+                $translate[] = $finding->fragment;
+            } elseif ($finding->classification === 'TECH_ALLOWED') {
+                $allowed[] = $finding->fragment;
+            } elseif ($finding->classification === 'BRAND_NAME') {
+                $brands[] = $finding->fragment;
+            }
+        }
+
+        foreach (
+            [
+                'AJAX Add-to-Cart',
+                'Quick View',
+                'swatches',
+                'sticky bar',
+                'Mega Menu',
+                'Header',
+                'featured video',
+                'zoom',
+                'storefront',
+            ] as $expected
+        ) {
+            self::assertContains($expected, $translate);
+        }
+
+        self::assertContains('WooCommerce', $brands);
+        foreach (['AJAX', 'API', 'SEO', 'CSS'] as $expected) {
+            self::assertContains($expected, $allowed);
+        }
+    }
+
+    public function testTitleDerivedFragmentsStayBrandNames(): void
     {
         $call = static function (
             string $name,
@@ -207,9 +249,9 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
         self::assertSame('REVIEW', $rows[2]->status);
         self::assertContains(
-            'Drop Import for CSV',
+            'TRANSLATE',
             array_map(
-                static fn($finding): string => $finding->fragment,
+                static fn($finding): string => $finding->classification,
                 $rows[2]->findings
             )
         );
