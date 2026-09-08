@@ -109,8 +109,7 @@ final class ProductEditorialMigrationService
 
         if (
             $this->meta($productId, self::STANDARD_META) === 'v28-manual'
-            && $this->manualContentIssue($current, $baseTitle) === ''
-            && $currentRuLanguageIssue === ''
+            && $this->manualContentIssue($current) === ''
         ) {
             return [
                 'productId' => $productId,
@@ -121,8 +120,10 @@ final class ProductEditorialMigrationService
                 'developer' => $developer,
                 'sourceUpdateDate' => $sourceUpdateDate,
                 'ruStatus' => 'CURRENT',
-                'ruLanguageStatus' => 'CLEAN',
-                'ruLanguageIssue' => '',
+                'ruLanguageStatus' => $currentRuLanguageIssue === ''
+                    ? 'CLEAN'
+                    : 'MIXED',
+                'ruLanguageIssue' => $currentRuLanguageIssue,
                 'enStatus' => 'CURRENT',
                 'metaStatus' => 'CURRENT',
                 'backupAvailable' => is_array($backup) && $backup !== [],
@@ -164,36 +165,16 @@ final class ProductEditorialMigrationService
         }
 
         if (is_array($legacy)) {
-            $legacyForBuild = $legacy;
-
-            if ($currentRuLanguageIssue !== '') {
-                $legacyForBuild['ruShort'] = '';
-                $legacyForBuild['ruLong'] = '';
-            }
-
             $generated = $this->builder->build(
                 $baseTitle,
                 $developer,
                 $productType,
                 $signals,
                 $sourceUpdateDate,
-                $this->enrichLegacy(
-                    $legacyForBuild,
-                    $official,
-                    $generic
-                )
+                $this->enrichLegacy($legacy, $official, $generic)
             );
-            $generated = $this->preserveQualityMeta(
-                $legacyForBuild,
-                $generated,
-                $productType
-            );
-            $generated = $this->preserveRichLegacyRu(
-                $legacyForBuild,
-                $generated,
-                $productType,
-                $baseTitle
-            );
+            $generated = $this->preserveQualityMeta($legacy, $generated, $productType);
+            $generated = $this->preserveRichLegacyRu($legacy, $generated, $productType);
         }
 
         $stalePreparedEnglish = false;
@@ -222,11 +203,6 @@ final class ProductEditorialMigrationService
                         $legacyWithoutEnglish[$field] = '';
                     }
 
-                    if ($currentRuLanguageIssue !== '') {
-                        $legacyWithoutEnglish['ruShort'] = '';
-                        $legacyWithoutEnglish['ruLong'] = '';
-                    }
-
                     $generated = $this->builder->build(
                         $baseTitle,
                         $developer,
@@ -236,12 +212,7 @@ final class ProductEditorialMigrationService
                         $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
                     );
                     $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
-                    $generated = $this->preserveRichLegacyRu(
-                        $legacyWithoutEnglish,
-                        $generated,
-                        $productType,
-                        $baseTitle
-                    );
+                    $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
                 }
             }
         }
@@ -370,7 +341,7 @@ final class ProductEditorialMigrationService
         }
 
         $safe = $this->sanitizeManualContent($content);
-        $issue = $this->manualContentIssue($safe, (string) $preview['baseTitle']);
+        $issue = $this->manualContentIssue($safe);
         if ($issue !== '') {
             throw new RuntimeException('Manual editorial draft stopped: ' . $issue);
         }
@@ -427,7 +398,7 @@ final class ProductEditorialMigrationService
         } elseif ($hasDraft && ! $sourceCurrent) {
             $issue = 'Current product content changed after the manual draft was saved. Reload and save the draft again.';
         } elseif ($hasDraft) {
-            $issue = $this->manualContentIssue($draft, (string) $preview['baseTitle']);
+            $issue = $this->manualContentIssue($draft);
         }
 
         return [
@@ -829,10 +800,7 @@ final class ProductEditorialMigrationService
     /**
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
      */
-    private function manualContentIssue(
-        array $content,
-        string $baseTitle = ''
-    ): string
+    private function manualContentIssue(array $content): string
     {
         foreach ([
             'ruShort' => 'RU Short',
@@ -851,16 +819,6 @@ final class ProductEditorialMigrationService
             if (preg_match('/<(p|h[1-6])\b[^>]*>\s*<\1\b/i', $content[$field]) === 1) {
                 return $field . ' contains nested duplicate block tags.';
             }
-        }
-
-        $mixedRu = $this->mixedRussianContentIssue(
-            $content['ruShort'] . ' ' . $content['ruLong'],
-            $baseTitle
-        );
-
-        if ($mixedRu !== '') {
-            return 'RU content contains untranslated English fragments: '
-                . $mixedRu;
         }
 
         $issue = $this->translationIssue($content);
@@ -1032,12 +990,7 @@ final class ProductEditorialMigrationService
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
      * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
      */
-    private function preserveRichLegacyRu(
-        array $legacy,
-        array $generated,
-        string $productType,
-        string $baseTitle = ''
-    ): array
+    private function preserveRichLegacyRu(array $legacy, array $generated, string $productType): array
     {
         foreach ([['ruShort', 'ruLong'], ['enShort', 'enLong']] as [$shortField, $longField]) {
             $long = trim((string) ($legacy[$longField] ?? ''));
@@ -1046,16 +999,6 @@ final class ProductEditorialMigrationService
             }
             $short = trim((string) ($legacy[$shortField] ?? ''));
             $language = $shortField === 'ruShort' ? 'ru' : 'en';
-
-            if (
-                $language === 'ru'
-                && $this->mixedRussianContentIssue(
-                    $short . ' ' . $long,
-                    $baseTitle
-                ) !== ''
-            ) {
-                continue;
-            }
 
             if ($this->legacyTypeConflict($short . ' ' . $long, $productType, $language)) {
                 continue;
