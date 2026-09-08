@@ -153,5 +153,4 @@ final class ProductArchiveIdentityInspectorVendorTest extends TestCase
             $result->source
         );
     }
-
 }
