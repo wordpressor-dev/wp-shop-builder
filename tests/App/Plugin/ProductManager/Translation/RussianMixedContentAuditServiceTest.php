@@ -9,7 +9,7 @@ use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditService
 
 final class RussianMixedContentAuditServiceTest extends TestCase
 {
-    public function testClassifiesBrandsTermsAndProseWithoutProductWrites(): void
+    public function testVisualPurityClassifiesBrandTechAndTranslateWithoutWrites(): void
     {
         $writes = [];
         $call = static function (
@@ -26,8 +26,8 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
                 if ($field === 'post_title') {
                     return match ($productId) {
-                        10 => 'Yoast Local SEO',
-                        20 => 'Example Product',
+                        10 => 'Goya — минималистичная WooCommerce-тема',
+                        20 => 'Technical Test',
                         30 => 'Code Only Product',
                         default => '',
                     };
@@ -35,19 +35,19 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
                 if ($field === 'post_excerpt') {
                     return match ($productId) {
-                        10 => '<p>Интеграция с Google Maps и page cache.</p>',
-                        20 => '<p>Удобный Development Tool for Non-Devs для магазина.</p>',
-                        30 => '<code>Performance focused toolkit</code> Русское описание.',
+                        10 => '<p>Goya использует WooCommerce и AJAX, '
+                            . 'но Quick View и zoom нужно перевести.</p>',
+                        20 => '<p>Поддерживаются REST API, SEO, CSS, HTML, PHP, '
+                            . 'JSON-LD, Open Graph и Google Maps API.</p>',
+                        30 => '<code>Quick View storefront</code> Русское описание.',
                         default => '',
                     };
                 }
 
                 if ($field === 'post_content') {
                     return match ($productId) {
-                        10 => '<p>Полностью русский текст.</p>',
-                        20 => '<p>The Best Backup and Migration для ежедневной работы.</p>',
-                        30 => '[demo text="Advanced With Real-Time Guidance and"] '
-                            . 'Документация https://example.com/english-page',
+                        30 => '[demo text="Mega Menu"] '
+                            . 'Документация https://example.com/quick-view',
                         default => '',
                     };
                 }
@@ -56,20 +56,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                $productId = (int) ($arguments[0] ?? 0);
-                $key = (string) ($arguments[1] ?? '');
-
-                if ($key !== 'surerank_settings_general') {
-                    return '';
-                }
-
-                return match ($productId) {
-                    20 => [
-                        'page_description' =>
-                            'Customer Support Ticket System для сайта.',
-                    ],
-                    default => ['page_description' => 'Русское meta описание.'],
-                };
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             if (
@@ -87,50 +74,25 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
         self::assertCount(3, $rows);
 
-        self::assertSame('INFO', $rows[0]->status);
+        self::assertSame('REVIEW', $rows[0]->status);
+        $first = [];
+        foreach ($rows[0]->findings as $finding) {
+            $first[$finding->fragment] = $finding->classification;
+        }
+
+        self::assertSame('BRAND_NAME', $first['Goya'] ?? null);
+        self::assertSame('BRAND_NAME', $first['WooCommerce'] ?? null);
+        self::assertSame('TECH_ALLOWED', $first['AJAX'] ?? null);
+        self::assertSame('TRANSLATE', $first['Quick View'] ?? null);
+        self::assertSame('TRANSLATE', $first['zoom'] ?? null);
+
+        self::assertSame('INFO', $rows[1]->status);
         self::assertSame(
-            ['BRAND_NAME', 'TERM_ONLY'],
+            ['TECH_ALLOWED'],
             array_values(array_unique(array_map(
                 static fn($finding): string => $finding->classification,
-                $rows[0]->findings
+                $rows[1]->findings
             )))
-        );
-        self::assertSame(
-            ['Google Maps', 'page cache'],
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[0]->findings
-            )
-        );
-
-        self::assertSame('REVIEW', $rows[1]->status);
-        self::assertContains(
-            'Development Tool for Non-Devs',
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[1]->findings
-            )
-        );
-        self::assertContains(
-            'The Best Backup and Migration',
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[1]->findings
-            )
-        );
-        self::assertContains(
-            'Customer Support Ticket System',
-            array_map(
-                static fn($finding): string => $finding->fragment,
-                $rows[1]->findings
-            )
-        );
-        self::assertNotContains(
-            'TERM_ONLY',
-            array_map(
-                static fn($finding): string => $finding->classification,
-                $rows[1]->findings
-            )
         );
 
         self::assertSame('CLEAN', $rows[2]->status);
@@ -138,7 +100,169 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         self::assertSame([], $writes);
     }
 
-    public function testTreatsTitleDerivedFragmentsAsBrandNamesButKeepsTaglineProse(): void
+    public function testGoyaUiAndFeatureTermsAreTranslateCandidates(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [100];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Goya — минималистичная WooCommerce-тема для магазина';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Для каталога предусмотрены AJAX Add-to-Cart, '
+                        . 'Quick View, разные swatches и sticky bar товара.</p>';
+                }
+
+                if ($field === 'post_content') {
+                    return '<p>В навигации доступны Mega Menu и Header. '
+                        . 'Также используются featured video, zoom и storefront.</p>'
+                        . '<p>WooCommerce, AJAX, API, SEO и CSS допустимы.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $translate = [];
+        $allowed = [];
+        $brands = [];
+
+        foreach ($rows[0]->findings as $finding) {
+            if ($finding->classification === 'TRANSLATE') {
+                $translate[] = $finding->fragment;
+            } elseif ($finding->classification === 'TECH_ALLOWED') {
+                $allowed[] = $finding->fragment;
+            } elseif ($finding->classification === 'BRAND_NAME') {
+                $brands[] = $finding->fragment;
+            }
+        }
+
+        foreach (
+            [
+                'AJAX Add-to-Cart',
+                'Quick View',
+                'swatches',
+                'sticky bar',
+                'Mega Menu',
+                'Header',
+                'featured video',
+                'zoom',
+                'storefront',
+            ] as $expected
+        ) {
+            self::assertContains($expected, $translate);
+        }
+
+        self::assertContains('WooCommerce', $brands);
+        foreach (['AJAX', 'API', 'SEO', 'CSS'] as $expected) {
+            self::assertContains($expected, $allowed);
+        }
+    }
+
+    public function testDiviMixedCopyKeepsBrandAndFlexboxButFlagsEnglishUiCopy(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [110];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Divi 5 — визуальная WordPress-тема и конструктор сайта';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Divi 5 от Elegant Themes объединяет WordPress-тему '
+                        . 'и визуальный builder. С помощью drag-and-drop интерфейса '
+                        . 'можно создавать landing pages, а Theme Builder управляет '
+                        . 'headers, footers, templates и archives.</p>';
+                }
+
+                if ($field === 'post_content') {
+                    return '<p>Поддерживаются CSS и Flexbox. Также используются Flexbox layouts, '
+                        . 'responsive editing, reusable styles, native modules '
+                        . 'и design systems.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $classifications = [];
+        foreach ($rows[0]->findings as $finding) {
+            $classifications[$finding->fragment] = $finding->classification;
+        }
+
+        self::assertSame('BRAND_NAME', $classifications['Divi'] ?? null);
+        self::assertSame('BRAND_NAME', $classifications['Elegant Themes'] ?? null);
+        self::assertSame('BRAND_NAME', $classifications['WordPress'] ?? null);
+        self::assertSame('TECH_ALLOWED', $classifications['CSS'] ?? null);
+        self::assertSame('TECH_ALLOWED', $classifications['Flexbox'] ?? null);
+
+        foreach (
+            [
+                'builder',
+                'drag-and-drop',
+                'landing pages',
+                'Theme Builder',
+                'headers',
+                'footers',
+                'templates',
+                'archives',
+                'Flexbox layouts',
+                'responsive editing',
+                'reusable styles',
+                'native modules',
+                'design systems',
+            ] as $expected
+        ) {
+            self::assertSame(
+                'TRANSLATE',
+                $classifications[$expected] ?? null,
+                $expected
+            );
+        }
+    }
+
+    public function testTitleDerivedFragmentsStayBrandNames(): void
     {
         $call = static function (
             string $name,
@@ -178,7 +302,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                return ['page_description' => 'Русское meta описание.'];
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             return null;
@@ -207,9 +331,9 @@ final class RussianMixedContentAuditServiceTest extends TestCase
 
         self::assertSame('REVIEW', $rows[2]->status);
         self::assertContains(
-            'Drop Import for CSV',
+            'TRANSLATE',
             array_map(
-                static fn($finding): string => $finding->fragment,
+                static fn($finding): string => $finding->classification,
                 $rows[2]->findings
             )
         );
@@ -240,7 +364,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                return ['page_description' => 'Русское meta описание.'];
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             return null;
@@ -265,6 +389,221 @@ final class RussianMixedContentAuditServiceTest extends TestCase
                 $rows[0]->findings
             )))
         );
+    }
+
+    public function testCatalogDeveloperAndCompanyNamesStayInformational(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [115];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Example Theme';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Тема от RadiusTheme с e-commerce storefront '
+                        . 'и drag-and-drop builder.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                $key = (string) ($arguments[1] ?? '');
+
+                if ($key === 'attr_developer_value') {
+                    return 'RadiusTheme';
+                }
+
+                if ($key === 'surerank_settings_general') {
+                    return ['page_description' => 'Русское описание для поисковой выдачи.'];
+                }
+
+                return '';
+            }
+
+            if ($name === 'wp_get_post_terms') {
+                $taxonomy = (string) ($arguments[1] ?? '');
+
+                return match ($taxonomy) {
+                    'pa_company' => ['Example Company'],
+                    'product_brand' => ['Example Brand'],
+                    default => [],
+                };
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $classifications = [];
+        foreach ($rows[0]->findings as $finding) {
+            $classifications[$finding->fragment] = $finding->classification;
+        }
+
+        self::assertSame(
+            'BRAND_NAME',
+            $classifications['RadiusTheme'] ?? null
+        );
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['e-commerce storefront'] ?? null
+        );
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['drag-and-drop builder'] ?? null
+        );
+    }
+
+    public function testConfirmedLinkedNamesStayInformational(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [118];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Example Product';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Совместимость с Bookly PRO, Divi Builder, '
+                        . 'WP Hotel Booking, BuddyPress, Dokan, TikTok, '
+                        . 'X/Twitter и WordPress WPZOOM. При этом Quick View '
+                        . 'и drag-and-drop builder должны переводиться.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                $key = (string) ($arguments[1] ?? '');
+
+                if ($key === 'surerank_settings_general') {
+                    return ['page_description' => 'Русское описание для поисковой выдачи.'];
+                }
+
+                return '';
+            }
+
+            if ($name === 'wp_get_post_terms') {
+                return [];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $classifications = [];
+        foreach ($rows[0]->findings as $finding) {
+            $classifications[$finding->fragment] = $finding->classification;
+        }
+
+        foreach (
+            [
+                'Bookly PRO',
+                'Divi Builder',
+                'WP Hotel Booking',
+                'BuddyPress',
+                'Dokan',
+                'TikTok',
+                'X/Twitter',
+                'WordPress WPZOOM',
+            ] as $expected
+        ) {
+            self::assertSame(
+                'BRAND_NAME',
+                $classifications[$expected] ?? null,
+                $expected
+            );
+        }
+
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['Quick View'] ?? null
+        );
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['drag-and-drop builder'] ?? null
+        );
+    }
+
+    public function testCanonicalMarketplaceTitleIsExcludedFromPurityScan(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [120];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Merchandiser – Clean, Fast, Lightweight WooCommerce Theme';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Merchandiser – Clean, Fast, Lightweight WooCommerce Theme '
+                        . '— современная тема для магазина.</p>';
+                }
+
+                if ($field === 'post_content') {
+                    return '<p>Есть storefront и Quick View.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $fragments = array_map(
+            static fn($finding): string => $finding->fragment,
+            $rows[0]->findings
+        );
+
+        self::assertNotContains('Clean', $fragments);
+        self::assertNotContains('Fast', $fragments);
+        self::assertNotContains('Lightweight WooCommerce Theme', $fragments);
+        self::assertContains('storefront', $fragments);
+        self::assertContains('Quick View', $fragments);
     }
 
     public function testCandidateCountUsesFullWooCommerceCatalog(): void

@@ -13,11 +13,13 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class RussianMixedContentAuditPage implements SubmenuPageInterface
 {
+    private const RULESET_ID = 'V30.4-20260908-R4';
+    private const PLUGIN_BUILD = '0.3.7';
     private const CLEANUP_PACK_VERSION = '1';
-    private const CLEANUP_STAGE_META_KEY = 'wp_shop_pm_ru_cleanup_stage_v1';
+    private const CLEANUP_STAGE_META_KEY = 'wp_shop_pm_ru_cleanup_stage_v4';
     private const CLEANUP_BACKUP_META_KEY = '_wp_shop_ru_cleanup_backup_v1';
-    private const REPORT_META_KEY = 'wp_shop_pm_ru_mixed_audit_report_v1';
-    private const STATE_META_KEY = 'wp_shop_pm_ru_mixed_audit_state_v1';
+    private const REPORT_META_KEY = 'wp_shop_pm_ru_visual_purity_report_v4';
+    private const STATE_META_KEY = 'wp_shop_pm_ru_visual_purity_state_v4';
 
     /**
      * @param Closure(string, mixed...): mixed $call
@@ -35,12 +37,12 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
 
     public function slug(): string
     {
-        return 'wp-shop-builder-ru-mixed-audit';
+        return 'wp-shop-builder-ru-visual-purity';
     }
 
     public function title(): string
     {
-        return 'Mixed RU Audit';
+        return 'Visual RU Purity';
     }
 
     public function capability(): string
@@ -76,7 +78,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
             $this->checkNonce();
 
             if ($state['status'] !== 'RUNNING') {
-                $error = 'No running Mixed RU Audit was found. Start a new audit.';
+                $error = 'No running Visual RU Purity audit was found. Start a new audit.';
             } else {
                 [$state, $message, $error] = $this->processNextBatch($state);
                 $autoContinue = $error === '' && $state['status'] === 'RUNNING';
@@ -108,8 +110,8 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         $findingRows = $this->findingRows($report['products']);
 
         echo '<div class="wrap">';
-        echo '<h1>WP Shop Product Manager — Mixed RU Audit</h1>';
-        echo '<p>Read-only audit of authoritative Russian Short Description, Long Description and SureRank Meta. HTML attributes, URLs, shortcodes and code/pre blocks are excluded before language analysis. BRAND_NAME and TERM_ONLY are informational findings; only MIXED_PROSE marks a product as REVIEW. Audit and Cleanup Pack import/stage never write product content; only the separate Apply Cleanup Pack action writes after full fingerprint preflight.</p>';
+        echo '<h1>WP Shop Product Manager — Visual RU Purity</h1>';
+        echo '<p>Strict read-only audit of authoritative Russian Short Description, Long Description and SureRank Meta. HTML attributes, URLs, shortcodes and code/pre blocks are excluded before language analysis. BRAND_NAME and approved TECH_ALLOWED identifiers are informational; every other visible English word or phrase is TRANSLATE and marks the product as REVIEW. Audit and Cleanup Pack import/stage never write product content; only the separate Apply Cleanup Pack action writes after full fingerprint preflight.</p>';
 
         if ($message !== '') {
             echo '<div class="notice notice-success"><p><strong>'
@@ -118,7 +120,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         }
 
         if ($error !== '') {
-            echo '<div class="notice notice-error"><p><strong>RU AUDIT ERROR:</strong> '
+            echo '<div class="notice notice-error"><p><strong>VISUAL RU PURITY ERROR:</strong> '
                 . $this->escape($error)
                 . '</p></div>';
         }
@@ -210,7 +212,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         );
         $report = $this->loadReport();
         $rows = $this->findingRows($report['products']);
-        $filename = 'wp-shop-ru-mixed-audit-v29-'
+        $filename = 'wp-shop-ru-visual-purity-v30-'
             . (string) ($this->call)('current_time', 'Y-m-d-His')
             . '.csv';
 
@@ -293,7 +295,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         if ($products === []) {
             ($this->call)(
                 'wp_die',
-                'The saved Mixed RU Audit has no REVIEW products.'
+                'The saved Visual RU Purity audit has no REVIEW products.'
             );
 
             return;
@@ -356,7 +358,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
 
                 if (
                     (string) ($finding['classification'] ?? '')
-                    !== 'MIXED_PROSE'
+                    !== 'TRANSLATE'
                 ) {
                     continue;
                 }
@@ -1027,10 +1029,10 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
                 $state['processed'],
                 $state['total']
             );
-            $message = 'MIXED RU AUDIT V29 = READY';
+            $message = 'VISUAL RU PURITY V30.4 = READY';
         } else {
             $state['status'] = 'RUNNING';
-            $message = 'MIXED RU AUDIT V29 BATCH = SAVED';
+            $message = 'VISUAL RU PURITY V30.4 BATCH = SAVED';
         }
 
         $this->saveState($state);
@@ -1131,9 +1133,9 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
 
                 if ($classification === 'BRAND_NAME') {
                     ++$summary['brand'];
-                } elseif ($classification === 'TERM_ONLY') {
+                } elseif ($classification === 'TECH_ALLOWED') {
                     ++$summary['term'];
-                } elseif ($classification === 'MIXED_PROSE') {
+                } elseif ($classification === 'TRANSLATE') {
                     ++$summary['prose'];
                 }
             }
@@ -1219,7 +1221,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
             : ($state['status'] === 'READY' ? 100 : 0);
 
         echo '<div class="notice notice-info" style="max-width:1500px;padding:10px 14px;">';
-        echo '<p><strong>MIXED RU AUDIT V29 = '
+        echo '<p><strong>VISUAL RU PURITY V30.4 = '
             . $this->escape((string) $state['status'])
             . '</strong> &nbsp; PROCESSED = '
             . $this->escape((string) $processed)
@@ -1237,11 +1239,16 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
             . '</p>';
         echo '<p><strong>FINDINGS:</strong> BRAND_NAME = '
             . $this->escape((string) $summary['brand'])
-            . ' &nbsp; TERM_ONLY = '
+            . ' &nbsp; TECH_ALLOWED = '
             . $this->escape((string) $summary['term'])
-            . ' &nbsp; MIXED_PROSE = '
+            . ' &nbsp; TRANSLATE = '
             . $this->escape((string) $summary['prose'])
             . '</p>';
+        echo '<p><strong>RULESET = '
+            . $this->escape(self::RULESET_ID)
+            . ' &nbsp; PLUGIN BUILD = '
+            . $this->escape(self::PLUGIN_BUILD)
+            . '</strong></p>';
         echo '<p><strong>REPORT STORAGE = USER META ONLY / PRODUCT WRITES = 0</strong></p>';
 
         if ((string) $state['updated_at'] !== '') {
@@ -1259,7 +1266,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
     private function renderControls(array $state): void
     {
         echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
-        echo '<h2 style="margin-top:0;">Mixed RU Audit — ALL catalog</h2>';
+        echo '<h2 style="margin-top:0;">Visual RU Purity — ALL catalog</h2>';
         echo '<p>Start rebuilds the saved report from the beginning. The scan is read-only and processes publish, draft and private WooCommerce products.</p>';
         echo '<form method="post">';
         $this->nonceField();
@@ -1267,14 +1274,14 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         echo '<p><label><strong>Batch size</strong><br><input type="number" min="1" max="50" name="audit_limit" value="'
             . $this->escapeAttr((string) $state['limit'])
             . '" style="width:180px;"></label></p>';
-        echo '<button type="submit" class="button button-primary">Запустить Mixed RU Audit — ALL catalog</button>';
+        echo '<button type="submit" class="button button-primary">Запустить Visual RU Purity — ALL catalog</button>';
         echo '</form>';
 
         if ($state['status'] === 'RUNNING') {
             echo '<form method="post" style="margin-top:12px;">';
             $this->nonceField();
             echo '<input type="hidden" name="wp_shop_pm_ru_mixed_audit_action" value="audit_resume">';
-            echo '<button type="submit" class="button button-secondary">Продолжить Mixed RU Audit</button>';
+            echo '<button type="submit" class="button button-secondary">Продолжить Visual RU Purity</button>';
             echo '</form>';
         }
 

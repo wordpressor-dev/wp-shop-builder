@@ -221,7 +221,7 @@ final class ProductManagerServiceProviderTest extends TestCase
             $registry->submenus()[4]
         );
         self::assertSame(
-            'wp-shop-builder-ru-mixed-audit',
+            'wp-shop-builder-ru-visual-purity',
             $registry->submenus()[4]->slug()
         );
         self::assertSame(

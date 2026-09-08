@@ -15,12 +15,117 @@ final class RussianMixedContentAuditService
      */
     private const KNOWN_BRANDS = [
         'Advanced Custom Fields',
+        'Bookly',
+        'Bookly PRO',
+        'Box',
+        'BuddyPress',
+        'CommerceGurus',
+        'Content AI',
+        'Cornerstone',
+        'DeBebe',
+        'Defender Pro',
+        'Divi Builder',
+        'Dokan',
+        'Electro Extensions',
+        'Fiore',
+        'Get Bowtied',
+        'Inspiro',
+        'JetPlugins',
+        'Masterstudy',
+        'MasterStudy',
+        'Microsoft Word',
+        'TikTok',
+        'WP Hotel Booking',
+        'WP Shop',
+        'WPResidence',
+        'WPZOOM',
+        'WPMU DEV Hub',
+        'X/Twitter',
+        'Stacks',
+        'SureRank SEO Business',
+        'AliExpress',
+        'Amazon S3',
+        'Apple Pay',
+        'BackupBuddy',
+        'Claude',
+        'Cool Plugins',
+        'Dailymotion',
+        'Discord',
+        'Dropbox',
+        'Dynamic.ooo',
+        'ElementsKit Lite',
+        'FiboSearch',
+        'Gemini',
+        'Google Drive',
+        'Google PageSpeed',
+        'Google Translate',
+        'Happy Elementor Addons Pro',
+        'Hello Elementor',
+        'LinkedIn',
+        'Microsoft',
+        'Microsoft Outlook',
+        'OneDrive',
+        'Patchstack',
+        'Rank Math SEO Pro',
+        'ServMask',
+        'Shoptimizer',
+        'SiteSEO Pro',
+        'Telegram',
+        'Threads',
+        'Vimeo',
+        'Walkscore',
+        'WC Vendors',
+        'WHMCS',
+        'WooCommerce Product Filters',
+        'Amazon',
+        'Apple',
+        'Astra',
+        'bbPress',
+        'Beaver Builder',
+        'Bricks',
+        'Bricks Builder',
+        'Cloudflare Turnstile',
+        'DALL-E',
+        'DeepL',
+        'Divi',
+        'eBay',
+        'Elessi',
+        'Excel',
+        'Facebook',
+        'Google',
+        'Google Sheets',
+        'Google Viewer',
+        'Gutenberg',
+        'hCaptcha',
+        'Instagram',
+        'LearnPress',
+        'Lottie',
+        'Outlook',
+        'PayPal',
+        'PDF.js',
+        'Pinterest',
+        'Pretty Links',
+        'reCAPTCHA',
+        'Slider Revolution',
+        'SoundCloud',
+        'ThimPress',
+        'Toolset',
+        'Twitter',
+        'VamTam',
+        'VK',
+        'WoodMart',
+        'WPBakery',
+        'WPBakery Page Builder',
+        'WPZOOM',
+        'Yandex',
+        'YouTube',
         'ACF',
         'Blocksy Companion',
         'Cloudflare',
         'Core Web Vitals',
         'Crocoblock',
         'Easy Digital Downloads',
+        'Elegant Themes',
         'Elementor',
         'Elementor Pro',
         'Fluent Forms',
@@ -71,44 +176,124 @@ final class RussianMixedContentAuditService
     ];
 
     /**
-     * Common technical noun phrases that are acceptable untranslated.
+     * Technical identifiers and technology names that are acceptable
+     * untranslated inside otherwise Russian editorial copy.
+     *
+     * Ordinary English UI/feature wording is intentionally NOT listed here.
      *
      * @var list<string>
      */
-    private const TECHNICAL_TERMS = [
-        'backup profiles',
-        'browser cache',
-        'cache preload',
-        'child theme',
-        'checkout fields',
-        'critical css',
-        'custom fields',
-        'custom post types',
-        'custom taxonomy',
-        'dynamic content',
-        'dynamic tags',
-        'email templates',
-        'faceted search',
-        'header builder',
-        'footer builder',
-        'lazy load',
-        'license key',
-        'live search',
-        'magic links',
-        'mega menu',
-        'object cache',
-        'page cache',
-        'popup builder',
-        'product bundles',
-        'quick view',
+    private const ALLOWED_TECHNICAL_TOKENS = [
+        'ajax',
+        'id',
+        'urls',
+        'wp',
+        'edd',
+        'fse',
+        'gbp',
+        'gzip',
+        'ip',
+        'it',
+        'mcp',
+        'schema',
+        'sop',
+        'vin',
+        'amp',
+        'cms',
+        'crm',
+        'faq',
+        'idx',
+        'js',
+        'lms',
+        'mlm',
+        'pdf',
+        'rtl',
+        'saas',
+        'smm',
+        'sms',
+        'ux',
+        'ui',
+        'zip',
+        'api',
+        'avif',
+        'cdn',
+        'cron',
+        'css',
+        'csv',
+        'dns',
+        'ean',
+        'ftp',
+        'flexbox',
+        'gtin',
+        'html',
+        'http',
+        'https',
+        'imap',
+        'javascript',
+        'jpeg',
+        'jpg',
+        'jquery',
+        'json',
+        'json-ld',
+        'jwt',
+        'mariadb',
+        'memcached',
+        'mysql',
+        'oauth',
+        'php',
+        'png',
+        'pop3',
+        'redis',
+        'rest',
+        'rss',
+        'schema.org',
+        'seo',
+        'sftp',
+        'sku',
+        'smtp',
+        'sql',
+        'ssh',
+        'ssl',
+        'svg',
+        'tls',
+        'upc',
+        'uri',
+        'url',
+        'webp',
+        'xml',
+        'xls',
+        'xlsx',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const ALLOWED_TECHNICAL_TERMS = [
+        'a/b',
+        'vat/gst',
+        'wp-cli',
+        'css/js',
+        'gpt',
+        'json-ld',
+        'paypal/stripe',
+        'open graph',
         'rest api',
-        'role editor',
-        'social login',
-        'starter sites',
-        'sticky header',
-        'theme builder',
-        'variation swatches',
-        'white label',
+    ];
+
+    /**
+     * Generic title words must not make an ordinary English word look like
+     * a one-word product name.
+     *
+     * @var list<string>
+     */
+    private const GENERIC_TITLE_WORDS = [
+        'addon',
+        'extension',
+        'plugin',
+        'premium',
+        'pro',
+        'template',
+        'theme',
     ];
 
     /**
@@ -193,13 +378,15 @@ final class RussianMixedContentAuditService
             ];
 
             $findings = [];
+            $entityNames = $this->productEntityNames($productId);
 
             foreach ($fields as $field => $value) {
                 foreach (
                     $this->findings(
                         $field,
                         $value,
-                        $title
+                        $title,
+                        $entityNames
                     ) as $finding
                 ) {
                     $findings[] = $finding;
@@ -209,7 +396,7 @@ final class RussianMixedContentAuditService
             $status = 'CLEAN';
 
             foreach ($findings as $finding) {
-                if ($finding->classification === 'MIXED_PROSE') {
+                if ($finding->classification === 'TRANSLATE') {
                     $status = 'REVIEW';
                     break;
                 }
@@ -229,14 +416,25 @@ final class RussianMixedContentAuditService
     }
 
     /**
+     * @param list<string> $entityNames
      * @return list<RussianMixedContentAuditFinding>
      */
     private function findings(
         string $field,
         string $value,
-        string $productTitle
+        string $productTitle,
+        array $entityNames
     ): array {
         $plain = $this->plainText($value);
+
+        if ($plain === '') {
+            return [];
+        }
+
+        $plain = $this->withoutProductTitle(
+            $plain,
+            $productTitle
+        );
 
         if ($plain === '') {
             return [];
@@ -283,7 +481,8 @@ final class RussianMixedContentAuditService
 
                 $classification = $this->classify(
                     $fragment,
-                    $productTitle
+                    $productTitle,
+                    $entityNames
                 );
 
                 if ($classification === '') {
@@ -334,7 +533,11 @@ final class RussianMixedContentAuditService
             ' ',
             $value
         ) ?? $value;
-        $value = strip_tags($value);
+        $value = preg_replace(
+            '/<[^>]+>/u',
+            ' ',
+            $value
+        ) ?? strip_tags($value);
         $value = html_entity_decode(
             $value,
             ENT_QUOTES | ENT_HTML5,
@@ -343,6 +546,34 @@ final class RussianMixedContentAuditService
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
         return trim($value);
+    }
+
+    private function withoutProductTitle(
+        string $value,
+        string $productTitle
+    ): string {
+        $title = html_entity_decode(
+            strip_tags($productTitle),
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+        $title = trim(
+            preg_replace('/\\s+/u', ' ', $title) ?? $title
+        );
+
+        if ($title === '') {
+            return $value;
+        }
+
+        $value = str_ireplace(
+            $title,
+            ' ',
+            $value
+        );
+
+        return trim(
+            preg_replace('/\\s+/u', ' ', $value) ?? $value
+        );
     }
 
     private function cleanFragment(string $fragment): string
@@ -354,50 +585,111 @@ final class RussianMixedContentAuditService
         ) ?? trim($fragment);
         $fragment = trim(
             $fragment,
-            " \t\n\r\0\x0B.,:;!?()[]{}<>\"“”'’"
+            " \t\n\r\0\x0B.,:;!?()[]{}<>\"“”'’–—-"
         );
 
         return $fragment;
     }
 
+    /**
+     * @param list<string> $entityNames
+     */
     private function classify(
         string $fragment,
-        string $productTitle
+        string $productTitle,
+        array $entityNames
     ): string {
-        $wordCount = $this->wordCount($fragment);
-
-        if ($wordCount <= 0) {
+        if ($this->wordCount($fragment) <= 0) {
             return '';
         }
 
         if (
             $this->isProductName($fragment, $productTitle)
             || $this->isKnownBrandName($fragment)
+            || $this->isCompositeBrandName($fragment)
+            || $this->isCatalogEntityName(
+                $fragment,
+                $entityNames
+            )
         ) {
             return 'BRAND_NAME';
         }
 
-        if ($wordCount === 1) {
-            return '';
+        if ($this->isAllowedTechnicalFragment($fragment)) {
+            return 'TECH_ALLOWED';
         }
 
-        if ($this->isTechnicalTerm($fragment)) {
-            return 'TERM_ONLY';
+        return 'TRANSLATE';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function productEntityNames(int $productId): array
+    {
+        $names = [];
+        $developer = ($this->call)(
+            'get_post_meta',
+            $productId,
+            'attr_developer_value',
+            true
+        );
+
+        if (is_scalar($developer)) {
+            $value = trim((string) $developer);
+
+            if ($value !== '') {
+                $names[] = $value;
+            }
         }
 
-        if ($this->containsKnownBrand($fragment)) {
-            return 'TERM_ONLY';
-        }
-
-        if (
-            $wordCount >= 5
-            || ($wordCount >= 3 && $this->hasConnector($fragment))
-            || $wordCount >= 4
+        foreach (
+            ['pa_developer', 'pa_company', 'product_brand']
+            as $taxonomy
         ) {
-            return 'MIXED_PROSE';
+            $terms = ($this->call)(
+                'wp_get_post_terms',
+                $productId,
+                $taxonomy,
+                ['fields' => 'names']
+            );
+
+            if (! is_array($terms)) {
+                continue;
+            }
+
+            foreach ($terms as $term) {
+                if (! is_scalar($term)) {
+                    continue;
+                }
+
+                $value = trim((string) $term);
+
+                if ($value !== '') {
+                    $names[] = $value;
+                }
+            }
         }
 
-        return 'TERM_ONLY';
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * @param list<string> $entityNames
+     */
+    private function isCatalogEntityName(
+        string $fragment,
+        array $entityNames
+    ): bool {
+        $normalized = $this->normalize($fragment);
+
+        foreach ($entityNames as $name) {
+            if ($normalized === $this->normalize($name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isProductName(
@@ -421,8 +713,21 @@ final class RussianMixedContentAuditService
         $fragmentWords = $this->titleWords($fragment);
         $titleWords = $this->titleWords($productTitle);
 
-        if (count($fragmentWords) < 2 || count($titleWords) < 1) {
+        if (count($fragmentWords) < 1 || count($titleWords) < 1) {
             return false;
+        }
+
+        if (count($fragmentWords) === 1) {
+            $word = $fragmentWords[0];
+            $firstTitleWord = $titleWords[0];
+
+            return $word === $firstTitleWord
+                && strlen($word) >= 3
+                && ! in_array(
+                    $word,
+                    self::GENERIC_TITLE_WORDS,
+                    true
+                );
         }
 
         $fragmentCompact = $this->compactLatin($fragment);
@@ -518,6 +823,52 @@ final class RussianMixedContentAuditService
         ) ?? '';
     }
 
+    private function isCompositeBrandName(
+        string $fragment
+    ): bool {
+        $remaining = $this->normalize($fragment);
+        $matched = 0;
+        $brands = array_map(
+            fn(string $brand): string => $this->normalize($brand),
+            self::KNOWN_BRANDS
+        );
+        usort(
+            $brands,
+            static fn(string $left, string $right): int =>
+                strlen($right) <=> strlen($left)
+        );
+
+        while ($remaining !== '') {
+            $found = false;
+
+            foreach ($brands as $brand) {
+                if (
+                    $remaining !== $brand
+                    && ! str_starts_with(
+                        $remaining,
+                        $brand . ' '
+                    )
+                ) {
+                    continue;
+                }
+
+                $remaining = trim(substr(
+                    $remaining,
+                    strlen($brand)
+                ));
+                ++$matched;
+                $found = true;
+                break;
+            }
+
+            if (! $found) {
+                return false;
+            }
+        }
+
+        return $matched >= 2;
+    }
+
     private function isKnownBrandName(string $fragment): bool
     {
         $normalized = $this->normalize($fragment);
@@ -555,27 +906,33 @@ final class RussianMixedContentAuditService
         return false;
     }
 
-    private function containsKnownBrand(string $fragment): bool
-    {
-        $normalized = ' ' . $this->normalize($fragment) . ' ';
-
-        foreach (self::KNOWN_BRANDS as $brand) {
-            $needle = ' ' . $this->normalize($brand) . ' ';
-
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function isTechnicalTerm(string $fragment): bool
-    {
+    private function isAllowedTechnicalFragment(
+        string $fragment
+    ): bool {
         $normalized = $this->normalize($fragment);
 
-        foreach (self::TECHNICAL_TERMS as $term) {
-            if ($normalized === $term) {
+        if ($this->isAllowedTechnicalTail($normalized)) {
+            return true;
+        }
+
+        foreach (self::KNOWN_BRANDS as $brand) {
+            $brandNormalized = $this->normalize($brand);
+
+            if (
+                ! str_starts_with(
+                    $normalized,
+                    $brandNormalized . ' '
+                )
+            ) {
+                continue;
+            }
+
+            $tail = trim(substr(
+                $normalized,
+                strlen($brandNormalized)
+            ));
+
+            if ($this->isAllowedTechnicalTail($tail)) {
                 return true;
             }
         }
@@ -583,31 +940,49 @@ final class RussianMixedContentAuditService
         return false;
     }
 
-    private function hasConnector(string $fragment): bool
+    private function isAllowedTechnicalTail(string $value): bool
     {
-        $normalized = preg_replace(
-            '/[^a-z]+/',
-            ' ',
-            $this->normalize($fragment)
-        ) ?? '';
-        $tokens = array_values(array_filter(
-            explode(' ', trim($normalized)),
-            static fn(string $token): bool => $token !== ''
-        ));
-        $connectors = [
-            'a', 'an', 'and', 'are', 'be', 'been', 'being', 'by',
-            'can', 'for', 'from', 'helps', 'into', 'is', 'of', 'or',
-            'our', 'that', 'the', 'to', 'using', 'was', 'we', 'were',
-            'which', 'who', 'will', 'with', 'without', 'you', 'your',
-        ];
+        $value = $this->normalize($value);
+
+        if ($value === '') {
+            return false;
+        }
+
+        if (
+            in_array(
+                $value,
+                self::ALLOWED_TECHNICAL_TERMS,
+                true
+            )
+        ) {
+            return true;
+        }
+
+        $tokens = preg_split(
+            '/[\\s,\/]+/u',
+            $value
+        );
+
+        if (! is_array($tokens)) {
+            return false;
+        }
 
         foreach ($tokens as $token) {
-            if (in_array($token, $connectors, true)) {
-                return true;
+            $token = trim($token);
+
+            if (
+                $token === ''
+                || ! in_array(
+                    $token,
+                    self::ALLOWED_TECHNICAL_TOKENS,
+                    true
+                )
+            ) {
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
 
     private function context(
