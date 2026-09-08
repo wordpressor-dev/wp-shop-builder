@@ -197,7 +197,7 @@ final class RussianMixedContentAuditService
         'css/js',
         'gpt',
         'json-ld',
-        'payPal/stripe',
+        'paypal/stripe',
         'open graph',
         'rest api',
     ];
@@ -349,6 +349,15 @@ final class RussianMixedContentAuditService
             return [];
         }
 
+        $plain = $this->withoutProductTitle(
+            $plain,
+            $productTitle
+        );
+
+        if ($plain === '') {
+            return [];
+        }
+
         $segments = preg_split(
             '/(?<=[.!?])\s+|\R+/u',
             $plain
@@ -454,6 +463,34 @@ final class RussianMixedContentAuditService
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
         return trim($value);
+    }
+
+    private function withoutProductTitle(
+        string $value,
+        string $productTitle
+    ): string {
+        $title = html_entity_decode(
+            strip_tags($productTitle),
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+        $title = trim(
+            preg_replace('/\\s+/u', ' ', $title) ?? $title
+        );
+
+        if ($title === '') {
+            return $value;
+        }
+
+        $value = str_ireplace(
+            $title,
+            ' ',
+            $value
+        );
+
+        return trim(
+            preg_replace('/\\s+/u', ' ', $value) ?? $value
+        );
     }
 
     private function cleanFragment(string $fragment): string
