@@ -452,7 +452,7 @@ final class RussianMixedContentAuditService
 
         if (count($fragmentWords) === 1) {
             $word = $fragmentWords[0];
-            $firstTitleWord = $titleWords[0] ?? '';
+            $firstTitleWord = $titleWords[0];
 
             return $word === $firstTitleWord
                 && strlen($word) >= 3
@@ -650,7 +650,7 @@ final class RussianMixedContentAuditService
             $value
         );
 
-        if (! is_array($tokens) || $tokens === []) {
+        if (! is_array($tokens)) {
             return false;
         }
 
