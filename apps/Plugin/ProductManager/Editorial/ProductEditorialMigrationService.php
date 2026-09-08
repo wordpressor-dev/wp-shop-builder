@@ -77,7 +77,8 @@ final class ProductEditorialMigrationService
         $developer = $this->meta($productId, 'attr_developer_value');
         $sourceUpdateDate = $this->meta($productId, '_wp_shop_source_update_date');
         $currentRuLanguageIssue = $this->mixedRussianContentIssue(
-            $current['ruShort'] . ' ' . $current['ruLong']
+            $current['ruShort'] . ' ' . $current['ruLong'],
+            $baseTitle
         );
 
         if ($productType === '') {
@@ -108,7 +109,7 @@ final class ProductEditorialMigrationService
 
         if (
             $this->meta($productId, self::STANDARD_META) === 'v28-manual'
-            && $this->manualContentIssue($current) === ''
+            && $this->manualContentIssue($current, $baseTitle) === ''
             && $currentRuLanguageIssue === ''
         ) {
             return [
@@ -163,16 +164,36 @@ final class ProductEditorialMigrationService
         }
 
         if (is_array($legacy)) {
+            $legacyForBuild = $legacy;
+
+            if ($currentRuLanguageIssue !== '') {
+                $legacyForBuild['ruShort'] = '';
+                $legacyForBuild['ruLong'] = '';
+            }
+
             $generated = $this->builder->build(
                 $baseTitle,
                 $developer,
                 $productType,
                 $signals,
                 $sourceUpdateDate,
-                $this->enrichLegacy($legacy, $official, $generic)
+                $this->enrichLegacy(
+                    $legacyForBuild,
+                    $official,
+                    $generic
+                )
             );
-            $generated = $this->preserveQualityMeta($legacy, $generated, $productType);
-            $generated = $this->preserveRichLegacyRu($legacy, $generated, $productType);
+            $generated = $this->preserveQualityMeta(
+                $legacyForBuild,
+                $generated,
+                $productType
+            );
+            $generated = $this->preserveRichLegacyRu(
+                $legacyForBuild,
+                $generated,
+                $productType,
+                $baseTitle
+            );
         }
 
         $stalePreparedEnglish = false;
@@ -200,6 +221,12 @@ final class ProductEditorialMigrationService
                     foreach (['enShort', 'enLong', 'enMeta'] as $field) {
                         $legacyWithoutEnglish[$field] = '';
                     }
+
+                    if ($currentRuLanguageIssue !== '') {
+                        $legacyWithoutEnglish['ruShort'] = '';
+                        $legacyWithoutEnglish['ruLong'] = '';
+                    }
+
                     $generated = $this->builder->build(
                         $baseTitle,
                         $developer,
@@ -209,7 +236,12 @@ final class ProductEditorialMigrationService
                         $this->enrichLegacy($legacyWithoutEnglish, $official, $generic)
                     );
                     $generated = $this->preserveQualityMeta($legacyWithoutEnglish, $generated, $productType);
-                    $generated = $this->preserveRichLegacyRu($legacyWithoutEnglish, $generated, $productType);
+                    $generated = $this->preserveRichLegacyRu(
+                        $legacyWithoutEnglish,
+                        $generated,
+                        $productType,
+                        $baseTitle
+                    );
                 }
             }
         }
@@ -338,7 +370,7 @@ final class ProductEditorialMigrationService
         }
 
         $safe = $this->sanitizeManualContent($content);
-        $issue = $this->manualContentIssue($safe);
+        $issue = $this->manualContentIssue($safe, (string) $preview['baseTitle']);
         if ($issue !== '') {
             throw new RuntimeException('Manual editorial draft stopped: ' . $issue);
         }
@@ -395,7 +427,7 @@ final class ProductEditorialMigrationService
         } elseif ($hasDraft && ! $sourceCurrent) {
             $issue = 'Current product content changed after the manual draft was saved. Reload and save the draft again.';
         } elseif ($hasDraft) {
-            $issue = $this->manualContentIssue($draft);
+            $issue = $this->manualContentIssue($draft, (string) $preview['baseTitle']);
         }
 
         return [
@@ -797,7 +829,10 @@ final class ProductEditorialMigrationService
     /**
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $content
      */
-    private function manualContentIssue(array $content): string
+    private function manualContentIssue(
+        array $content,
+        string $baseTitle = ''
+    ): string
     {
         foreach ([
             'ruShort' => 'RU Short',
@@ -819,7 +854,8 @@ final class ProductEditorialMigrationService
         }
 
         $mixedRu = $this->mixedRussianContentIssue(
-            $content['ruShort'] . ' ' . $content['ruLong']
+            $content['ruShort'] . ' ' . $content['ruLong'],
+            $baseTitle
         );
 
         if ($mixedRu !== '') {
@@ -996,7 +1032,12 @@ final class ProductEditorialMigrationService
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $generated
      * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
      */
-    private function preserveRichLegacyRu(array $legacy, array $generated, string $productType): array
+    private function preserveRichLegacyRu(
+        array $legacy,
+        array $generated,
+        string $productType,
+        string $baseTitle = ''
+    ): array
     {
         foreach ([['ruShort', 'ruLong'], ['enShort', 'enLong']] as [$shortField, $longField]) {
             $long = trim((string) ($legacy[$longField] ?? ''));
@@ -1009,7 +1050,8 @@ final class ProductEditorialMigrationService
             if (
                 $language === 'ru'
                 && $this->mixedRussianContentIssue(
-                    $short . ' ' . $long
+                    $short . ' ' . $long,
+                    $baseTitle
                 ) !== ''
             ) {
                 continue;
@@ -1165,14 +1207,21 @@ final class ProductEditorialMigrationService
             );
         }
 
+        $title = trim((string) ($row['post_title'] ?? ''));
+        $baseTitle = $this->baseTitle($productId, $title);
+
         return $this->mixedRussianContentIssue(
             (string) ($row['post_excerpt'] ?? '')
                 . ' '
-                . (string) ($row['post_content'] ?? '')
+                . (string) ($row['post_content'] ?? ''),
+            $baseTitle
         );
     }
 
-    private function mixedRussianContentIssue(string $content): string
+    private function mixedRussianContentIssue(
+        string $content,
+        string $baseTitle = ''
+    ): string
     {
         $plain = $this->plainEditorialText($content);
 
@@ -1186,6 +1235,16 @@ final class ProductEditorialMigrationService
             $plain
         );
         $clean = is_string($clean) ? $clean : $plain;
+
+        $baseTitle = trim($baseTitle);
+
+        if ($baseTitle !== '') {
+            $clean = preg_replace(
+                '/' . preg_quote($baseTitle, '/') . '/iu',
+                ' ',
+                $clean
+            ) ?? $clean;
+        }
 
         $allowed = [
             'WordPress',
