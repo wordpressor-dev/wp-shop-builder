@@ -818,12 +818,15 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         }
 
         $this->clearCleanupStage();
+        $this->invalidateAuditAfterCleanup();
 
         return 'RU CLEANUP PACK V1 = APPLIED'
             . ' | PRODUCTS WRITTEN = '
             . count($changed)
             . ' | BACKUP META = YES'
-            . ' | STAGE = CLEARED';
+            . ' | STAGE = CLEARED'
+            . ' | OLD AUDIT REPORT = INVALIDATED'
+            . ' | RUN NEW MIXED RU AUDIT';
     }
 
     /**
@@ -1460,6 +1463,21 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
     private function resetReport(): void
     {
         $this->saveReport($this->emptyReport());
+    }
+
+    private function invalidateAuditAfterCleanup(): void
+    {
+        $this->resetReport();
+        $this->saveState([
+            'status' => 'IDLE',
+            'limit' => 50,
+            'total' => 0,
+            'processed' => 0,
+            'next_offset' => 0,
+            'started_at' => '',
+            'updated_at' => $this->currentTime(),
+            'error' => '',
+        ]);
     }
 
     /**
