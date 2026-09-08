@@ -56,7 +56,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                return ['page_description' => 'Русское meta описание.'];
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             if (
@@ -132,7 +132,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                return ['page_description' => 'Русское meta описание.'];
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             return null;
@@ -220,7 +220,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                return ['page_description' => 'Русское meta описание.'];
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             return null;
@@ -282,7 +282,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
             }
 
             if ($name === 'get_post_meta') {
-                return ['page_description' => 'Русское meta описание.'];
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
             }
 
             return null;
