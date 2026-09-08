@@ -6,7 +6,6 @@ namespace WPShop\App\Plugin\Admin;
 
 use Closure;
 use Throwable;
-use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditFinding;
 use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditRow;
 use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditService;
 use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
