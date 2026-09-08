@@ -15,6 +15,34 @@ final class RussianMixedContentAuditService
      */
     private const KNOWN_BRANDS = [
         'Advanced Custom Fields',
+        'Bookly',
+        'Bookly PRO',
+        'Box',
+        'BuddyPress',
+        'CommerceGurus',
+        'Content AI',
+        'Cornerstone',
+        'DeBebe',
+        'Defender Pro',
+        'Divi Builder',
+        'Dokan',
+        'Electro Extensions',
+        'Fiore',
+        'Get Bowtied',
+        'Inspiro',
+        'JetPlugins',
+        'Masterstudy',
+        'MasterStudy',
+        'Microsoft Word',
+        'TikTok',
+        'WP Hotel Booking',
+        'WP Shop',
+        'WPResidence',
+        'WPZOOM',
+        'WPMU DEV Hub',
+        'X/Twitter',
+        'Stacks',
+        'SureRank SEO Business',
         'AliExpress',
         'Amazon S3',
         'Apple Pay',
@@ -157,6 +185,9 @@ final class RussianMixedContentAuditService
      */
     private const ALLOWED_TECHNICAL_TOKENS = [
         'ajax',
+        'id',
+        'urls',
+        'wp',
         'edd',
         'fse',
         'gbp',
@@ -575,6 +606,7 @@ final class RussianMixedContentAuditService
         if (
             $this->isProductName($fragment, $productTitle)
             || $this->isKnownBrandName($fragment)
+            || $this->isCompositeBrandName($fragment)
             || $this->isCatalogEntityName(
                 $fragment,
                 $entityNames
@@ -789,6 +821,52 @@ final class RussianMixedContentAuditService
             '',
             $value
         ) ?? '';
+    }
+
+    private function isCompositeBrandName(
+        string $fragment
+    ): bool {
+        $remaining = $this->normalize($fragment);
+        $matched = 0;
+        $brands = array_map(
+            fn(string $brand): string => $this->normalize($brand),
+            self::KNOWN_BRANDS
+        );
+        usort(
+            $brands,
+            static fn(string $left, string $right): int =>
+                strlen($right) <=> strlen($left)
+        );
+
+        while ($remaining !== '') {
+            $found = false;
+
+            foreach ($brands as $brand) {
+                if (
+                    $remaining !== $brand
+                    && ! str_starts_with(
+                        $remaining,
+                        $brand . ' '
+                    )
+                ) {
+                    continue;
+                }
+
+                $remaining = trim(substr(
+                    $remaining,
+                    strlen($brand)
+                ));
+                ++$matched;
+                $found = true;
+                break;
+            }
+
+            if (! $found) {
+                return false;
+            }
+        }
+
+        return $matched >= 2;
     }
 
     private function isKnownBrandName(string $fragment): bool
