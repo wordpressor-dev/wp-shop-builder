@@ -391,6 +391,83 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         );
     }
 
+    public function testCatalogDeveloperAndCompanyNamesStayInformational(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [115];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Example Theme';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Тема от RadiusTheme с e-commerce storefront '
+                        . 'и drag-and-drop builder.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                $key = (string) ($arguments[1] ?? '');
+
+                if ($key === 'attr_developer_value') {
+                    return 'RadiusTheme';
+                }
+
+                if ($key === 'surerank_settings_general') {
+                    return ['page_description' => 'Русское описание для поисковой выдачи.'];
+                }
+
+                return '';
+            }
+
+            if ($name === 'wp_get_post_terms') {
+                $taxonomy = (string) ($arguments[1] ?? '');
+
+                return match ($taxonomy) {
+                    'pa_company' => ['Example Company'],
+                    'product_brand' => ['Example Brand'],
+                    default => [],
+                };
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $classifications = [];
+        foreach ($rows[0]->findings as $finding) {
+            $classifications[$finding->fragment] = $finding->classification;
+        }
+
+        self::assertSame(
+            'BRAND_NAME',
+            $classifications['RadiusTheme'] ?? null
+        );
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['e-commerce storefront'] ?? null
+        );
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['drag-and-drop builder'] ?? null
+        );
+    }
+
     public function testCanonicalMarketplaceTitleIsExcludedFromPurityScan(): void
     {
         $call = static function (
