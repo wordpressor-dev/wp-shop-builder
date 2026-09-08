@@ -164,7 +164,7 @@ final class ProductArchiveIdentityInspector
                 continue;
             }
 
-            $size = max(0, (int) ($stat['size'] ?? 0));
+            $size = max(0, (int) $stat['size']);
 
             if (
                 $size <= 0
@@ -293,11 +293,7 @@ final class ProductArchiveIdentityInspector
                 $left['score'] <=> $right['score']
         );
 
-        $best = $candidates[0]['result'] ?? null;
-
-        return $best instanceof ProductArchiveIdentityResult
-            ? $best
-            : null;
+        return $candidates[0]['result'];
     }
 
     private function nestedScore(
