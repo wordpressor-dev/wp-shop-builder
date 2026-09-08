@@ -377,7 +377,11 @@ final class RussianMixedContentAuditService
             ' ',
             $value
         ) ?? $value;
-        $value = strip_tags($value);
+        $value = preg_replace(
+            '/<[^>]+>/u',
+            ' ',
+            $value
+        ) ?? strip_tags($value);
         $value = html_entity_decode(
             $value,
             ENT_QUOTES | ENT_HTML5,
