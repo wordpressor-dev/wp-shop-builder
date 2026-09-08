@@ -468,6 +468,90 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         );
     }
 
+    public function testConfirmedLinkedNamesStayInformational(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [118];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Example Product';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Совместимость с Bookly PRO, Divi Builder, '
+                        . 'WP Hotel Booking, BuddyPress, Dokan, TikTok, '
+                        . 'X/Twitter и WordPress WPZOOM. При этом Quick View '
+                        . 'и drag-and-drop builder должны переводиться.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                $key = (string) ($arguments[1] ?? '');
+
+                if ($key === 'surerank_settings_general') {
+                    return ['page_description' => 'Русское описание для поисковой выдачи.'];
+                }
+
+                return '';
+            }
+
+            if ($name === 'wp_get_post_terms') {
+                return [];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $classifications = [];
+        foreach ($rows[0]->findings as $finding) {
+            $classifications[$finding->fragment] = $finding->classification;
+        }
+
+        foreach (
+            [
+                'Bookly PRO',
+                'Divi Builder',
+                'WP Hotel Booking',
+                'BuddyPress',
+                'Dokan',
+                'TikTok',
+                'X/Twitter',
+                'WordPress WPZOOM',
+            ] as $expected
+        ) {
+            self::assertSame(
+                'BRAND_NAME',
+                $classifications[$expected] ?? null,
+                $expected
+            );
+        }
+
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['Quick View'] ?? null
+        );
+        self::assertSame(
+            'TRANSLATE',
+            $classifications['drag-and-drop builder'] ?? null
+        );
+    }
+
     public function testCanonicalMarketplaceTitleIsExcludedFromPurityScan(): void
     {
         $call = static function (
