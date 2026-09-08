@@ -54,7 +54,7 @@ final class ProductVersionUpdaterTest extends TestCase
         );
     }
 
-    public function testUpdatePreservesPublicationDateAndStatus(): void
+    public function testUpdateSynchronizesStorefrontDateAndPreservesStatus(): void
     {
         $calls = [];
         $updater = new ProductVersionUpdater(
@@ -69,6 +69,7 @@ final class ProductVersionUpdaterTest extends TestCase
                     'get_post_status' => 'publish',
                     'get_post_meta' => self::currentIdentityMeta($arguments),
                     'wc_get_product_id_by_sku' => 5034,
+                    'get_gmt_from_date' => '2026-08-20 09:00:00',
                     'wp_update_post' => 5034,
                     'is_wp_error' => false,
                     default => true,
@@ -94,11 +95,21 @@ final class ProductVersionUpdaterTest extends TestCase
             'Veera – Multipurpose WooCommerce Theme',
             $update[0]['post_title']
         );
-        self::assertArrayNotHasKey('post_date', $update[0]);
-        self::assertArrayNotHasKey('post_date_gmt', $update[0]);
+        self::assertSame(
+            '2026-08-20 12:00:00',
+            $update[0]['post_date']
+        );
+        self::assertSame(
+            '2026-08-20 09:00:00',
+            $update[0]['post_date_gmt']
+        );
         self::assertArrayNotHasKey('post_status', $update[0]);
         self::assertContains(
-            'PUBLICATION DATE / STATUS = PRESERVED',
+            'STOREFRONT UPDATE DATE = 2026-08-20',
+            $result->logs
+        );
+        self::assertContains(
+            'POST STATUS = PRESERVED',
             $result->logs
         );
 

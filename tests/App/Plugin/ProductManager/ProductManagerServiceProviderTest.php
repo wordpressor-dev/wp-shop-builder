@@ -9,10 +9,14 @@ use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
 use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
+use WPShop\App\Plugin\Admin\ProductManagerMenuOptimizer;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
+use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
+use WPShop\App\Plugin\Admin\ProductUpdateQueuePage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
+use WPShop\App\Plugin\Admin\VendorAiCoverCandidateBox;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
 use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
@@ -22,6 +26,11 @@ use WPShop\App\Plugin\Admin\VendorProductNamingReviewV5Page;
 use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\Cover\OpenAIVendorAiImageGenerator;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverMediaService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverPromptBuilder;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverService;
+use WPShop\App\Plugin\ProductManager\Cover\Contracts\VendorAiImageGeneratorInterface;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverPreviewService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverRenderer;
@@ -178,6 +187,30 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(EnglishContentAuditPage::class)
         );
         self::assertInstanceOf(
+            OpenAIVendorAiImageGenerator::class,
+            $container->get(VendorAiImageGeneratorInterface::class)
+        );
+        self::assertInstanceOf(
+            OpenAIVendorAiImageGenerator::class,
+            $container->get(OpenAIVendorAiImageGenerator::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverPromptBuilder::class,
+            $container->get(VendorAiCoverPromptBuilder::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverMediaService::class,
+            $container->get(VendorAiCoverMediaService::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverService::class,
+            $container->get(VendorAiCoverService::class)
+        );
+        self::assertInstanceOf(
+            VendorAiCoverCandidateBox::class,
+            $container->get(VendorAiCoverCandidateBox::class)
+        );
+        self::assertInstanceOf(
             ProductVersionUpdater::class,
             $container->get(ProductVersionUpdater::class)
         );
@@ -289,45 +322,65 @@ final class ProductManagerServiceProviderTest extends TestCase
             ProductManagerController::class,
             $container->get(ProductManagerController::class)
         );
-        self::assertSame(
-            $container->get(ProductManagerPage::class),
-            $registry->submenus()[0]
-        );
-        self::assertSame(
-            'wp-shop-builder-product-manager',
-            $registry->submenus()[0]->slug()
+        self::assertInstanceOf(
+            ProductManagerMenuOptimizer::class,
+            $container->get(ProductManagerMenuOptimizer::class)
         );
         self::assertSame(
             $container->get(ProductBatchIntakePage::class),
-            $registry->submenus()[1]
+            $registry->submenus()[0]
         );
         self::assertSame(
             'wp-shop-builder-product-batch-intake',
+            $registry->submenus()[0]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdateQueuePage::class),
+            $registry->submenus()[1]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update-queue',
             $registry->submenus()[1]->slug()
         );
         self::assertSame(
-            $container->get(ProductEditorialMigrationPage::class),
+            $container->get(ProductUpdateFullScannerPage::class),
             $registry->submenus()[2]
         );
         self::assertSame(
-            'wp-shop-builder-product-editorial-migration',
+            'wp-shop-builder-product-update-full-scan',
             $registry->submenus()[2]->slug()
         );
         self::assertSame(
-            $container->get(EnglishContentAuditPage::class),
+            $container->get(ProductManagerPage::class),
             $registry->submenus()[3]
         );
         self::assertSame(
-            'wp-shop-builder-en-content-audit',
+            'wp-shop-builder-product-manager',
             $registry->submenus()[3]->slug()
         );
         self::assertSame(
-            $container->get(ProductUpdatePage::class),
+            $container->get(ProductEditorialMigrationPage::class),
             $registry->submenus()[4]
         );
         self::assertSame(
-            'wp-shop-builder-product-update',
+            'wp-shop-builder-product-editorial-migration',
             $registry->submenus()[4]->slug()
+        );
+        self::assertSame(
+            $container->get(EnglishContentAuditPage::class),
+            $registry->submenus()[5]
+        );
+        self::assertSame(
+            'wp-shop-builder-en-content-audit',
+            $registry->submenus()[5]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[6]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[6]->slug()
         );
         self::assertSame(
             $container->get(VendorProductNamingAuditPage::class),

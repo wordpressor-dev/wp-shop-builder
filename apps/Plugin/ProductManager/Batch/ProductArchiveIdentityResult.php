@@ -13,7 +13,8 @@ final readonly class ProductArchiveIdentityResult
         public string $version,
         public string $source,
         public string $developer = '',
-        public string $productUrl = ''
+        public string $productUrl = '',
+        public string $packageEntry = ''
     ) {
     }
 }

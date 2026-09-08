@@ -146,12 +146,25 @@ final class ProductVersionUpdater
             $displayVersion = self::VERSIONLESS_DISPLAY_PLACEHOLDER;
         }
 
+        $localDate = $preparedData->sourceUpdateDate
+            . ' 12:00:00';
+        $gmtDate = (string) ($this->call)(
+            'get_gmt_from_date',
+            $localDate
+        );
+        $postUpdate = [
+            'ID' => $preparedData->productId,
+            'post_title' => $preparedData->title(),
+            'post_date' => $localDate,
+        ];
+
+        if ($gmtDate !== '') {
+            $postUpdate['post_date_gmt'] = $gmtDate;
+        }
+
         $result = ($this->call)(
             'wp_update_post',
-            [
-                'ID' => $preparedData->productId,
-                'post_title' => $preparedData->title(),
-            ],
+            $postUpdate,
             true
         );
 
@@ -227,7 +240,8 @@ final class ProductVersionUpdater
         $logs[] = 'TITLE = ' . $preparedData->title();
         $logs[] = 'SKU = ' . $preparedData->skuFilename;
         $logs[] = 'DOWNLOAD FILE = UPDATED';
-        $logs[] = 'PUBLICATION DATE / STATUS = PRESERVED';
+        $logs[] = 'STOREFRONT UPDATE DATE = ' . $preparedData->sourceUpdateDate;
+        $logs[] = 'POST STATUS = PRESERVED';
         $logs[] = 'RU/EN CONTENT = PRESERVED';
         $logs[] = 'TAGS / ATTRIBUTES / LABELS = PRESERVED';
         $logs[] = 'attr_update_value = SKIPPED';

@@ -165,6 +165,16 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     'EN COLUMNS = READY FOR TRANSLATION',
                 ];
                 $success = true;
+            } elseif ($action === 'prepare_mixed_ru_audit') {
+                $this->checkNonce();
+                $auditCsv = $this->prepareMixedRuAudit();
+                $logs = [
+                    'MIXED RU AUDIT = READY',
+                    'MODE = READ ONLY / NO WRITES',
+                    'SCOPE = ALL PUBLISHED / DRAFT / PRIVATE PRODUCTS',
+                    'NEXT = DOWNLOAD CSV AND REVIEW MIXED RU PRODUCTS',
+                ];
+                $success = true;
             } elseif ($action === 'prepare_audit_page') {
                 $this->checkNonce();
                 $auditIds = $this->productIds($search, $page, $perPage + 1);
@@ -266,9 +276,9 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         $this->nonceField();
         $this->hiddenState($search, $page, $perPage);
         echo '<table class="widefat striped"><thead><tr><th></th><th>ID</th><th>Product</th><th>Type</th>';
-        echo '<th>RU</th><th>EN</th><th>Meta</th><th>Overall</th><th>Backup</th><th>Actions</th></tr></thead><tbody>';
+        echo '<th>RU</th><th>RU Lang</th><th>EN</th><th>Meta</th><th>Overall</th><th>Backup</th><th>Actions</th></tr></thead><tbody>';
         if ($rows === []) {
-            echo '<tr><td colspan="10"><em>Товары не найдены.</em></td></tr>';
+            echo '<tr><td colspan="11"><em>Товары не найдены.</em></td></tr>';
         }
         foreach ($rows as $row) {
             $id = (int) $row['productId'];
@@ -297,6 +307,11 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             echo '<td>' . $id . '</td><td><strong>' . $this->escape((string) $row['title']) . '</strong></td>';
             echo '<td>' . $this->escape((string) $row['productType']) . '</td>';
             echo '<td>' . $this->badge((string) $row['ruStatus']) . '</td>';
+            $ruLang = (string) ($row['ruLanguageStatus'] ?? 'CLEAN');
+            $ruIssue = (string) ($row['ruLanguageIssue'] ?? '');
+            echo '<td title="' . $this->escapeAttr($ruIssue) . '">'
+                . $this->languageBadge($ruLang)
+                . '</td>';
             echo '<td>' . $this->badge((string) $row['enStatus']) . '</td>';
             echo '<td>' . $this->badge((string) $row['metaStatus']) . '</td>';
             echo '<td><strong>' . $this->escape((string) $row['status']) . '</strong></td>';
@@ -313,6 +328,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
             echo '</td></tr>';
         }
         echo '</tbody></table><p>';
+        echo '<button class="button" name="wp_shop_pm_editorial_action" value="prepare_mixed_ru_audit">Mixed RU Audit — ALL catalog</button> ';
         echo '<button class="button" name="wp_shop_pm_editorial_action" value="prepare_audit_page">Audit CSV — current page</button> ';
         echo '<button class="button" name="wp_shop_pm_editorial_action" value="prepare_en_pack">Prepare EN pack v2 (max 25)</button> ';
         echo '<button class="button button-primary" name="wp_shop_pm_editorial_action" value="apply_selected">Apply selected (max 25)</button> ';
@@ -346,6 +362,8 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                     (string) $preview['developer'],
                     (string) $preview['status'],
                     (string) $preview['ruStatus'],
+                    (string) ($preview['ruLanguageStatus'] ?? 'CLEAN'),
+                    (string) ($preview['ruLanguageIssue'] ?? ''),
                     (string) $preview['enStatus'],
                     (string) $preview['metaStatus'],
                     ! empty($preview['backupAvailable']) ? 'YES' : 'NO',
@@ -368,7 +386,7 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
                 ], ';', '"', '');
             } catch (Throwable $exception) {
                 fputcsv($stream, [
-                    '1', (string) $id, '', '', '', 'ERROR', 'REVIEW', 'REVIEW', 'REVIEW',
+                    '1', (string) $id, '', '', '', 'ERROR', 'REVIEW', 'REVIEW', '', 'REVIEW', 'REVIEW',
                     '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
                     $exception->getMessage(),
                 ], ';', '"', '');
@@ -386,12 +404,96 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         return $csv;
     }
 
+    private function prepareMixedRuAudit(): string
+    {
+        $ids = ($this->call)(
+            'get_posts',
+            [
+                'post_type' => 'product',
+                'post_status' => ['publish', 'draft', 'private'],
+                'numberposts' => -1,
+                'fields' => 'ids',
+                'orderby' => 'ID',
+                'order' => 'ASC',
+                'suppress_filters' => true,
+            ]
+        );
+        $ids = is_array($ids)
+            ? array_values(array_map('intval', $ids))
+            : [];
+
+        $stream = fopen('php://temp', 'w+b');
+
+        if ($stream === false) {
+            throw new RuntimeException(
+                'Unable to create Mixed RU audit CSV stream.'
+            );
+        }
+
+        fwrite($stream, "\xEF\xBB\xBF");
+        fputcsv(
+            $stream,
+            [
+                'Product ID',
+                'Product',
+                'RU Language',
+                'Issue / First English fragment',
+            ],
+            ';',
+            '"',
+            ''
+        );
+
+        foreach ($ids as $id) {
+            try {
+                $issue = $this->migration->mixedRussianIssue($id);
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($issue === '') {
+                continue;
+            }
+
+            $title = (string) ($this->call)(
+                'get_post_field',
+                'post_title',
+                $id
+            );
+
+            fputcsv(
+                $stream,
+                [
+                    (string) $id,
+                    $title,
+                    'MIXED',
+                    $issue,
+                ],
+                ';',
+                '"',
+                ''
+            );
+        }
+
+        rewind($stream);
+        $csv = stream_get_contents($stream);
+        fclose($stream);
+
+        if (! is_string($csv) || $csv === '') {
+            throw new RuntimeException(
+                'Unable to read Mixed RU audit CSV stream.'
+            );
+        }
+
+        return $csv;
+    }
+
     /** @return list<string> */
     private function auditHeaders(): array
     {
         return [
             'Audit Version', 'Product ID', 'Product', 'Type', 'Developer', 'Overall',
-            'RU Status', 'EN Status', 'Meta Status', 'Backup', 'Source Update Date',
+            'RU Status', 'RU Language', 'RU Language Issue', 'EN Status', 'Meta Status', 'Backup', 'Source Update Date',
             'Official Status', 'Official Facts',
             'Current RU Short HTML', 'Current RU Long HTML', 'Current RU Meta',
             'Generated RU Short HTML', 'Generated RU Long HTML', 'Generated RU Meta',
@@ -1128,6 +1230,18 @@ final class ProductEditorialMigrationPage implements SubmenuPageInterface
         $style = $status === 'CURRENT' ? 'color:#008a20;font-weight:700;'
             : ($status === 'MISSING' ? 'color:#b32d2e;font-weight:700;' : 'color:#996800;font-weight:700;');
         return '<span style="' . $style . '">' . $this->escape($status) . '</span>';
+    }
+
+    private function languageBadge(string $status): string
+    {
+        $status = strtoupper(trim($status));
+        $style = $status === 'CLEAN'
+            ? 'color:#008a20;font-weight:700;'
+            : 'color:#b32d2e;font-weight:700;';
+
+        return '<span style="' . $style . '">'
+            . $this->escape($status !== '' ? $status : 'CLEAN')
+            . '</span>';
     }
 
     /** @param list<string> $logs */

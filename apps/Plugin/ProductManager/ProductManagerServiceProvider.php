@@ -9,6 +9,7 @@ use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
 use WPShop\App\Plugin\Admin\ElementorProTranslatePressPreflightPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
+use WPShop\App\Plugin\Admin\ProductManagerMenuOptimizer;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
 use WPShop\App\Plugin\Admin\ProductUpdateFullScannerPage;
 use WPShop\App\Plugin\Admin\ProductUpdatePage;
@@ -18,6 +19,7 @@ use WPShop\App\Plugin\Admin\ProductUpdateScannerPage;
 use WPShop\App\Plugin\Admin\ProductTitleVersionAuditPage;
 use WPShop\App\Plugin\Admin\VendorProductNamingAuditPage;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationPage;
+use WPShop\App\Plugin\Admin\VendorAiCoverCandidateBox;
 use WPShop\App\Plugin\Admin\VendorCanonicalNamingMigrationV2Page;
 use WPShop\App\Plugin\Admin\VendorCoverAuditPage;
 use WPShop\App\Plugin\Admin\VendorCoverGeneratorPage;
@@ -27,6 +29,11 @@ use WPShop\App\Plugin\Database\Contracts\DatabaseConnectionInterface;
 use WPShop\App\Plugin\ProductManager\Admin\ProductManagerController;
 use WPShop\App\Plugin\ProductManager\Batch\ProductArchiveIdentityInspector;
 use WPShop\App\Plugin\ProductManager\Batch\ProductBatchIntakeScanner;
+use WPShop\App\Plugin\ProductManager\Cover\OpenAIVendorAiImageGenerator;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverMediaService;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverPromptBuilder;
+use WPShop\App\Plugin\ProductManager\Cover\VendorAiCoverService;
+use WPShop\App\Plugin\ProductManager\Cover\Contracts\VendorAiImageGeneratorInterface;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverAuditService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverPreviewService;
 use WPShop\App\Plugin\ProductManager\Cover\VendorCoverRenderer;
@@ -121,10 +128,6 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $archiveIdentityInspector,
             $envatoSearchResolver
         );
-        $batchIntakePage = new ProductBatchIntakePage(
-            $batchIntakeScanner,
-            $functionCaller(...)
-        );
         $draftGateway = new WordPressWooCommerceDraftGateway(
             $functionCaller(...)
         );
@@ -175,15 +178,59 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $editorialMigrationService,
             $functionCaller(...)
         );
+        $openAiApiKey = static function () use ($functionCaller): string {
+            if (defined('WP_SHOP_OPENAI_API_KEY')) {
+                $configured = constant('WP_SHOP_OPENAI_API_KEY');
+
+                if (
+                    is_string($configured)
+                    && trim($configured) !== ''
+                ) {
+                    return trim($configured);
+                }
+            }
+
+            return trim((string) $functionCaller(
+                'get_option',
+                'wp_shop_openai_api_key',
+                ''
+            ));
+        };
+        $vendorAiImageGenerator = new OpenAIVendorAiImageGenerator(
+            $functionCaller(...),
+            $openAiApiKey
+        );
+        $vendorAiCoverPromptBuilder = new VendorAiCoverPromptBuilder();
+        $vendorAiCoverMedia = new VendorAiCoverMediaService(
+            $functionCaller(...)
+        );
+        $vendorAiCover = new VendorAiCoverService(
+            $vendorAiImageGenerator,
+            $vendorAiCoverPromptBuilder,
+            $vendorAiCoverMedia,
+            $functionCaller(...)
+        );
+        $vendorAiCoverCandidateBox = new VendorAiCoverCandidateBox(
+            $functionCaller(...)
+        );
         $controller = new ProductManagerController(
             $envatoClient,
             $tagSelector,
             $draftCreator,
             $translator,
             $tagParser,
-            $archiveUploader
+            $archiveUploader,
+            $vendorAiCover
+        );
+        $batchIntakePage = new ProductBatchIntakePage(
+            $batchIntakeScanner,
+            $functionCaller(...),
+            $controller
         );
         $page = new ProductManagerPage($controller, $functionCaller(...));
+        $menuOptimizer = new ProductManagerMenuOptimizer(
+            $functionCaller(...)
+        );
         $versionUpdater = new ProductVersionUpdater($functionCaller(...));
         $archiveUpdateCoordinator = new ProductArchiveUpdateCoordinator(
             $versionUpdater,
@@ -320,14 +367,17 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             $functionCaller(...)
         );
 
-        $registry->addSubmenu($page);
+        // Daily workflow first. Legacy/diagnostic pages stay registered
+        // for direct access but are hidden from the WordPress sidebar.
         $registry->addSubmenu($batchIntakePage);
+        $registry->addSubmenu($updateQueuePage);
+        $registry->addSubmenu($updateFullScannerPage);
+        $registry->addSubmenu($page);
         $registry->addSubmenu($editorialMigrationPage);
         $registry->addSubmenu($englishContentAuditPage);
+
         $registry->addSubmenu($updatePage);
         $registry->addSubmenu($updateScannerPage);
-        $registry->addSubmenu($updateFullScannerPage);
-        $registry->addSubmenu($updateQueuePage);
         $registry->addSubmenu($vendorNamingAuditPage);
         $registry->addSubmenu($titleVersionAuditPage);
         $registry->addSubmenu($vendorNamingReviewPage);
@@ -411,8 +461,36 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             EnglishContentAuditPage::class,
             $englishContentAuditPage
         );
+        $this->container->set(
+            VendorAiImageGeneratorInterface::class,
+            $vendorAiImageGenerator
+        );
+        $this->container->set(
+            OpenAIVendorAiImageGenerator::class,
+            $vendorAiImageGenerator
+        );
+        $this->container->set(
+            VendorAiCoverPromptBuilder::class,
+            $vendorAiCoverPromptBuilder
+        );
+        $this->container->set(
+            VendorAiCoverMediaService::class,
+            $vendorAiCoverMedia
+        );
+        $this->container->set(
+            VendorAiCoverService::class,
+            $vendorAiCover
+        );
+        $this->container->set(
+            VendorAiCoverCandidateBox::class,
+            $vendorAiCoverCandidateBox
+        );
         $this->container->set(ProductManagerController::class, $controller);
         $this->container->set(ProductManagerPage::class, $page);
+        $this->container->set(
+            ProductManagerMenuOptimizer::class,
+            $menuOptimizer
+        );
         $this->container->set(ProductVersionUpdater::class, $versionUpdater);
         $this->container->set(
             ProductArchiveUpdateCoordinator::class,
@@ -561,6 +639,12 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         $preparedEnglishContent = $this->container->get(
             PreparedEnglishProductContent::class
         );
+        $menuOptimizer = $this->container->get(
+            ProductManagerMenuOptimizer::class
+        );
+        $vendorAiCoverCandidateBox = $this->container->get(
+            VendorAiCoverCandidateBox::class
+        );
 
         if (! $page instanceof ProductUpdateScannerPage) {
             throw new LogicException(
@@ -622,6 +706,44 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
             );
         }
 
+        if (! $menuOptimizer instanceof ProductManagerMenuOptimizer) {
+            throw new LogicException(
+                'ProductManagerMenuOptimizer must be registered before boot.'
+            );
+        }
+
+        if (! $vendorAiCoverCandidateBox instanceof VendorAiCoverCandidateBox) {
+            throw new LogicException(
+                'VendorAiCoverCandidateBox must be registered before boot.'
+            );
+        }
+
+        $functionCaller(
+            'add_action',
+            'admin_menu',
+            [$menuOptimizer, 'optimize'],
+            999
+        );
+        $functionCaller(
+            'add_action',
+            'add_meta_boxes_product',
+            [$vendorAiCoverCandidateBox, 'register']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_vendor_cover_approve',
+            [$vendorAiCoverCandidateBox, 'approve']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_vendor_cover_discard',
+            [$vendorAiCoverCandidateBox, 'discard']
+        );
+        $functionCaller(
+            'add_action',
+            'admin_post_wp_shop_vendor_cover_restore',
+            [$vendorAiCoverCandidateBox, 'restore']
+        );
         $functionCaller(
             'add_action',
             'admin_post_wp_shop_pm_export_update_report',
