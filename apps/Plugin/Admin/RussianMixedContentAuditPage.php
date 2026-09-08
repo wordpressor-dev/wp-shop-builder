@@ -561,13 +561,6 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
                 }
 
                 $combined = array_combine($headers, $csvRow);
-
-                if (! is_array($combined)) {
-                    throw new RuntimeException(
-                        'Unable to map RU Cleanup Pack row.'
-                    );
-                }
-
                 $rows[] = $combined;
 
                 if (count($rows) > 100) {
