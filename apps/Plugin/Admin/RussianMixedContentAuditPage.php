@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\Admin;
 
 use Closure;
+use RuntimeException;
 use Throwable;
 use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditRow;
 use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditService;
@@ -13,6 +14,8 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 final class RussianMixedContentAuditPage implements SubmenuPageInterface
 {
     private const CLEANUP_PACK_VERSION = '1';
+    private const CLEANUP_STAGE_META_KEY = 'wp_shop_pm_ru_cleanup_stage_v1';
+    private const CLEANUP_BACKUP_META_KEY = '_wp_shop_ru_cleanup_backup_v1';
     private const REPORT_META_KEY = 'wp_shop_pm_ru_mixed_audit_report_v1';
     private const STATE_META_KEY = 'wp_shop_pm_ru_mixed_audit_state_v1';
 
@@ -78,6 +81,26 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
                 [$state, $message, $error] = $this->processNextBatch($state);
                 $autoContinue = $error === '' && $state['status'] === 'RUNNING';
             }
+        } elseif ($action === 'import_cleanup_pack') {
+            $this->checkNonce();
+
+            try {
+                $message = $this->importCleanupPack();
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
+            }
+        } elseif ($action === 'apply_cleanup_pack') {
+            $this->checkNonce();
+
+            try {
+                $message = $this->applyStagedCleanupPack();
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
+            }
+        } elseif ($action === 'discard_cleanup_pack') {
+            $this->checkNonce();
+            $this->clearCleanupStage();
+            $message = 'RU CLEANUP PACK V1 = STAGE DISCARDED';
         }
 
         $report = $this->loadReport();
@@ -86,7 +109,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
 
         echo '<div class="wrap">';
         echo '<h1>WP Shop Product Manager — Mixed RU Audit</h1>';
-        echo '<p>Read-only audit of authoritative Russian Short Description, Long Description and SureRank Meta. HTML attributes, URLs, shortcodes and code/pre blocks are excluded before language analysis. BRAND_NAME and TERM_ONLY are informational findings; only MIXED_PROSE marks a product as REVIEW. Product content is never written.</p>';
+        echo '<p>Read-only audit of authoritative Russian Short Description, Long Description and SureRank Meta. HTML attributes, URLs, shortcodes and code/pre blocks are excluded before language analysis. BRAND_NAME and TERM_ONLY are informational findings; only MIXED_PROSE marks a product as REVIEW. Audit and Cleanup Pack import/stage never write product content; only the separate Apply Cleanup Pack action writes after full fingerprint preflight.</p>';
 
         if ($message !== '') {
             echo '<div class="notice notice-success"><p><strong>'
@@ -106,6 +129,8 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         if ($state['status'] === 'READY') {
             $this->renderExport();
         }
+
+        $this->renderCleanupImport();
 
         echo '<div class="postbox" style="max-width:1550px;padding:18px 20px;">';
         echo '<h2 style="margin-top:0;">English fragments found in RU fields</h2>';
@@ -449,6 +474,513 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         );
     }
 
+    private function importCleanupPack(): string
+    {
+        $upload = $_FILES['ru_cleanup_pack'] ?? null;
+
+        if (! is_array($upload)) {
+            throw new RuntimeException('RU Cleanup Pack CSV was not uploaded.');
+        }
+
+        $error = is_scalar($upload['error'] ?? null)
+            ? (int) $upload['error']
+            : UPLOAD_ERR_NO_FILE;
+        $name = is_scalar($upload['name'] ?? null)
+            ? (string) $upload['name']
+            : '';
+        $tmp = is_scalar($upload['tmp_name'] ?? null)
+            ? (string) $upload['tmp_name']
+            : '';
+        $size = is_scalar($upload['size'] ?? null)
+            ? (int) $upload['size']
+            : 0;
+
+        if ($error !== UPLOAD_ERR_OK || $tmp === '') {
+            throw new RuntimeException(
+                'RU Cleanup Pack upload failed with code ' . $error . '.'
+            );
+        }
+
+        if (
+            $size <= 0
+            || $size > 16 * 1024 * 1024
+            || strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'csv'
+        ) {
+            throw new RuntimeException(
+                'RU Cleanup Pack must be a .csv file between 1 byte and 16 MB.'
+            );
+        }
+
+        $stream = fopen($tmp, 'rb');
+
+        if ($stream === false) {
+            throw new RuntimeException(
+                'Unable to open uploaded RU Cleanup Pack.'
+            );
+        }
+
+        try {
+            $headers = fgetcsv($stream, 0, ';', '"', '');
+
+            if (! is_array($headers)) {
+                throw new RuntimeException(
+                    'RU Cleanup Pack header is missing.'
+                );
+            }
+
+            $headers = array_map(
+                static fn(mixed $value): string =>
+                    is_scalar($value) ? trim((string) $value) : '',
+                $headers
+            );
+            $headers[0] = ltrim(
+                $headers[0],
+                "\xEF\xBB\xBF"
+            );
+
+            if ($headers !== $this->cleanupPackHeaders()) {
+                throw new RuntimeException(
+                    'RU Cleanup Pack header does not match v1 format.'
+                );
+            }
+
+            $rows = [];
+
+            while (
+                ($csvRow = fgetcsv($stream, 0, ';', '"', ''))
+                !== false
+            ) {
+                if ($this->cleanupRowEmpty($csvRow)) {
+                    continue;
+                }
+
+                if (count($csvRow) !== count($headers)) {
+                    throw new RuntimeException(
+                        'RU Cleanup Pack contains a malformed CSV row.'
+                    );
+                }
+
+                $combined = array_combine($headers, $csvRow);
+
+                if (! is_array($combined)) {
+                    throw new RuntimeException(
+                        'Unable to map RU Cleanup Pack row.'
+                    );
+                }
+
+                $rows[] = $combined;
+
+                if (count($rows) > 100) {
+                    throw new RuntimeException(
+                        'RU Cleanup Pack is limited to 100 products.'
+                    );
+                }
+            }
+        } finally {
+            fclose($stream);
+        }
+
+        if ($rows === []) {
+            throw new RuntimeException(
+                'RU Cleanup Pack contains no product rows.'
+            );
+        }
+
+        $prepared = [];
+        $seen = [];
+        $changed = 0;
+
+        foreach ($rows as $row) {
+            $productId = (int) trim(
+                (string) ($row['Product ID'] ?? '0')
+            );
+
+            if ($productId <= 0 || isset($seen[$productId])) {
+                throw new RuntimeException(
+                    'RU Cleanup Pack contains an invalid or duplicate Product ID.'
+                );
+            }
+
+            $seen[$productId] = true;
+
+            if (
+                trim((string) ($row['Pack Version'] ?? ''))
+                !== self::CLEANUP_PACK_VERSION
+            ) {
+                throw new RuntimeException(
+                    'Unsupported RU Cleanup Pack version for product #'
+                    . $productId
+                    . '.'
+                );
+            }
+
+            $current = $this->currentRussianContent($productId);
+            $fingerprint = trim(
+                (string) ($row['Source RU Fingerprint'] ?? '')
+            );
+
+            if (
+                $fingerprint === ''
+                || ! hash_equals(
+                    $this->russianFingerprint($current),
+                    $fingerprint
+                )
+            ) {
+                throw new RuntimeException(
+                    'Product #'
+                    . $productId
+                    . ' RU source changed after export. Re-export Cleanup Pack.'
+                );
+            }
+
+            foreach (
+                [
+                    'Source RU Short HTML' => 'short',
+                    'Source RU Long HTML' => 'long',
+                    'Source RU Meta' => 'meta',
+                ] as $column => $field
+            ) {
+                if ((string) ($row[$column] ?? '') !== $current[$field]) {
+                    throw new RuntimeException(
+                        'Product #'
+                        . $productId
+                        . ' source RU columns do not match current content.'
+                    );
+                }
+            }
+
+            $target = [
+                'short' => (string) ($row['Target RU Short HTML'] ?? ''),
+                'long' => (string) ($row['Target RU Long HTML'] ?? ''),
+                'meta' => (string) ($row['Target RU Meta'] ?? ''),
+            ];
+
+            foreach (['short', 'long', 'meta'] as $field) {
+                if (
+                    trim($current[$field]) !== ''
+                    && trim($target[$field]) === ''
+                ) {
+                    throw new RuntimeException(
+                        'Product #'
+                        . $productId
+                        . ' target '
+                        . strtoupper($field)
+                        . ' would erase non-empty RU content.'
+                    );
+                }
+            }
+
+            $isChanged = $target !== $current;
+
+            if ($isChanged) {
+                ++$changed;
+            }
+
+            $prepared[] = [
+                'productId' => $productId,
+                'title' => (string) ($row['Product'] ?? ''),
+                'sourceFingerprint' => $fingerprint,
+                'source' => $current,
+                'target' => $target,
+                'changed' => $isChanged,
+            ];
+        }
+
+        $stage = [
+            'version' => self::CLEANUP_PACK_VERSION,
+            'imported_at' => $this->currentTime(),
+            'rows' => $prepared,
+        ];
+        $this->saveCleanupStage($stage);
+
+        return 'RU CLEANUP PACK V1 = VALIDATED / STAGED'
+            . ' | PRODUCTS = '
+            . count($prepared)
+            . ' | CHANGED = '
+            . $changed
+            . ' | PRODUCT WRITES = 0';
+    }
+
+    private function applyStagedCleanupPack(): string
+    {
+        $stage = $this->loadCleanupStage();
+        $rows = $stage['rows'] ?? [];
+
+        if (! is_array($rows) || $rows === []) {
+            throw new RuntimeException(
+                'No validated RU Cleanup Pack is staged.'
+            );
+        }
+
+        $prepared = [];
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                throw new RuntimeException(
+                    'Staged RU Cleanup Pack is malformed.'
+                );
+            }
+
+            $productId = (int) ($row['productId'] ?? 0);
+            $source = $row['source'] ?? null;
+            $target = $row['target'] ?? null;
+            $fingerprint = (string) (
+                $row['sourceFingerprint'] ?? ''
+            );
+
+            if (
+                $productId <= 0
+                || ! is_array($source)
+                || ! is_array($target)
+                || $fingerprint === ''
+            ) {
+                throw new RuntimeException(
+                    'Staged RU Cleanup Pack contains an invalid product row.'
+                );
+            }
+
+            $current = $this->currentRussianContent($productId);
+
+            if (
+                ! hash_equals(
+                    $this->russianFingerprint($current),
+                    $fingerprint
+                )
+                || $current !== $source
+            ) {
+                throw new RuntimeException(
+                    'Preflight STOP: product #'
+                    . $productId
+                    . ' RU source changed after staging. No products written.'
+                );
+            }
+
+            $prepared[] = [
+                'productId' => $productId,
+                'source' => $current,
+                'target' => [
+                    'short' => (string) ($target['short'] ?? ''),
+                    'long' => (string) ($target['long'] ?? ''),
+                    'meta' => (string) ($target['meta'] ?? ''),
+                ],
+                'changed' => (bool) ($row['changed'] ?? false),
+            ];
+        }
+
+        $changed = array_values(array_filter(
+            $prepared,
+            static fn(array $row): bool => $row['changed'] === true
+        ));
+
+        if ($changed === []) {
+            $this->clearCleanupStage();
+
+            return 'RU CLEANUP PACK V1 = NO CHANGES / STAGE CLEARED';
+        }
+
+        $applied = [];
+
+        try {
+            foreach ($changed as $row) {
+                $productId = (int) $row['productId'];
+                $source = $row['source'];
+                $target = $row['target'];
+
+                ($this->call)(
+                    'update_post_meta',
+                    $productId,
+                    self::CLEANUP_BACKUP_META_KEY,
+                    [
+                        'created_at' => $this->currentTime(),
+                        'source_fingerprint' =>
+                            $this->russianFingerprint($source),
+                        'content' => $source,
+                    ]
+                );
+
+                $this->writeRussianContent(
+                    $productId,
+                    $target
+                );
+                $applied[] = $row;
+            }
+        } catch (Throwable $exception) {
+            foreach (array_reverse($applied) as $row) {
+                try {
+                    $this->writeRussianContent(
+                        (int) $row['productId'],
+                        $row['source']
+                    );
+                } catch (Throwable) {
+                }
+            }
+
+            throw new RuntimeException(
+                'RU Cleanup Apply failed: '
+                . $exception->getMessage()
+                . ' Rollback was attempted for products already written.',
+                0,
+                $exception
+            );
+        }
+
+        $this->clearCleanupStage();
+
+        return 'RU CLEANUP PACK V1 = APPLIED'
+            . ' | PRODUCTS WRITTEN = '
+            . count($changed)
+            . ' | BACKUP META = YES'
+            . ' | STAGE = CLEARED';
+    }
+
+    /**
+     * @param array{short:string,long:string,meta:string} $content
+     */
+    private function writeRussianContent(
+        int $productId,
+        array $content
+    ): void {
+        $short = (string) ($this->call)(
+            'wp_kses_post',
+            $content['short']
+        );
+        $long = (string) ($this->call)(
+            'wp_kses_post',
+            $content['long']
+        );
+        $meta = (string) ($this->call)(
+            'sanitize_textarea_field',
+            $content['meta']
+        );
+
+        $result = ($this->call)(
+            'wp_update_post',
+            [
+                'ID' => $productId,
+                'post_excerpt' => $short,
+                'post_content' => $long,
+            ],
+            true
+        );
+
+        if ((bool) ($this->call)('is_wp_error', $result)) {
+            $message = is_object($result)
+                && method_exists($result, 'get_error_message')
+                ? (string) $result->get_error_message()
+                : 'unknown WordPress update error';
+            throw new RuntimeException(
+                'Product #'
+                . $productId
+                . ' post update failed: '
+                . $message
+            );
+        }
+
+        $settings = ($this->call)(
+            'get_post_meta',
+            $productId,
+            'surerank_settings_general',
+            true
+        );
+
+        if (! is_array($settings)) {
+            $settings = [];
+        }
+
+        $settings['page_description'] = $meta;
+        ($this->call)(
+            'update_post_meta',
+            $productId,
+            'surerank_settings_general',
+            $settings
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function cleanupPackHeaders(): array
+    {
+        return [
+            'Pack Version',
+            'Product ID',
+            'Product',
+            'Source RU Fingerprint',
+            'Review Findings',
+            'Source RU Short HTML',
+            'Source RU Long HTML',
+            'Source RU Meta',
+            'Target RU Short HTML',
+            'Target RU Long HTML',
+            'Target RU Meta',
+        ];
+    }
+
+    /**
+     * @param array<int, mixed> $row
+     */
+    private function cleanupRowEmpty(array $row): bool
+    {
+        foreach ($row as $value) {
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadCleanupStage(): array
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $stage = ($this->call)(
+            'get_user_meta',
+            $userId,
+            self::CLEANUP_STAGE_META_KEY,
+            true
+        );
+
+        return is_array($stage) ? $stage : [];
+    }
+
+    /**
+     * @param array<string, mixed> $stage
+     */
+    private function saveCleanupStage(array $stage): void
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'update_user_meta',
+                $userId,
+                self::CLEANUP_STAGE_META_KEY,
+                $stage
+            );
+        }
+    }
+
+    private function clearCleanupStage(): void
+    {
+        $userId = $this->currentUserId();
+
+        if ($userId > 0) {
+            ($this->call)(
+                'delete_user_meta',
+                $userId,
+                self::CLEANUP_STAGE_META_KEY
+            );
+        }
+    }
+
     /**
      * @param array<string, int|string> $state
      * @return array{array<string, int|string>, string, string}
@@ -779,6 +1311,62 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         echo '<button type="submit" class="button button-primary">Export RU Cleanup Pack v1 — REVIEW only</button>';
         echo '<span style="margin-left:10px;">Read-only export. Target RU columns initially equal Source RU.</span>';
         echo '</form>';
+    }
+
+    private function renderCleanupImport(): void
+    {
+        $stage = $this->loadCleanupStage();
+        $rows = $stage['rows'] ?? [];
+        $rowCount = is_array($rows) ? count($rows) : 0;
+        $changed = 0;
+
+        if (is_array($rows)) {
+            foreach ($rows as $row) {
+                if (
+                    is_array($row)
+                    && (bool) ($row['changed'] ?? false)
+                ) {
+                    ++$changed;
+                }
+            }
+        }
+
+        echo '<div class="postbox" style="max-width:1500px;padding:18px 20px;">';
+        echo '<h2 style="margin-top:0;">RU Cleanup Pack v1</h2>';
+        echo '<p><strong>Step 1 — Validate / Stage:</strong> upload the filled Cleanup Pack. This stores only a staging copy in the current administrator user meta; product content is not written.</p>';
+        echo '<form method="post" enctype="multipart/form-data">';
+        $this->nonceField();
+        echo '<input type="hidden" name="wp_shop_pm_ru_mixed_audit_action" value="import_cleanup_pack">';
+        echo '<input type="file" name="ru_cleanup_pack" accept=".csv,text/csv" required> ';
+        echo '<button type="submit" class="button button-secondary">Validate + Stage RU Cleanup Pack v1</button>';
+        echo '</form>';
+
+        if ($rowCount > 0) {
+            echo '<div class="notice notice-info inline" style="margin:14px 0 0;">';
+            echo '<p><strong>STAGED = YES</strong> &nbsp; PRODUCTS = '
+                . $this->escape((string) $rowCount)
+                . ' &nbsp; CHANGED = '
+                . $this->escape((string) $changed)
+                . ' &nbsp; PRODUCT WRITES = 0</p>';
+            echo '<p>Step 2 runs a full fingerprint/source preflight for every staged product before the first content write. Each changed product receives a backup in '
+                . $this->escape(self::CLEANUP_BACKUP_META_KEY)
+                . ' before update.</p>';
+            echo '</div>';
+
+            echo '<form method="post" style="display:inline-block;margin-top:12px;">';
+            $this->nonceField();
+            echo '<input type="hidden" name="wp_shop_pm_ru_mixed_audit_action" value="apply_cleanup_pack">';
+            echo '<button type="submit" class="button button-primary">Apply staged RU Cleanup Pack v1</button>';
+            echo '</form> ';
+
+            echo '<form method="post" style="display:inline-block;margin-top:12px;">';
+            $this->nonceField();
+            echo '<input type="hidden" name="wp_shop_pm_ru_mixed_audit_action" value="discard_cleanup_pack">';
+            echo '<button type="submit" class="button">Discard staged pack</button>';
+            echo '</form>';
+        }
+
+        echo '</div>';
     }
 
     private function renderAutoContinue(): void
