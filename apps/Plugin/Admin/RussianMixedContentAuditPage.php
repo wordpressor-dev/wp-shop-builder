@@ -314,10 +314,6 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
             $findings = [];
 
             foreach ($row->findings as $finding) {
-                if (! $finding instanceof RussianMixedContentAuditFinding) {
-                    continue;
-                }
-
                 $findings[] = [
                     'field' => $finding->field,
                     'classification' => $finding->classification,
