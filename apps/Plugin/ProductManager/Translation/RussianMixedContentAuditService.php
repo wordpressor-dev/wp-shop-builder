@@ -403,25 +403,118 @@ final class RussianMixedContentAuditService
         string $fragment,
         string $productTitle
     ): bool {
-        $fragment = $this->normalize($fragment);
-        $title = $this->normalize($productTitle);
+        $fragment = trim($fragment);
+        $productTitle = trim($productTitle);
 
-        if ($fragment === '' || $title === '') {
+        if ($fragment === '' || $productTitle === '') {
             return false;
         }
 
-        if ($fragment === $title) {
+        $normalizedFragment = $this->normalize($fragment);
+        $normalizedTitle = $this->normalize($productTitle);
+
+        if ($normalizedFragment === $normalizedTitle) {
             return true;
         }
 
+        $fragmentWords = $this->titleWords($fragment);
+        $titleWords = $this->titleWords($productTitle);
+
+        if (count($fragmentWords) < 2 || count($titleWords) < 1) {
+            return false;
+        }
+
+        $fragmentCompact = $this->compactLatin($fragment);
+        $titleCompact = $this->compactLatin($productTitle);
+
         if (
-            $this->wordCount($fragment) >= 2
-            && str_contains($title, $fragment)
+            $fragmentCompact !== ''
+            && $titleCompact !== ''
+            && str_contains($titleCompact, $fragmentCompact)
         ) {
             return true;
         }
 
+        if (
+            $fragmentCompact !== ''
+            && $titleCompact !== ''
+            && count($fragmentWords) <= count($titleWords) + 2
+            && str_contains($fragmentCompact, $titleCompact)
+        ) {
+            return true;
+        }
+
+        $matched = count(array_intersect(
+            $fragmentWords,
+            $titleWords
+        ));
+        $coverage = $matched / count($fragmentWords);
+
+        if (
+            count($fragmentWords) <= count($titleWords) + 2
+            && $coverage >= 0.75
+        ) {
+            return true;
+        }
+
+        if (
+            $fragmentCompact !== ''
+            && $titleCompact !== ''
+            && count($fragmentWords) <= count($titleWords) + 2
+        ) {
+            $similarity = 0.0;
+            similar_text(
+                $fragmentCompact,
+                $titleCompact,
+                $similarity
+            );
+
+            if ($similarity >= 75.0) {
+                return true;
+            }
+        }
+
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function titleWords(string $value): array
+    {
+        $value = preg_replace(
+            '/(?<=[a-z])(?=[A-Z])/u',
+            ' ',
+            $value
+        ) ?? $value;
+        $matches = [];
+        $count = preg_match_all(
+            '/[A-Za-z0-9]+/u',
+            $value,
+            $matches
+        );
+
+        if (! is_int($count) || $count <= 0) {
+            return [];
+        }
+
+        $words = array_map(
+            static fn(string $word): string => strtolower($word),
+            $matches[0]
+        );
+
+        return array_values(array_unique($words));
+    }
+
+    private function compactLatin(string $value): string
+    {
+        $value = strtolower($value);
+
+        return preg_replace(
+            '/[^a-z0-9]+/',
+            '',
+            $value
+        ) ?? '';
     }
 
     private function isKnownBrandName(string $fragment): bool
