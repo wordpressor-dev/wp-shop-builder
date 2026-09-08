@@ -86,6 +86,10 @@ final class ProductEditorialMigrationService
                 'developer' => $developer,
                 'sourceUpdateDate' => $sourceUpdateDate,
                 'ruStatus' => 'REVIEW',
+                'ruLanguageStatus' => $currentRuLanguageIssue === ''
+                    ? 'CLEAN'
+                    : 'MIXED',
+                'ruLanguageIssue' => $currentRuLanguageIssue,
                 'enStatus' => 'REVIEW',
                 'metaStatus' => 'REVIEW',
                 'backupAvailable' => false,
@@ -97,9 +101,14 @@ final class ProductEditorialMigrationService
         }
 
         $backup = ($this->call)('get_post_meta', $productId, self::BACKUP_META, true);
+        $currentRuLanguageIssue = $this->mixedRussianContentIssue(
+            $current['ruShort'] . ' ' . $current['ruLong']
+        );
+
         if (
             $this->meta($productId, self::STANDARD_META) === 'v28-manual'
             && $this->manualContentIssue($current) === ''
+            && $currentRuLanguageIssue === ''
         ) {
             return [
                 'productId' => $productId,
@@ -110,6 +119,8 @@ final class ProductEditorialMigrationService
                 'developer' => $developer,
                 'sourceUpdateDate' => $sourceUpdateDate,
                 'ruStatus' => 'CURRENT',
+                'ruLanguageStatus' => 'CLEAN',
+                'ruLanguageIssue' => '',
                 'enStatus' => 'CURRENT',
                 'metaStatus' => 'CURRENT',
                 'backupAvailable' => is_array($backup) && $backup !== [],
@@ -232,6 +243,10 @@ final class ProductEditorialMigrationService
             'developer' => $developer,
             'sourceUpdateDate' => $sourceUpdateDate,
             'ruStatus' => $ruStatus,
+            'ruLanguageStatus' => $currentRuLanguageIssue === ''
+                ? 'CLEAN'
+                : 'MIXED',
+            'ruLanguageIssue' => $currentRuLanguageIssue,
             'enStatus' => $enStatus,
             'metaStatus' => $metaStatus,
             'backupAvailable' => is_array($backup) && $backup !== [],
@@ -802,6 +817,15 @@ final class ProductEditorialMigrationService
             }
         }
 
+        $mixedRu = $this->mixedRussianContentIssue(
+            $content['ruShort'] . ' ' . $content['ruLong']
+        );
+
+        if ($mixedRu !== '') {
+            return 'RU content contains untranslated English fragments: '
+                . $mixedRu;
+        }
+
         $issue = $this->translationIssue($content);
         return $issue === '' ? '' : 'RU/EN structure mismatch: ' . $issue;
     }
@@ -980,6 +1004,16 @@ final class ProductEditorialMigrationService
             }
             $short = trim((string) ($legacy[$shortField] ?? ''));
             $language = $shortField === 'ruShort' ? 'ru' : 'en';
+
+            if (
+                $language === 'ru'
+                && $this->mixedRussianContentIssue(
+                    $short . ' ' . $long
+                ) !== ''
+            ) {
+                continue;
+            }
+
             if ($this->legacyTypeConflict($short . ' ' . $long, $productType, $language)) {
                 continue;
             }
@@ -1117,6 +1151,128 @@ final class ProductEditorialMigrationService
             return false;
         }
         return $this->normalize($left) === $this->normalize($right);
+    }
+
+    public function mixedRussianIssue(int $productId): string
+    {
+        $post = ($this->call)('get_post', $productId);
+        $row = is_object($post) ? get_object_vars($post) : [];
+
+        if (($row['post_type'] ?? '') !== 'product') {
+            throw new RuntimeException(
+                'Product not found: ' . $productId
+            );
+        }
+
+        return $this->mixedRussianContentIssue(
+            (string) ($row['post_excerpt'] ?? '')
+                . ' '
+                . (string) ($row['post_content'] ?? '')
+        );
+    }
+
+    private function mixedRussianContentIssue(string $content): string
+    {
+        $plain = $this->plainEditorialText($content);
+
+        if ($plain === '') {
+            return '';
+        }
+
+        $clean = preg_replace(
+            '~https?://\S+|www\.\S+~iu',
+            ' ',
+            $plain
+        );
+        $clean = is_string($clean) ? $clean : $plain;
+
+        $allowed = [
+            'WordPress',
+            'WooCommerce',
+            'Elementor',
+            'Elementor Pro',
+            'WPML',
+            'AJAX',
+            'API',
+            'SEO',
+            'PHP',
+            'CSS',
+            'HTML',
+            'JavaScript',
+            'jQuery',
+            'Gutenberg',
+            'LearnPress',
+            'LearnDash',
+            'LifterLMS',
+            'bbPress',
+            'BuddyPress',
+            'ThemeForest',
+            'CodeCanyon',
+            'Envato',
+            'RTL',
+        ];
+
+        usort(
+            $allowed,
+            static fn (string $left, string $right): int =>
+                strlen($right) <=> strlen($left)
+        );
+
+        foreach ($allowed as $term) {
+            $clean = preg_replace(
+                '/(?<![\p{L}\p{N}])'
+                    . preg_quote($term, '/')
+                    . '(?![\p{L}\p{N}])/iu',
+                ' ',
+                $clean
+            ) ?? $clean;
+        }
+
+        if (
+            preg_match(
+                '/\b[A-Za-z][A-Za-z0-9+\'-]*'
+                    . '(?:\s+[A-Za-z][A-Za-z0-9+\'-]*){1,4}\b/',
+                $clean,
+                $matches
+            ) === 1
+        ) {
+            $phrase = trim((string) ($matches[0] ?? ''));
+
+            if ($phrase !== '') {
+                return $phrase;
+            }
+        }
+
+        $englishCuePattern = '/\b(?:'
+            . 'add|cart|quick|view|sticky|bar|header|footer|featured|video|'
+            . 'custom|layout|layouts|template|templates|product|products|'
+            . 'page|pages|builder|search|menu|content|support|ready|live|'
+            . 'advanced|premium|theme|plugin|shop|archive|single|dynamic|'
+            . 'storefront|drag|drop|widgets|insights'
+            . ')\b/i';
+
+        $count = preg_match_all(
+            $englishCuePattern,
+            $clean,
+            $matches
+        );
+
+        if (is_int($count) && $count >= 2) {
+            $tokens = array_values(array_unique(
+                array_map(
+                    static fn (string $value): string =>
+                        strtolower($value),
+                    $matches[0] ?? []
+                )
+            ));
+
+            return implode(
+                ' / ',
+                array_slice($tokens, 0, 5)
+            );
+        }
+
+        return '';
     }
 
     private function plainEditorialText(string $content): string
