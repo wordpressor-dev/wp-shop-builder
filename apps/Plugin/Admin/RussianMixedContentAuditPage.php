@@ -887,6 +887,21 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
             'surerank_settings_general',
             $settings
         );
+
+        $expected = [
+            'short' => $short,
+            'long' => $long,
+            'meta' => $meta,
+        ];
+        $actual = $this->currentRussianContent($productId);
+
+        if ($actual !== $expected) {
+            throw new RuntimeException(
+                'Product #'
+                . $productId
+                . ' post-write verification failed.'
+            );
+        }
     }
 
     /**
