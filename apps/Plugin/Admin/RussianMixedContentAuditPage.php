@@ -118,7 +118,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         }
 
         if ($error !== '') {
-            echo '<div class="notice notice-error"><p><strong>RU AUDIT ERROR:</strong> '
+            echo '<div class="notice notice-error"><p><strong>VISUAL RU PURITY ERROR:</strong> '
                 . $this->escape($error)
                 . '</p></div>';
         }
@@ -293,7 +293,7 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         if ($products === []) {
             ($this->call)(
                 'wp_die',
-                'The saved Mixed RU Audit has no REVIEW products.'
+                'The saved Visual RU Purity audit has no REVIEW products.'
             );
 
             return;
