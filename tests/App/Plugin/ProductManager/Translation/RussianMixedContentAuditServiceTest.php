@@ -138,6 +138,83 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         self::assertSame([], $writes);
     }
 
+    public function testTreatsTitleDerivedFragmentsAsBrandNamesButKeepsTaglineProse(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [40, 50, 60];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+                $productId = (int) ($arguments[1] ?? 0);
+
+                if ($field === 'post_title') {
+                    return match ($productId) {
+                        40 => 'Duplicator Pro',
+                        50 => 'Essential Blocks Pro',
+                        60 => 'WP All Import Pro',
+                        default => '',
+                    };
+                }
+
+                if ($field === 'post_excerpt') {
+                    return match ($productId) {
+                        40 => 'Duplicator Pro Duplicator Pro — плагин WordPress.',
+                        50 => 'Gutenberg Essential Blocks Pro — набор блоков.',
+                        60 => 'WP All Import Pro – Drag & Drop Import for CSV — импорт данных.',
+                        default => '',
+                    };
+                }
+
+                if ($field === 'post_content') {
+                    return '';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское meta описание.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertSame('INFO', $rows[0]->status);
+        self::assertSame(
+            ['BRAND_NAME'],
+            array_values(array_unique(array_map(
+                static fn($finding): string => $finding->classification,
+                $rows[0]->findings
+            )))
+        );
+
+        self::assertSame('INFO', $rows[1]->status);
+        self::assertSame(
+            ['BRAND_NAME'],
+            array_values(array_unique(array_map(
+                static fn($finding): string => $finding->classification,
+                $rows[1]->findings
+            )))
+        );
+
+        self::assertSame('REVIEW', $rows[2]->status);
+        self::assertContains(
+            'Drop Import for CSV',
+            array_map(
+                static fn($finding): string => $finding->fragment,
+                $rows[2]->findings
+            )
+        );
+    }
+
     public function testCandidateCountUsesFullWooCommerceCatalog(): void
     {
         $captured = [];
