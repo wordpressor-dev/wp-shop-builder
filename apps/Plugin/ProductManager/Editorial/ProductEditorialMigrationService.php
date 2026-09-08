@@ -36,7 +36,8 @@ final class ProductEditorialMigrationService
     /**
      * @return array{
      * productId:int,title:string,baseTitle:string,status:string,productType:string,
-     * developer:string,sourceUpdateDate:string,ruStatus:string,enStatus:string,
+     * developer:string,sourceUpdateDate:string,ruStatus:string,
+     * ruLanguageStatus:string,ruLanguageIssue:string,enStatus:string,
      * metaStatus:string,backupAvailable:bool,officialStatus:string,officialFacts:int,
      * current:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
      * generated:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
@@ -75,6 +76,9 @@ final class ProductEditorialMigrationService
         );
         $developer = $this->meta($productId, 'attr_developer_value');
         $sourceUpdateDate = $this->meta($productId, '_wp_shop_source_update_date');
+        $currentRuLanguageIssue = $this->mixedRussianContentIssue(
+            $current['ruShort'] . ' ' . $current['ruLong']
+        );
 
         if ($productType === '') {
             return [
@@ -101,9 +105,6 @@ final class ProductEditorialMigrationService
         }
 
         $backup = ($this->call)('get_post_meta', $productId, self::BACKUP_META, true);
-        $currentRuLanguageIssue = $this->mixedRussianContentIssue(
-            $current['ruShort'] . ' ' . $current['ruLong']
-        );
 
         if (
             $this->meta($productId, self::STANDARD_META) === 'v28-manual'
