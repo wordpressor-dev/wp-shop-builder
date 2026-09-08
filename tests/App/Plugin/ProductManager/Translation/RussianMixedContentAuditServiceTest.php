@@ -205,8 +205,9 @@ final class RussianMixedContentAuditServiceTest extends TestCase
                 }
 
                 if ($field === 'post_content') {
-                    return '<p>Поддерживаются CSS, Flexbox layouts, responsive editing, '
-                        . 'reusable styles, native modules и design systems.</p>';
+                    return '<p>Поддерживаются CSS и Flexbox. Также используются Flexbox layouts, '
+                        . 'responsive editing, reusable styles, native modules '
+                        . 'и design systems.</p>';
                 }
 
                 return '';
@@ -246,7 +247,7 @@ final class RussianMixedContentAuditServiceTest extends TestCase
                 'footers',
                 'templates',
                 'archives',
-                'layouts',
+                'Flexbox layouts',
                 'responsive editing',
                 'reusable styles',
                 'native modules',
