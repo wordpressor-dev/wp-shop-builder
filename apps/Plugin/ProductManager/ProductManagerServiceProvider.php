@@ -400,6 +400,11 @@ final class ProductManagerServiceProvider extends AbstractServiceProvider
         );
         $functionCaller(
             'add_action',
+            'admin_post_wp_shop_pm_export_ru_cleanup_pack',
+            [$russianMixedContentAuditPage, 'exportCleanupPack']
+        );
+        $functionCaller(
+            'add_action',
             'admin_notices',
             [$returnNavigation, 'renderReturnNotice']
         );
