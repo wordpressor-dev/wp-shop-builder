@@ -391,6 +391,60 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         );
     }
 
+    public function testCanonicalMarketplaceTitleIsExcludedFromPurityScan(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [120];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Merchandiser – Clean, Fast, Lightweight WooCommerce Theme';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Merchandiser – Clean, Fast, Lightweight WooCommerce Theme '
+                        . '— современная тема для магазина.</p>';
+                }
+
+                if ($field === 'post_content') {
+                    return '<p>Есть storefront и Quick View.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $fragments = array_map(
+            static fn($finding): string => $finding->fragment,
+            $rows[0]->findings
+        );
+
+        self::assertNotContains('Clean', $fragments);
+        self::assertNotContains('Fast', $fragments);
+        self::assertNotContains('Lightweight WooCommerce Theme', $fragments);
+        self::assertContains('storefront', $fragments);
+        self::assertContains('Quick View', $fragments);
+    }
+
     public function testCandidateCountUsesFullWooCommerceCatalog(): void
     {
         $captured = [];
