@@ -6,6 +6,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager;
 
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\Admin\EnglishContentAuditPage;
+use WPShop\App\Plugin\Admin\RussianMixedContentAuditPage;
 use WPShop\App\Plugin\Admin\ProductBatchIntakePage;
 use WPShop\App\Plugin\Admin\ProductEditorialMigrationPage;
 use WPShop\App\Plugin\Admin\ProductManagerPage;
@@ -28,6 +29,7 @@ use WPShop\App\Plugin\ProductManager\Tags\WordPressCatalogTagRepository;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationDictionaryInterface;
 use WPShop\App\Plugin\ProductManager\Translation\Contracts\TranslationRegistrarInterface;
 use WPShop\App\Plugin\ProductManager\Translation\EnglishContentAuditService;
+use WPShop\App\Plugin\ProductManager\Translation\RussianMixedContentAuditService;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressDictionary;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressProductTranslator;
 use WPShop\App\Plugin\ProductManager\Translation\TranslatePressRegistrar;
@@ -155,6 +157,14 @@ final class ProductManagerServiceProviderTest extends TestCase
             $container->get(EnglishContentAuditPage::class)
         );
         self::assertInstanceOf(
+            RussianMixedContentAuditService::class,
+            $container->get(RussianMixedContentAuditService::class)
+        );
+        self::assertInstanceOf(
+            RussianMixedContentAuditPage::class,
+            $container->get(RussianMixedContentAuditPage::class)
+        );
+        self::assertInstanceOf(
             ProductVersionUpdater::class,
             $container->get(ProductVersionUpdater::class)
         );
@@ -207,12 +217,20 @@ final class ProductManagerServiceProviderTest extends TestCase
             $registry->submenus()[3]->slug()
         );
         self::assertSame(
-            $container->get(ProductUpdatePage::class),
+            $container->get(RussianMixedContentAuditPage::class),
             $registry->submenus()[4]
         );
         self::assertSame(
-            'wp-shop-builder-product-update',
+            'wp-shop-builder-ru-mixed-audit',
             $registry->submenus()[4]->slug()
+        );
+        self::assertSame(
+            $container->get(ProductUpdatePage::class),
+            $registry->submenus()[5]
+        );
+        self::assertSame(
+            'wp-shop-builder-product-update',
+            $registry->submenus()[5]->slug()
         );
     }
 }
