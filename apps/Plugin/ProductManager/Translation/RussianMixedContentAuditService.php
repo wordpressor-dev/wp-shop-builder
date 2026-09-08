@@ -43,6 +43,7 @@ final class RussianMixedContentAuditService
         'JetFormBuilder',
         'JetSmartFilters',
         'JetWooBuilder',
+        'Justified Image Grid Premium',
         'LearnDash',
         'LifterLMS',
         'Loco Translate',
