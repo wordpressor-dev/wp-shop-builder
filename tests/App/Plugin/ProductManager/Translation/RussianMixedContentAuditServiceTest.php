@@ -180,6 +180,87 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         }
     }
 
+    public function testDiviMixedCopyKeepsBrandAndFlexboxButFlagsEnglishUiCopy(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [110];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Divi 5 — визуальная WordPress-тема и конструктор сайта';
+                }
+
+                if ($field === 'post_excerpt') {
+                    return '<p>Divi 5 от Elegant Themes объединяет WordPress-тему '
+                        . 'и визуальный builder. С помощью drag-and-drop интерфейса '
+                        . 'можно создавать landing pages, а Theme Builder управляет '
+                        . 'headers, footers, templates и archives.</p>';
+                }
+
+                if ($field === 'post_content') {
+                    return '<p>Поддерживаются CSS, Flexbox layouts, responsive editing, '
+                        . 'reusable styles, native modules и design systems.</p>';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское описание для поисковой выдачи.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('REVIEW', $rows[0]->status);
+
+        $classifications = [];
+        foreach ($rows[0]->findings as $finding) {
+            $classifications[$finding->fragment] = $finding->classification;
+        }
+
+        self::assertSame('BRAND_NAME', $classifications['Divi'] ?? null);
+        self::assertSame('BRAND_NAME', $classifications['Elegant Themes'] ?? null);
+        self::assertSame('BRAND_NAME', $classifications['WordPress'] ?? null);
+        self::assertSame('TECH_ALLOWED', $classifications['CSS'] ?? null);
+        self::assertSame('TECH_ALLOWED', $classifications['Flexbox'] ?? null);
+
+        foreach (
+            [
+                'builder',
+                'drag-and-drop',
+                'landing pages',
+                'Theme Builder',
+                'headers',
+                'footers',
+                'templates',
+                'archives',
+                'layouts',
+                'responsive editing',
+                'reusable styles',
+                'native modules',
+                'design systems',
+            ] as $expected
+        ) {
+            self::assertSame(
+                'TRANSLATE',
+                $classifications[$expected] ?? null,
+                $expected
+            );
+        }
+    }
+
     public function testTitleDerivedFragmentsStayBrandNames(): void
     {
         $call = static function (
