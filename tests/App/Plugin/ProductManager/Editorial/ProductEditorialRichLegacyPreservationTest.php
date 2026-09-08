@@ -9,7 +9,7 @@ use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialMigrationService;
 
 final class ProductEditorialRichLegacyPreservationTest extends TestCase
 {
-    public function testKeepsRichRuEditorialContentWhileEnglishIsIncomplete(): void
+    public function testDoesNotPreserveRichRuWhenItContainsEnglishFragments(): void
     {
         $ruShort = 'Премиальный performance-плагин WordPress с page cache, preload, '
             . 'file optimization, LazyLoad, Delay JS, Remove Unused CSS и database optimization.';
@@ -55,11 +55,13 @@ final class ProductEditorialRichLegacyPreservationTest extends TestCase
 
         self::assertSame('STOP', $preview['status']);
         self::assertSame('plugin', $preview['productType']);
-        self::assertSame('CURRENT', $preview['ruStatus']);
+        self::assertSame('MIXED', $preview['ruLanguageStatus']);
+        self::assertNotSame('', $preview['ruLanguageIssue']);
+        self::assertSame('OLD', $preview['ruStatus']);
         self::assertSame('REVIEW', $preview['enStatus']);
         self::assertSame('CURRENT', $preview['metaStatus']);
-        self::assertSame($ruShort, $preview['generated']['ruShort']);
-        self::assertSame($ruLong, $preview['generated']['ruLong']);
+        self::assertNotSame($ruShort, $preview['generated']['ruShort']);
+        self::assertNotSame($ruLong, $preview['generated']['ruLong']);
         self::assertSame($ruMeta, $preview['generated']['ruMeta']);
         self::assertStringNotContainsString(
             '<h2>WP Rocket – The Best WordPress Performance Plugin</h2>',
