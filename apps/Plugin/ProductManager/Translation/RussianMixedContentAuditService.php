@@ -385,10 +385,8 @@ final class RussianMixedContentAuditService
     }
 
     /**
-     * @return list<RussianMixedContentAuditFinding>
-     */
-    /**
      * @param list<string> $entityNames
+     * @return list<RussianMixedContentAuditFinding>
      */
     private function findings(
         string $field,
