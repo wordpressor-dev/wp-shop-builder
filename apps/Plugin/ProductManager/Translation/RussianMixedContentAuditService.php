@@ -15,6 +15,40 @@ final class RussianMixedContentAuditService
      */
     private const KNOWN_BRANDS = [
         'Advanced Custom Fields',
+        'AliExpress',
+        'Amazon S3',
+        'Apple Pay',
+        'BackupBuddy',
+        'Claude',
+        'Cool Plugins',
+        'Dailymotion',
+        'Discord',
+        'Dropbox',
+        'Dynamic.ooo',
+        'ElementsKit Lite',
+        'FiboSearch',
+        'Gemini',
+        'Google Drive',
+        'Google PageSpeed',
+        'Google Translate',
+        'Happy Elementor Addons Pro',
+        'Hello Elementor',
+        'LinkedIn',
+        'Microsoft',
+        'Microsoft Outlook',
+        'OneDrive',
+        'Patchstack',
+        'Rank Math SEO Pro',
+        'ServMask',
+        'Shoptimizer',
+        'SiteSEO Pro',
+        'Telegram',
+        'Threads',
+        'Vimeo',
+        'Walkscore',
+        'WC Vendors',
+        'WHMCS',
+        'WooCommerce Product Filters',
         'Amazon',
         'Apple',
         'Astra',
@@ -123,6 +157,16 @@ final class RussianMixedContentAuditService
      */
     private const ALLOWED_TECHNICAL_TOKENS = [
         'ajax',
+        'edd',
+        'fse',
+        'gbp',
+        'gzip',
+        'ip',
+        'it',
+        'mcp',
+        'schema',
+        'sop',
+        'vin',
         'amp',
         'cms',
         'crm',
@@ -194,6 +238,9 @@ final class RussianMixedContentAuditService
      * @var list<string>
      */
     private const ALLOWED_TECHNICAL_TERMS = [
+        'a/b',
+        'vat/gst',
+        'wp-cli',
         'css/js',
         'gpt',
         'json-ld',
@@ -300,13 +347,15 @@ final class RussianMixedContentAuditService
             ];
 
             $findings = [];
+            $entityNames = $this->productEntityNames($productId);
 
             foreach ($fields as $field => $value) {
                 foreach (
                     $this->findings(
                         $field,
                         $value,
-                        $title
+                        $title,
+                        $entityNames
                     ) as $finding
                 ) {
                     $findings[] = $finding;
@@ -338,10 +387,14 @@ final class RussianMixedContentAuditService
     /**
      * @return list<RussianMixedContentAuditFinding>
      */
+    /**
+     * @param list<string> $entityNames
+     */
     private function findings(
         string $field,
         string $value,
-        string $productTitle
+        string $productTitle,
+        array $entityNames
     ): array {
         $plain = $this->plainText($value);
 
@@ -399,7 +452,8 @@ final class RussianMixedContentAuditService
 
                 $classification = $this->classify(
                     $fragment,
-                    $productTitle
+                    $productTitle,
+                    $entityNames
                 );
 
                 if ($classification === '') {
@@ -508,9 +562,13 @@ final class RussianMixedContentAuditService
         return $fragment;
     }
 
+    /**
+     * @param list<string> $entityNames
+     */
     private function classify(
         string $fragment,
-        string $productTitle
+        string $productTitle,
+        array $entityNames
     ): string {
         if ($this->wordCount($fragment) <= 0) {
             return '';
@@ -519,6 +577,10 @@ final class RussianMixedContentAuditService
         if (
             $this->isProductName($fragment, $productTitle)
             || $this->isKnownBrandName($fragment)
+            || $this->isCatalogEntityName(
+                $fragment,
+                $entityNames
+            )
         ) {
             return 'BRAND_NAME';
         }
@@ -528,6 +590,82 @@ final class RussianMixedContentAuditService
         }
 
         return 'TRANSLATE';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function productEntityNames(int $productId): array
+    {
+        $names = [];
+        $developer = ($this->call)(
+            'get_post_meta',
+            $productId,
+            'attr_developer_value',
+            true
+        );
+
+        if (is_scalar($developer)) {
+            $value = trim((string) $developer);
+
+            if ($value !== '') {
+                $names[] = $value;
+            }
+        }
+
+        foreach (
+            ['pa_developer', 'pa_company', 'product_brand']
+            as $taxonomy
+        ) {
+            $terms = ($this->call)(
+                'wp_get_post_terms',
+                $productId,
+                $taxonomy,
+                ['fields' => 'names']
+            );
+
+            if (! is_array($terms)) {
+                continue;
+            }
+
+            foreach ($terms as $term) {
+                if (is_scalar($term)) {
+                    $value = trim((string) $term);
+                } elseif (
+                    is_object($term)
+                    && isset($term->name)
+                    && is_scalar($term->name)
+                ) {
+                    $value = trim((string) $term->name);
+                } else {
+                    continue;
+                }
+
+                if ($value !== '') {
+                    $names[] = $value;
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * @param list<string> $entityNames
+     */
+    private function isCatalogEntityName(
+        string $fragment,
+        array $entityNames
+    ): bool {
+        $normalized = $this->normalize($fragment);
+
+        foreach ($entityNames as $name) {
+            if ($normalized === $this->normalize($name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isProductName(
