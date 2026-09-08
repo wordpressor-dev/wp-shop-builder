@@ -593,21 +593,6 @@ final class RussianMixedContentAuditService
         return false;
     }
 
-    private function containsKnownBrand(string $fragment): bool
-    {
-        $normalized = ' ' . $this->normalize($fragment) . ' ';
-
-        foreach (self::KNOWN_BRANDS as $brand) {
-            $needle = ' ' . $this->normalize($brand) . ' ';
-
-            if (str_contains($normalized, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private function isAllowedTechnicalFragment(
         string $fragment
     ): bool {
