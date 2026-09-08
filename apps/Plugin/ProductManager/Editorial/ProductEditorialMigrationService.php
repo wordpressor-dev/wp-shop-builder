@@ -1237,7 +1237,7 @@ final class ProductEditorialMigrationService
                 $matches
             ) === 1
         ) {
-            $phrase = trim((string) ($matches[0] ?? ''));
+            $phrase = trim((string) $matches[0]);
 
             if ($phrase !== '') {
                 return $phrase;
@@ -1263,7 +1263,7 @@ final class ProductEditorialMigrationService
                 array_map(
                     static fn (string $value): string =>
                         strtolower($value),
-                    $matches[0] ?? []
+                    $matches[0]
                 )
             ));
 
