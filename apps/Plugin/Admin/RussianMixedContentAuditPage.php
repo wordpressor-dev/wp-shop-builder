@@ -12,6 +12,7 @@ use WPShop\WordPress\Admin\Contracts\SubmenuPageInterface;
 
 final class RussianMixedContentAuditPage implements SubmenuPageInterface
 {
+    private const CLEANUP_PACK_VERSION = '1';
     private const REPORT_META_KEY = 'wp_shop_pm_ru_mixed_audit_report_v1';
     private const STATE_META_KEY = 'wp_shop_pm_ru_mixed_audit_state_v1';
 
@@ -242,6 +243,210 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
 
         fclose($stream);
         exit;
+    }
+
+    public function exportCleanupPack(): void
+    {
+        if (! (bool) ($this->call)('current_user_can', $this->capability())) {
+            ($this->call)(
+                'wp_die',
+                'You are not allowed to export this cleanup pack.'
+            );
+
+            return;
+        }
+
+        ($this->call)(
+            'check_admin_referer',
+            'wp_shop_pm_export_ru_cleanup_pack',
+            '_wpnonce'
+        );
+
+        $report = $this->loadReport();
+        $products = $this->reviewProducts($report['products']);
+
+        if ($products === []) {
+            ($this->call)(
+                'wp_die',
+                'The saved Mixed RU Audit has no REVIEW products.'
+            );
+
+            return;
+        }
+
+        $filename = 'wp-shop-ru-cleanup-pack-v1-'
+            . (string) ($this->call)('current_time', 'Y-m-d-His')
+            . '.csv';
+
+        ($this->call)('nocache_headers');
+        header('Content-Type: text/csv; charset=UTF-8');
+        header(
+            'Content-Disposition: attachment; filename="'
+            . $filename
+            . '"'
+        );
+        header('X-Content-Type-Options: nosniff');
+
+        $stream = fopen('php://output', 'wb');
+
+        if ($stream === false) {
+            ($this->call)(
+                'wp_die',
+                'Unable to open RU cleanup pack output stream.'
+            );
+
+            return;
+        }
+
+        fwrite($stream, "\xEF\xBB\xBF");
+        fputcsv(
+            $stream,
+            [
+                'Pack Version',
+                'Product ID',
+                'Product',
+                'Source RU Fingerprint',
+                'Review Findings',
+                'Source RU Short HTML',
+                'Source RU Long HTML',
+                'Source RU Meta',
+                'Target RU Short HTML',
+                'Target RU Long HTML',
+                'Target RU Meta',
+            ],
+            ';',
+            '"',
+            ''
+        );
+
+        foreach ($products as $product) {
+            $productId = (int) $product['productId'];
+            $source = $this->currentRussianContent($productId);
+            $findings = [];
+
+            foreach ((array) ($product['findings'] ?? []) as $finding) {
+                if (! is_array($finding)) {
+                    continue;
+                }
+
+                if (
+                    (string) ($finding['classification'] ?? '')
+                    !== 'MIXED_PROSE'
+                ) {
+                    continue;
+                }
+
+                $findings[] = (string) ($finding['field'] ?? '')
+                    . ': '
+                    . (string) ($finding['fragment'] ?? '');
+            }
+
+            fputcsv(
+                $stream,
+                [
+                    self::CLEANUP_PACK_VERSION,
+                    (string) $productId,
+                    (string) $product['title'],
+                    $this->russianFingerprint($source),
+                    implode(' | ', $findings),
+                    $source['short'],
+                    $source['long'],
+                    $source['meta'],
+                    $source['short'],
+                    $source['long'],
+                    $source['meta'],
+                ],
+                ';',
+                '"',
+                ''
+            );
+        }
+
+        fclose($stream);
+        exit;
+    }
+
+    /**
+     * @param array<int|string, mixed> $stored
+     * @return list<array<string, mixed>>
+     */
+    private function reviewProducts(array $stored): array
+    {
+        $products = [];
+
+        foreach ($stored as $product) {
+            if (! is_array($product)) {
+                continue;
+            }
+
+            if ((string) ($product['status'] ?? '') !== 'REVIEW') {
+                continue;
+            }
+
+            $productId = (int) ($product['productId'] ?? 0);
+
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $products[] = $product;
+        }
+
+        usort(
+            $products,
+            static fn(array $left, array $right): int =>
+                (int) ($left['productId'] ?? 0)
+                <=> (int) ($right['productId'] ?? 0)
+        );
+
+        return $products;
+    }
+
+    /**
+     * @return array{short:string,long:string,meta:string}
+     */
+    private function currentRussianContent(int $productId): array
+    {
+        $short = (string) ($this->call)(
+            'get_post_field',
+            'post_excerpt',
+            $productId
+        );
+        $long = (string) ($this->call)(
+            'get_post_field',
+            'post_content',
+            $productId
+        );
+        $settings = ($this->call)(
+            'get_post_meta',
+            $productId,
+            'surerank_settings_general',
+            true
+        );
+        $meta = is_array($settings)
+            ? trim((string) ($settings['page_description'] ?? ''))
+            : '';
+
+        return [
+            'short' => $short,
+            'long' => $long,
+            'meta' => $meta,
+        ];
+    }
+
+    /**
+     * @param array{short:string,long:string,meta:string} $content
+     */
+    private function russianFingerprint(array $content): string
+    {
+        return hash(
+            'sha256',
+            $content['short']
+                . "\0"
+                . $content['long']
+                . "\0"
+                . $content['meta']
+        );
     }
 
     /**
@@ -558,6 +763,21 @@ final class RussianMixedContentAuditPage implements SubmenuPageInterface
         );
         echo '<input type="hidden" name="action" value="wp_shop_pm_export_ru_mixed_audit">';
         echo '<button type="submit" class="button button-secondary">Export classified CSV</button>';
+        echo '</form>';
+
+        echo '<form method="post" action="'
+            . $this->escapeUrl($action)
+            . '" style="margin:12px 0;">';
+        ($this->call)(
+            'wp_nonce_field',
+            'wp_shop_pm_export_ru_cleanup_pack',
+            '_wpnonce',
+            true,
+            true
+        );
+        echo '<input type="hidden" name="action" value="wp_shop_pm_export_ru_cleanup_pack">';
+        echo '<button type="submit" class="button button-primary">Export RU Cleanup Pack v1 — REVIEW only</button>';
+        echo '<span style="margin-left:10px;">Read-only export. Target RU columns initially equal Source RU.</span>';
         echo '</form>';
     }
 
