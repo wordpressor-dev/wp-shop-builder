@@ -215,6 +215,58 @@ final class RussianMixedContentAuditServiceTest extends TestCase
         );
     }
 
+    public function testTreatsLinkedProductNameAsBrandName(): void
+    {
+        $call = static function (
+            string $name,
+            mixed ...$arguments
+        ): mixed {
+            if ($name === 'get_posts') {
+                return [70];
+            }
+
+            if ($name === 'get_post_field') {
+                $field = (string) ($arguments[0] ?? '');
+
+                if ($field === 'post_title') {
+                    return 'Envira Gallery';
+                }
+
+                if ($field === 'post_content') {
+                    return 'Совместимость с Justified Image Grid Premium.';
+                }
+
+                return '';
+            }
+
+            if ($name === 'get_post_meta') {
+                return ['page_description' => 'Русское meta описание.'];
+            }
+
+            return null;
+        };
+
+        $audit = new RussianMixedContentAuditService($call(...));
+        $rows = $audit->scan(0, 25);
+
+        self::assertCount(1, $rows);
+        self::assertSame('INFO', $rows[0]->status);
+        self::assertContains(
+            'Justified Image Grid Premium',
+            array_map(
+                static fn($finding): string => $finding->fragment,
+                $rows[0]->findings
+            )
+        );
+        self::assertSame(
+            ['BRAND_NAME'],
+            array_values(array_unique(array_map(
+                static fn($finding): string => $finding->classification,
+                $rows[0]->findings
+            )))
+        );
+    }
+
     public function testCandidateCountUsesFullWooCommerceCatalog(): void
     {
         $captured = [];
