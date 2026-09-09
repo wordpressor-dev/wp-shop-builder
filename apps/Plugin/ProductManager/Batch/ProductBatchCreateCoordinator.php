@@ -266,11 +266,24 @@ final class ProductBatchCreateCoordinator
             }
 
             $developer = trim((string) ($fields['developer'] ?? ''));
-            $content = $this->editorialContent(
-                $baseTitle,
-                $developer,
-                $envatoType
-            );
+            $content = [
+                'ruShort' => trim((string) ($fields['short_description'] ?? '')),
+                'ruLong' => trim((string) ($fields['long_description'] ?? '')),
+                'ruMeta' => trim((string) ($fields['meta_description'] ?? '')),
+                'enShort' => trim((string) ($fields['en_short_description'] ?? '')),
+                'enLong' => trim((string) ($fields['en_long_description'] ?? '')),
+                'enMeta' => trim((string) ($fields['en_meta_description'] ?? '')),
+            ];
+
+            if (
+                in_array('', $content, true)
+            ) {
+                $content = $this->editorialContent(
+                    $baseTitle,
+                    $developer,
+                    $envatoType
+                );
+            }
 
             try {
                 $tags = $controller->parseExistingTags(
