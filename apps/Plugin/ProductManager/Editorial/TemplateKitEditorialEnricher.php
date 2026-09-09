@@ -18,7 +18,8 @@ final class TemplateKitEditorialEnricher
      *   templates:list<string>,
      *   requiredPlugins:list<string>,
      *   helloElementor:bool,
-     *   demoImagesLicense:bool
+     *   demoImagesLicense:bool,
+     *   tags:list<string>
      * } $facts
      * @return array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string}
      */
@@ -220,7 +221,8 @@ final class TemplateKitEditorialEnricher
      *   templates:list<string>,
      *   requiredPlugins:list<string>,
      *   helloElementor:bool,
-     *   demoImagesLicense:bool
+     *   demoImagesLicense:bool,
+     *   tags:list<string>
      * } $facts
      */
     public function factCount(array $facts): int
@@ -260,7 +262,8 @@ final class TemplateKitEditorialEnricher
      *   templates:list<string>,
      *   requiredPlugins:list<string>,
      *   helloElementor:bool,
-     *   demoImagesLicense:bool
+     *   demoImagesLicense:bool,
+     *   tags:list<string>
      * } $facts
      */
     private function hasUsefulFacts(array $facts): bool
