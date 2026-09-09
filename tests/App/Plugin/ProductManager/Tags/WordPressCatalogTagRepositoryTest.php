@@ -75,6 +75,42 @@ final class WordPressCatalogTagRepositoryTest extends TestCase
         self::assertSame('finance-law', $tag->slug);
     }
 
+    public function testCanonicalLookupAcceptsWordPressTermObjects(): void
+    {
+        $repository = new WordPressCatalogTagRepository(
+            static function (
+                string $taxonomy,
+                string $name,
+                string $slug
+            ): mixed {
+                if (
+                    ! in_array(
+                        $taxonomy,
+                        ['product_tag', 'pa_tags'],
+                        true
+                    )
+                ) {
+                    return false;
+                }
+
+                return (object) [
+                    'term_id' => $taxonomy === 'product_tag' ? 21 : 22,
+                    'name' => 'агентство',
+                    'slug' => 'agency',
+                ];
+            }
+        );
+
+        $tag = $repository->resolveInBoth(
+            'agency',
+            'agency'
+        );
+
+        self::assertNotNull($tag);
+        self::assertSame('агентство', $tag->name);
+        self::assertSame('agency', $tag->slug);
+    }
+
     public function testRejectsTagMissingFromAttributeTaxonomy(): void
     {
         $repository = new WordPressCatalogTagRepository(
