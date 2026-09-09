@@ -16,7 +16,8 @@ final class EnvatoTemplateKitSalesPageExtractor
      *   templates:list<string>,
      *   requiredPlugins:list<string>,
      *   helloElementor:bool,
-     *   demoImagesLicense:bool
+     *   demoImagesLicense:bool,
+     *   tags:list<string>
      * }
      */
     public function extract(string $html): array
@@ -88,6 +89,7 @@ final class EnvatoTemplateKitSalesPageExtractor
                 '/demo\s+images?.{0,180}(?:license|envato\s+elements)/ui',
                 $plain
             ) === 1,
+            'tags' => $this->pageTags($html),
         ];
     }
 
@@ -155,6 +157,37 @@ final class EnvatoTemplateKitSalesPageExtractor
         }
 
         return array_values(array_unique(array_slice($items, 0, 30)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function pageTags(string $html): array
+    {
+        $tags = [];
+
+        if (
+            preg_match_all(
+                '~href=["\']https?://(?:www\.)?themeforest\.net/search/([^"\'?#]+)~ui',
+                $html,
+                $matches
+            ) !== false
+        ) {
+            foreach ($matches[1] as $value) {
+                $tag = rawurldecode((string) $value);
+                $tag = str_replace('+', ' ', $tag);
+                $tag = trim((string) preg_replace('/\s+/u', ' ', $tag));
+
+                if (
+                    $tag !== ''
+                    && mb_strlen($tag, 'UTF-8') <= 60
+                ) {
+                    $tags[] = mb_strtolower($tag, 'UTF-8');
+                }
+            }
+        }
+
+        return array_values(array_unique($tags));
     }
 
     private function cleanItem(string $value): string
