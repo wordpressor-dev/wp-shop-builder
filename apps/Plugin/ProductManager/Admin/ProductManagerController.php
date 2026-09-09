@@ -89,6 +89,7 @@ final class ProductManagerController
                     $item->baseTitle,
                     $item->developer,
                     $item->tags,
+                    $item->source,
                     $item->salesPage
                 );
         }
@@ -168,7 +169,7 @@ final class ProductManagerController
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
-                    'EDITORIAL CONTENT = AUTO-DRAFT V31.4 / REVIEW REQUIRED',
+                    'EDITORIAL CONTENT = AUTO-DRAFT V31.5 / REVIEW REQUIRED',
                 ]
             )
         );
@@ -177,6 +178,7 @@ final class ProductManagerController
     /**
      * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $editorial
      * @param list<string> $sourceTags
+     * @param array<string, mixed> $source
      * @return array{
      *   0:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
      *   1:list<string>,
@@ -188,19 +190,50 @@ final class ProductManagerController
         string $title,
         string $developer,
         array $sourceTags,
+        array $source,
         string $salesPage
     ): array {
+        $extractor = new EnvatoTemplateKitSalesPageExtractor();
+        $apiDescription = $this->envatoItemDescription($source);
+
+        if ($apiDescription !== '') {
+            $facts = $extractor->extract($apiDescription);
+            $enricher = new TemplateKitEditorialEnricher();
+            $factCount = $enricher->factCount($facts);
+
+            if ($factCount >= 2) {
+                return [
+                    $enricher->enrich(
+                        $editorial,
+                        $title,
+                        $developer,
+                        $sourceTags,
+                        $facts
+                    ),
+                    [
+                        'EDITORIAL FACT SOURCE = ENVATO API DESCRIPTION',
+                        'SALES PAGE EDITORIAL FACTS = READY',
+                        'SALES PAGE FACTS = ' . $factCount,
+                        'SALES PAGE TAGS = 0',
+                    ],
+                    [],
+                ];
+            }
+        }
+
         $html = $this->templateKitSalesPageHtml($salesPage);
 
         if ($html === '') {
             return [
                 $editorial,
-                ['SALES PAGE EDITORIAL FACTS = NOT AVAILABLE / API FALLBACK'],
+                [
+                    'EDITORIAL FACT SOURCE = API / LIVE PAGE UNAVAILABLE',
+                    'SALES PAGE EDITORIAL FACTS = NOT AVAILABLE / API FALLBACK',
+                ],
                 [],
             ];
         }
 
-        $extractor = new EnvatoTemplateKitSalesPageExtractor();
         $facts = $extractor->extract($html);
         $pageTags = $facts['tags'];
         $sourceTags = array_values(array_unique(array_merge(
@@ -214,6 +247,7 @@ final class ProductManagerController
             return [
                 $editorial,
                 [
+                    'EDITORIAL FACT SOURCE = THEMEFOREST LIVE PAGE',
                     'SALES PAGE EDITORIAL FACTS = INSUFFICIENT / API FALLBACK',
                     'SALES PAGE FACTS = ' . $factCount,
                     'SALES PAGE TAGS = ' . count($pageTags),
@@ -231,12 +265,43 @@ final class ProductManagerController
                 $facts
             ),
             [
+                'EDITORIAL FACT SOURCE = THEMEFOREST LIVE PAGE',
                 'SALES PAGE EDITORIAL FACTS = READY',
                 'SALES PAGE FACTS = ' . $factCount,
                 'SALES PAGE TAGS = ' . count($pageTags),
             ],
             $pageTags,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $source
+     */
+    private function envatoItemDescription(array $source): string
+    {
+        $candidates = [
+            $source['description'] ?? null,
+            is_array($source['item'] ?? null)
+                ? ($source['item']['description'] ?? null)
+                : null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (! is_scalar($candidate)) {
+                continue;
+            }
+
+            $description = trim((string) $candidate);
+
+            if (
+                $description !== ''
+                && strlen($description) <= 5_000_000
+            ) {
+                return $description;
+            }
+        }
+
+        return '';
     }
 
     private function templateKitSalesPageHtml(string $salesPage): string
