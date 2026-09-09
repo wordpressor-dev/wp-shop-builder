@@ -168,7 +168,7 @@ final class EnvatoTemplateKitSalesPageExtractor
 
         if (
             preg_match_all(
-                '~href=["\']https?://(?:www\.)?themeforest\.net/search/([^"\'?#]+)~ui',
+                '~href=["\'](?:https?://(?:www\.)?themeforest\.net)?/search/([^"\'?#]+)~ui',
                 $html,
                 $matches
             ) !== false
