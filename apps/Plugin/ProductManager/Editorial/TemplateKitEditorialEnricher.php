@@ -166,20 +166,18 @@ final class TemplateKitEditorialEnricher
             $enShort .= '.';
         }
 
-        $ruMeta = $product . ' — набор шаблонов Elementor'
-            . ($audienceRu !== '' ? ' для ' . $audienceRu : '');
-        $enMeta = $product . ' — Elementor template kit'
-            . ($audienceEn !== '' ? ' for ' . $audienceEn : '');
-
-        if ($facts['templateCount'] > 0) {
-            $ruMeta .= ': ' . $facts['templateCount'] . '+ готовых шаблонов';
-            $enMeta .= ': ' . $facts['templateCount'] . '+ ready templates';
-        }
-
-        if ($facts['elementorProRequired'] === false) {
-            $ruMeta .= ', Elementor Pro не требуется';
-            $enMeta .= ', Elementor Pro not required';
-        }
+        $ruMeta = $this->metaDescription(
+            $product,
+            $sourceTags,
+            $facts,
+            'ru'
+        );
+        $enMeta = $this->metaDescription(
+            $product,
+            $sourceTags,
+            $facts,
+            'en'
+        );
 
         return [
             'ruShort' => '<p>' . $this->text($ruShort) . '</p>',
@@ -194,7 +192,7 @@ final class TemplateKitEditorialEnricher
                 $ruImportant,
                 'ru'
             ),
-            'ruMeta' => $this->limit($ruMeta . '.', 160),
+            'ruMeta' => $ruMeta,
             'enShort' => '<p>' . $this->text($enShort) . '</p>',
             'enLong' => $this->longHtml(
                 $title,
@@ -207,7 +205,7 @@ final class TemplateKitEditorialEnricher
                 $enImportant,
                 'en'
             ),
-            'enMeta' => $this->limit($enMeta . '.', 160),
+            'enMeta' => $enMeta,
         ];
     }
 
@@ -380,48 +378,216 @@ final class TemplateKitEditorialEnricher
     /** @param list<string> $tags */
     private function audience(array $tags, string $language): string
     {
-        $mapRu = [
-            'consulting' => 'сайтов консалтинговых компаний',
-            'accounting' => 'бухгалтерских и финансовых компаний',
-            'advisor' => 'консультантов',
-            'agency' => 'агентств',
-            'corporate' => 'корпоративных проектов',
-            'finance' => 'финансовых компаний',
-            'marketing' => 'маркетинговых агентств',
-            'startup' => 'стартапов',
-            'business' => 'бизнес-сайтов',
-            'company' => 'сайтов компаний',
-            'service' => 'сервисных компаний',
-        ];
-        $mapEn = [
-            'consulting' => 'business consulting websites',
-            'accounting' => 'accounting and finance companies',
-            'advisor' => 'advisors',
-            'agency' => 'agencies',
-            'corporate' => 'corporate projects',
-            'finance' => 'finance companies',
-            'marketing' => 'marketing agencies',
-            'startup' => 'startups',
-            'business' => 'business websites',
-            'company' => 'company websites',
-            'service' => 'service companies',
-        ];
-        $map = $language === 'ru' ? $mapRu : $mapEn;
+        $normalized = array_values(array_unique(array_map(
+            static fn(string $tag): string =>
+                mb_strtolower(trim($tag), 'UTF-8'),
+            $tags
+        )));
+        $has = static fn(string ...$needles): bool =>
+            array_intersect($needles, $normalized) !== [];
+
         $values = [];
 
-        foreach ($tags as $tag) {
-            $key = mb_strtolower(trim($tag), 'UTF-8');
-            if (isset($map[$key])) {
-                $values[] = $map[$key];
-            }
+        if ($has('consulting')) {
+            $values[] = $language === 'ru'
+                ? 'консалтинговых компаний'
+                : 'consulting companies';
         }
 
-        $values = array_values(array_unique($values));
+        if ($has('advisor') && $has('finance', 'accounting')) {
+            $values[] = $language === 'ru'
+                ? 'финансовых консультантов'
+                : 'financial advisors';
+        } elseif ($has('accounting', 'finance')) {
+            $values[] = $language === 'ru'
+                ? 'финансовых компаний'
+                : 'finance companies';
+        } elseif ($has('advisor')) {
+            $values[] = $language === 'ru'
+                ? 'консультантов'
+                : 'advisors';
+        }
+
+        if ($has('agency', 'marketing')) {
+            $values[] = $language === 'ru'
+                ? 'агентств'
+                : 'agencies';
+        }
+
+        if ($has('corporate')) {
+            $values[] = $language === 'ru'
+                ? 'корпоративных проектов'
+                : 'corporate projects';
+        }
+
+        if (count($values) < 4 && $has('startup')) {
+            $values[] = $language === 'ru'
+                ? 'стартапов'
+                : 'startups';
+        }
+
+        if (
+            $values === []
+            && $has('business', 'company', 'service')
+        ) {
+            $values[] = $language === 'ru'
+                ? 'бизнес-сайтов'
+                : 'business websites';
+        }
+
+        return $this->joinNatural(
+            array_values(array_unique(array_slice($values, 0, 4))),
+            $language
+        );
+    }
+
+    /** @param list<string> $tags */
+    private function metaAudience(
+        array $tags,
+        string $language
+    ): string {
+        $normalized = array_values(array_unique(array_map(
+            static fn(string $tag): string =>
+                mb_strtolower(trim($tag), 'UTF-8'),
+            $tags
+        )));
+        $has = static fn(string ...$needles): bool =>
+            array_intersect($needles, $normalized) !== [];
+
+        $values = [];
+
+        if ($has('consulting')) {
+            $values[] = $language === 'ru'
+                ? 'консалтинговых'
+                : 'consulting';
+        }
+        if ($has('finance', 'accounting', 'advisor')) {
+            $values[] = $language === 'ru'
+                ? 'финансовых'
+                : 'finance';
+        }
+        if (count($values) < 2 && $has('agency', 'marketing')) {
+            $values[] = $language === 'ru'
+                ? 'агентских'
+                : 'agency';
+        }
+        if (
+            count($values) < 2
+            && $has('corporate', 'business', 'company')
+        ) {
+            $values[] = $language === 'ru'
+                ? 'корпоративных'
+                : 'corporate';
+        }
+        if (count($values) < 2 && $has('startup')) {
+            $values[] = $language === 'ru'
+                ? 'стартап'
+                : 'startup';
+        }
+
+        $values = array_values(array_unique(array_slice($values, 0, 2)));
+
         if ($values === []) {
+            return $language === 'ru'
+                ? 'бизнес-сайтов'
+                : 'business websites';
+        }
+
+        if ($language === 'ru') {
+            return implode(' и ', $values) . ' сайтов';
+        }
+
+        return implode(' and ', $values) . ' websites';
+    }
+
+    /**
+     * @param list<string> $tags
+     * @param array{
+     *   templateCount:int,
+     *   elementorProRequired:?bool,
+     *   responsive:bool,
+     *   dragDrop:bool,
+     *   globalStyles:bool,
+     *   templates:list<string>,
+     *   requiredPlugins:list<string>,
+     *   helloElementor:bool,
+     *   demoImagesLicense:bool,
+     *   tags:list<string>
+     * } $facts
+     */
+    private function metaDescription(
+        string $product,
+        array $tags,
+        array $facts,
+        string $language
+    ): string {
+        $audience = $this->metaAudience(
+            $tags,
+            $language
+        );
+
+        if ($language === 'ru') {
+            $meta = $product
+                . ' — набор шаблонов Elementor для '
+                . $audience . '.';
+
+            if ($facts['templateCount'] > 0) {
+                $meta .= ' ' . $facts['templateCount']
+                    . '+ готовых шаблонов.';
+            }
+
+            if ($facts['elementorProRequired'] === false) {
+                $meta .= ' Elementor Pro не требуется.';
+            }
+
+            return $this->limit(
+                $meta,
+                160
+            );
+        }
+
+        $meta = $product
+            . ' — Elementor template kit for '
+            . $audience . '.';
+
+        if ($facts['templateCount'] > 0) {
+            $meta .= ' ' . $facts['templateCount']
+                . '+ ready templates.';
+        }
+
+        if ($facts['elementorProRequired'] === false) {
+            $meta .= ' Elementor Pro is not required.';
+        }
+
+        return $this->limit(
+            $meta,
+            160
+        );
+    }
+
+    /** @param list<string> $values */
+    private function joinNatural(
+        array $values,
+        string $language
+    ): string {
+        $count = count($values);
+
+        if ($count === 0) {
             return '';
         }
 
-        return implode(', ', array_slice($values, 0, 5));
+        if ($count === 1) {
+            return $values[0];
+        }
+
+        $last = array_pop($values);
+        $conjunction = $language === 'ru'
+            ? ' и '
+            : ' and ';
+
+        return implode(', ', $values)
+            . $conjunction
+            . $last;
     }
 
     private function productName(string $title): string
