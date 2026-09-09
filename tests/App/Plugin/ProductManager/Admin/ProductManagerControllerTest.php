@@ -189,7 +189,7 @@ final class ProductManagerControllerTest extends TestCase
             $result->fields['long_description']
         );
         self::assertStringContainsString(
-            'консалтинговых компаний, финансовых консультантов, агентств и корпоративных проектов',
+            'консалтинговых компаний, финансовых компаний, агентств и корпоративных проектов',
             $result->fields['short_description']
         );
         self::assertStringNotContainsString(
