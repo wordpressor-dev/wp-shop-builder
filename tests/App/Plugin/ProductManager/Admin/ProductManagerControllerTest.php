@@ -49,6 +49,24 @@ final class ProductManagerControllerTest extends TestCase
             "elementor|elementor\nторговая площадка|marketplace",
             $result->fields['tags']
         );
+        self::assertStringContainsString(
+            '<h3>Основные возможности</h3>',
+            $result->fields['long_description']
+        );
+        self::assertStringContainsString(
+            '<h3>Кому подходит</h3>',
+            $result->fields['long_description']
+        );
+        self::assertStringContainsString(
+            '<h3>Совместимость и требования</h3>',
+            $result->fields['long_description']
+        );
+        self::assertStringContainsString(
+            '<h3>Что важно знать</h3>',
+            $result->fields['long_description']
+        );
+        self::assertNotSame('', $result->fields['short_description']);
+        self::assertNotSame('', $result->fields['meta_description']);
         self::assertSame(
             'https://assets.market.envato.com/aabbe-landscape.jpg',
             $result->fields['featured_image_source_url']
@@ -56,6 +74,10 @@ final class ProductManagerControllerTest extends TestCase
         self::assertSame('', $result->fields['featured_image_id']);
         self::assertContains(
             'ENVATO AUTOFILL = READY',
+            $result->logs
+        );
+        self::assertContains(
+            'EDITORIAL CONTENT = AUTO-DRAFT V31 / REVIEW REQUIRED',
             $result->logs
         );
         self::assertContains(
