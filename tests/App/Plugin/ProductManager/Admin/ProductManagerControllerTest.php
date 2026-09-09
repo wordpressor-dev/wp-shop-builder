@@ -78,7 +78,7 @@ final class ProductManagerControllerTest extends TestCase
             $result->logs
         );
         self::assertContains(
-            'EDITORIAL CONTENT = AUTO-DRAFT V31.5 / REVIEW REQUIRED',
+            'EDITORIAL CONTENT = AUTO-DRAFT V31.6 / REVIEW REQUIRED',
             $result->logs
         );
         self::assertContains(
@@ -188,6 +188,14 @@ final class ProductManagerControllerTest extends TestCase
             'Hello Elementor',
             $result->fields['long_description']
         );
+        self::assertStringContainsString(
+            'консалтинговых компаний, финансовых консультантов, агентств и корпоративных проектов',
+            $result->fields['short_description']
+        );
+        self::assertStringNotContainsString(
+            '…',
+            $result->fields['meta_description']
+        );
         self::assertContains(
             'EDITORIAL FACT SOURCE = ENVATO API DESCRIPTION',
             $result->logs
@@ -197,7 +205,7 @@ final class ProductManagerControllerTest extends TestCase
             $result->logs
         );
         self::assertContains(
-            'EDITORIAL CONTENT = AUTO-DRAFT V31.5 / REVIEW REQUIRED',
+            'EDITORIAL CONTENT = AUTO-DRAFT V31.6 / REVIEW REQUIRED',
             $result->logs
         );
     }
