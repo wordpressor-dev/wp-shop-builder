@@ -77,7 +77,7 @@ final class ProductManagerControllerTest extends TestCase
             $result->logs
         );
         self::assertContains(
-            'EDITORIAL CONTENT = AUTO-DRAFT V31 / REVIEW REQUIRED',
+            'EDITORIAL CONTENT = AUTO-DRAFT V31.1 / REVIEW REQUIRED',
             $result->logs
         );
         self::assertContains(
