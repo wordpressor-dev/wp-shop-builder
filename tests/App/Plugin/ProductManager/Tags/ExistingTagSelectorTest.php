@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace WPShop\Tests\App\Plugin\ProductManager\Tags;
 
 use PHPUnit\Framework\TestCase;
-use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CanonicalCatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
@@ -222,7 +222,7 @@ final class ExistingTagSelectorTest extends TestCase
 }
 
 final class ExistingTagSelectorRepository implements
-    CatalogTagRepositoryInterface
+    CanonicalCatalogTagRepositoryInterface
 {
     /**
      * @param list<string> $existingSlugs
