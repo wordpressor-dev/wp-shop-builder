@@ -61,7 +61,6 @@ final class ProductManagerController
             );
         }
 
-        $selectedTags = $this->tags->select($item->source);
         $productType = CatalogProductType::infer(
             $item->baseTitle,
             $item->salesPage
@@ -81,16 +80,25 @@ final class ProductManagerController
             $item->updatedDate
         );
         $editorialLogs = [];
+        $pageTags = [];
 
         if ($productType === CatalogProductType::TEMPLATE_KIT) {
-            [$editorial, $editorialLogs] = $this->enrichTemplateKitEditorial(
-                $editorial,
-                $item->baseTitle,
-                $item->developer,
-                $item->tags,
-                $item->salesPage
-            );
+            [$editorial, $editorialLogs, $pageTags] =
+                $this->enrichTemplateKitEditorial(
+                    $editorial,
+                    $item->baseTitle,
+                    $item->developer,
+                    $item->tags,
+                    $item->salesPage
+                );
         }
+
+        $tagSource = $item->source;
+        $tagSource['tags'] = array_values(array_unique(array_merge(
+            $item->tags,
+            $pageTags
+        )));
+        $selectedTags = $this->tags->select($tagSource);
         [$featuredImageId, $featuredImageLogs] =
             $this->importEnvatoPreview(
                 $item->previewImageUrl,
@@ -171,7 +179,8 @@ final class ProductManagerController
      * @param list<string> $sourceTags
      * @return array{
      *   0:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
-     *   1:list<string>
+     *   1:list<string>,
+     *   2:list<string>
      * }
      */
     private function enrichTemplateKitEditorial(
@@ -187,11 +196,17 @@ final class ProductManagerController
             return [
                 $editorial,
                 ['SALES PAGE EDITORIAL FACTS = NOT AVAILABLE / API FALLBACK'],
+                [],
             ];
         }
 
         $extractor = new EnvatoTemplateKitSalesPageExtractor();
         $facts = $extractor->extract($html);
+        $pageTags = $facts['tags'];
+        $sourceTags = array_values(array_unique(array_merge(
+            $sourceTags,
+            $pageTags
+        )));
         $enricher = new TemplateKitEditorialEnricher();
         $factCount = $enricher->factCount($facts);
 
@@ -201,7 +216,9 @@ final class ProductManagerController
                 [
                     'SALES PAGE EDITORIAL FACTS = INSUFFICIENT / API FALLBACK',
                     'SALES PAGE FACTS = ' . $factCount,
+                    'SALES PAGE TAGS = ' . count($pageTags),
                 ],
+                $pageTags,
             ];
         }
 
@@ -216,7 +233,9 @@ final class ProductManagerController
             [
                 'SALES PAGE EDITORIAL FACTS = READY',
                 'SALES PAGE FACTS = ' . $factCount,
+                'SALES PAGE TAGS = ' . count($pageTags),
             ],
+            $pageTags,
         ];
     }
 
@@ -248,6 +267,8 @@ final class ProductManagerController
                     'redirection' => 3,
                     'headers' => [
                         'Accept' => 'text/html,application/xhtml+xml',
+                        'Accept-Language' => 'en-US,en;q=0.9',
+                        'User-Agent' => 'Mozilla/5.0 (compatible; WPShopBuilder/0.3.9; +https://wp-shop.org)',
                     ],
                 ]
             );
