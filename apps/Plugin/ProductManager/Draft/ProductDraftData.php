@@ -85,12 +85,27 @@ final readonly class ProductDraftData
                 $salesPage
             );
 
-        if ($importQueueDraft) {
+        $preparedEditorial = trim($shortDescription) !== ''
+            && trim($longDescription) !== ''
+            && trim($metaDescription) !== ''
+            && trim($enShortDescription) !== ''
+            && trim($enLongDescription) !== ''
+            && trim($enMetaDescription) !== '';
+
+        if ($importQueueDraft && ! $preparedEditorial) {
+            $signals = $this->editorialSignals($baseTitle);
+
+            foreach ($tags as $tag) {
+                if ($tag instanceof CatalogTag) {
+                    $signals[] = $tag->name;
+                }
+            }
+
             $editorial = (new ProductEditorialDraftBuilder())->build(
                 $baseTitle,
                 $developer,
                 $resolvedProductType,
-                $this->editorialSignals($baseTitle),
+                array_values(array_unique($signals)),
                 $sourceUpdateDate
             );
             $shortDescription = $editorial['ruShort'];
