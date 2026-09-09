@@ -19,7 +19,9 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Editorial\EnvatoOfficialFactsExtractor;
+use WPShop\App\Plugin\ProductManager\Editorial\EnvatoTemplateKitSalesPageExtractor;
 use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
+use WPShop\App\Plugin\ProductManager\Editorial\TemplateKitEditorialEnricher;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -78,6 +80,17 @@ final class ProductManagerController
             $editorialSignals,
             $item->updatedDate
         );
+        $editorialLogs = [];
+
+        if ($productType === CatalogProductType::TEMPLATE_KIT) {
+            [$editorial, $editorialLogs] = $this->enrichTemplateKitEditorial(
+                $editorial,
+                $item->baseTitle,
+                $item->developer,
+                $item->tags,
+                $item->salesPage
+            );
+        }
         [$featuredImageId, $featuredImageLogs] =
             $this->importEnvatoPreview(
                 $item->previewImageUrl,
@@ -143,13 +156,131 @@ final class ProductManagerController
                 ],
                 $featuredImageLogs,
                 $downloadUrlLogs,
+                $editorialLogs,
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
-                    'EDITORIAL CONTENT = AUTO-DRAFT V31 / REVIEW REQUIRED',
+                    'EDITORIAL CONTENT = AUTO-DRAFT V31.1 / REVIEW REQUIRED',
                 ]
             )
         );
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $editorial
+     * @param list<string> $sourceTags
+     * @return array{
+     *   0:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
+     *   1:list<string>
+     * }
+     */
+    private function enrichTemplateKitEditorial(
+        array $editorial,
+        string $title,
+        string $developer,
+        array $sourceTags,
+        string $salesPage
+    ): array {
+        $html = $this->templateKitSalesPageHtml($salesPage);
+
+        if ($html === '') {
+            return [
+                $editorial,
+                ['SALES PAGE EDITORIAL FACTS = NOT AVAILABLE / API FALLBACK'],
+            ];
+        }
+
+        $extractor = new EnvatoTemplateKitSalesPageExtractor();
+        $facts = $extractor->extract($html);
+        $enricher = new TemplateKitEditorialEnricher();
+        $factCount = $enricher->factCount($facts);
+
+        if ($factCount < 2) {
+            return [
+                $editorial,
+                [
+                    'SALES PAGE EDITORIAL FACTS = INSUFFICIENT / API FALLBACK',
+                    'SALES PAGE FACTS = ' . $factCount,
+                ],
+            ];
+        }
+
+        return [
+            $enricher->enrich(
+                $editorial,
+                $title,
+                $developer,
+                $sourceTags,
+                $facts
+            ),
+            [
+                'SALES PAGE EDITORIAL FACTS = READY',
+                'SALES PAGE FACTS = ' . $factCount,
+            ],
+        ];
+    }
+
+    private function templateKitSalesPageHtml(string $salesPage): string
+    {
+        $salesPage = trim($salesPage);
+        $host = strtolower((string) parse_url($salesPage, PHP_URL_HOST));
+
+        if (
+            $salesPage === ''
+            || ! in_array(
+                $host,
+                ['themeforest.net', 'www.themeforest.net'],
+                true
+            )
+            || ! $this->wpFunctionAvailable('wp_safe_remote_get')
+            || ! $this->wpFunctionAvailable('wp_remote_retrieve_response_code')
+            || ! $this->wpFunctionAvailable('wp_remote_retrieve_body')
+        ) {
+            return '';
+        }
+
+        try {
+            $response = $this->wpCall(
+                'wp_safe_remote_get',
+                $salesPage,
+                [
+                    'timeout' => 20,
+                    'redirection' => 3,
+                    'headers' => [
+                        'Accept' => 'text/html,application/xhtml+xml',
+                    ],
+                ]
+            );
+
+            if (
+                $this->wpFunctionAvailable('is_wp_error')
+                && (bool) $this->wpCall('is_wp_error', $response)
+            ) {
+                return '';
+            }
+
+            $code = (int) $this->wpCall(
+                'wp_remote_retrieve_response_code',
+                $response
+            );
+
+            if ($code < 200 || $code >= 300) {
+                return '';
+            }
+
+            $body = (string) $this->wpCall(
+                'wp_remote_retrieve_body',
+                $response
+            );
+
+            if ($body === '' || strlen($body) > 5_000_000) {
+                return '';
+            }
+
+            return $body;
+        } catch (Throwable) {
+            return '';
+        }
     }
 
     /**
