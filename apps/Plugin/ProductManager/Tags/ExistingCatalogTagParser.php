@@ -48,14 +48,19 @@ final class ExistingCatalogTagParser
 
             [$name, $slug] = $parts;
 
-            if (! $this->repository->existsInBoth($name, $slug)) {
+            $canonical = $this->repository->resolveInBoth(
+                $name,
+                $slug
+            );
+
+            if ($canonical === null) {
                 throw new InvalidArgumentException(
                     'Tag is not present in both product_tag and pa_tags: '
                     . $name . '|' . $slug
                 );
             }
 
-            $selected[$slug] = new CatalogTag($name, $slug);
+            $selected[$canonical->slug] = $canonical;
         }
 
         return array_values($selected);
