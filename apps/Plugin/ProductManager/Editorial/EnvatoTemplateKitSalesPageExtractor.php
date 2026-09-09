@@ -113,30 +113,10 @@ final class EnvatoTemplateKitSalesPageExtractor
         }
 
         if ($start === null) {
-            $plain = html_entity_decode(
-                strip_tags($html),
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-
-            if (
-                preg_match(
-                    $startPattern,
-                    $plain,
-                    $match,
-                    PREG_OFFSET_CAPTURE
-                ) !== 1
-            ) {
-                return [];
-            }
-
             return [];
         }
 
         $tail = substr($html, $start);
-        if (! is_string($tail)) {
-            return [];
-        }
 
         $length = strlen($tail);
         if (
@@ -151,7 +131,7 @@ final class EnvatoTemplateKitSalesPageExtractor
         }
 
         $section = substr($tail, 0, $length);
-        if (! is_string($section) || $section === '') {
+        if ($section === '') {
             return [];
         }
 
@@ -166,7 +146,7 @@ final class EnvatoTemplateKitSalesPageExtractor
         }
 
         $items = [];
-        foreach ($matches[1] ?? [] as $item) {
+        foreach ($matches[1] as $item) {
             $item = $this->cleanItem((string) $item);
 
             if ($item !== '' && mb_strlen($item, 'UTF-8') <= 100) {
