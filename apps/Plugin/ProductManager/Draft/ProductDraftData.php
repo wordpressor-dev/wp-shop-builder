@@ -96,9 +96,7 @@ final readonly class ProductDraftData
             $signals = $this->editorialSignals($baseTitle);
 
             foreach ($tags as $tag) {
-                if ($tag instanceof CatalogTag) {
-                    $signals[] = $tag->name;
-                }
+                $signals[] = $tag->name;
             }
 
             $editorial = (new ProductEditorialDraftBuilder())->build(
