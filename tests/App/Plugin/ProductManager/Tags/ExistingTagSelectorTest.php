@@ -7,6 +7,7 @@ namespace WPShop\Tests\App\Plugin\ProductManager\Tags;
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
+use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
 final class ExistingTagSelectorTest extends TestCase
 {
@@ -87,14 +88,14 @@ final class ExistingTagSelectorTest extends TestCase
 
         self::assertSame(
             [
-                'agency|agency',
-                'business|business',
+                'агентство|agency',
+                'бизнес|business',
                 'консультации|consultations',
-                'corporate|corporate',
+                'корпоративные|corporate',
                 'финансы и право|finance-law',
                 'лендинг|landing',
-                'marketing|marketing',
-                'startup|startup',
+                'маркетинг|marketing',
+                'стартап|startup',
                 'elementor|elementor',
             ],
             array_map(
@@ -239,6 +240,38 @@ final class ExistingTagSelectorRepository implements
             $slug,
             $this->existingSlugs,
             true
+        );
+    }
+
+    public function resolveInBoth(
+        string $name,
+        string $slug
+    ): ?CatalogTag {
+        if (! $this->existsInBoth($name, $slug)) {
+            return null;
+        }
+
+        $names = [
+            'agency' => 'агентство',
+            'business' => 'бизнес',
+            'consultations' => 'консультации',
+            'corporate' => 'корпоративные',
+            'digital-product' => 'цифровые товары',
+            'elementor' => 'elementor',
+            'finance-law' => 'финансы и право',
+            'landing' => 'лендинг',
+            'marketplace' => 'торговая площадка',
+            'marketing' => 'маркетинг',
+            'multi-vendor' => 'multi-vendor',
+            'music-bands' => 'музыка и группы',
+            'shop' => 'интернет-магазин',
+            'software' => 'программное обеспечение',
+            'startup' => 'стартап',
+        ];
+
+        return new CatalogTag(
+            $names[$slug] ?? $name,
+            $slug
         );
     }
 }
