@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Tags;
 
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CanonicalCatalogTagRepositoryInterface;
 
 final class ExistingTagSelector
 {
@@ -44,7 +45,7 @@ final class ExistingTagSelector
                 continue;
             }
 
-            $canonical = $this->repository->resolveInBoth(
+            $canonical = $this->resolveCanonical(
                 $sourceTag,
                 $slug
             );
@@ -65,7 +66,7 @@ final class ExistingTagSelector
                 continue;
             }
 
-            $canonical = $this->repository->resolveInBoth(
+            $canonical = $this->resolveCanonical(
                 $rule['name'],
                 $rule['slug']
             );
@@ -198,6 +199,28 @@ final class ExistingTagSelector
         }
 
         return array_values(array_unique($tags));
+    }
+
+    private function resolveCanonical(
+        string $name,
+        string $slug
+    ): ?CatalogTag {
+        if (
+            $this->repository instanceof
+                CanonicalCatalogTagRepositoryInterface
+        ) {
+            return $this->repository->resolveInBoth(
+                $name,
+                $slug
+            );
+        }
+
+        return $this->repository->existsInBoth(
+            $name,
+            $slug
+        )
+            ? new CatalogTag($name, $slug)
+            : null;
     }
 
     private function canonicalAliasSlug(
