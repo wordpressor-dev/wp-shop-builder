@@ -16,6 +16,7 @@ use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItem;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
+use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
 final class ProductManagerControllerTest extends TestCase
 {
@@ -229,6 +230,22 @@ final class ProductManagerCatalogTagRepository implements
             $slug,
             ['elementor', 'marketplace'],
             true
+        );
+    }
+
+    public function resolveInBoth(
+        string $name,
+        string $slug
+    ): ?CatalogTag {
+        if (! $this->existsInBoth($name, $slug)) {
+            return null;
+        }
+
+        return new CatalogTag(
+            $slug === 'marketplace'
+                ? 'торговая площадка'
+                : 'elementor',
+            $slug
         );
     }
 }
