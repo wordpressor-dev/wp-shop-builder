@@ -323,7 +323,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
 
         if ($language === 'ru') {
             $purpose = $topics !== ''
-                ? ' для проектов в сфере ' . $topics
+                ? ' для проектов, ориентированных на ' . $topics
                 : '';
 
             return match ($productType) {
@@ -428,7 +428,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
 
         if ($topics !== '' && count($features) < 2) {
             $features[] = $language === 'ru'
-                ? 'Структура и оформление ориентированы на проекты в сфере '
+                ? 'Структура и оформление адаптированы под проекты, ориентированные на '
                     . $topics
                 : 'The structure and presentation are oriented toward '
                     . $topics . ' projects';
@@ -480,7 +480,10 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             ['learnpress', 'learndash', 'lifterlms', 'sensei', 'tutor', 'tutor lms']
         );
         foreach ($lms as $item) {
-            $items[] = $item;
+            $items[] = $this->compatibilityLabel(
+                $item,
+                $language
+            );
         }
 
         $languageTags = $this->selectedTags(
@@ -488,7 +491,10 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             ['wpml', 'rtl', 'loco translate', 'translation ready']
         );
         foreach ($languageTags as $item) {
-            $items[] = $item;
+            $items[] = $this->compatibilityLabel(
+                $item,
+                $language
+            );
         }
 
         return $this->listSection(
@@ -497,6 +503,26 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
                 : 'Compatibility and requirements',
             array_values(array_unique($items))
         );
+    }
+
+    private function compatibilityLabel(
+        string $value,
+        string $language
+    ): string {
+        return match (strtolower(trim($value))) {
+            'wpml' => 'WPML',
+            'rtl' => 'RTL',
+            'loco translate' => 'Loco Translate',
+            'translation ready' => $language === 'ru'
+                ? 'Готовность к переводу'
+                : 'Translation Ready',
+            'learnpress' => 'LearnPress',
+            'learndash' => 'LearnDash',
+            'lifterlms' => 'LifterLMS',
+            'sensei' => 'Sensei',
+            'tutor', 'tutor lms' => 'Tutor LMS',
+            default => $value,
+        };
     }
 
     private function importantSection(
@@ -685,7 +711,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         }
 
         if ($topics !== '') {
-            return $product . ' подходит для проектов в сфере '
+            return $product . ' подходит для проектов, ориентированных на '
                 . $topics . '.';
         }
 
