@@ -18,6 +18,8 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
+use WPShop\App\Plugin\ProductManager\Editorial\EnvatoOfficialFactsExtractor;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -62,6 +64,20 @@ final class ProductManagerController
             $item->baseTitle,
             $item->salesPage
         );
+        $official = (new EnvatoOfficialFactsExtractor())->extract(
+            $item->source
+        );
+        $editorialSignals = array_values(array_unique(array_merge(
+            $item->tags,
+            $official['signals']
+        )));
+        $editorial = (new ProductEditorialDraftBuilder())->build(
+            $item->baseTitle,
+            $item->developer,
+            $productType,
+            $editorialSignals,
+            $item->updatedDate
+        );
         [$featuredImageId, $featuredImageLogs] =
             $this->importEnvatoPreview(
                 $item->previewImageUrl,
@@ -89,6 +105,12 @@ final class ProductManagerController
                 : '',
             'featured_image_source_url' => $item->previewImageUrl,
             'tags' => $this->tagLines($selectedTags),
+            'short_description' => $editorial['ruShort'],
+            'long_description' => $editorial['ruLong'],
+            'meta_description' => $editorial['ruMeta'],
+            'en_short_description' => $editorial['enShort'],
+            'en_long_description' => $editorial['enLong'],
+            'en_meta_description' => $editorial['enMeta'],
         ];
 
         $versionLogs = $this->versionLogs(
@@ -124,7 +146,7 @@ final class ProductManagerController
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
-                    'EDITORIAL CONTENT = MANUAL',
+                    'EDITORIAL CONTENT = AUTO-DRAFT V31 / REVIEW REQUIRED',
                 ]
             )
         );
