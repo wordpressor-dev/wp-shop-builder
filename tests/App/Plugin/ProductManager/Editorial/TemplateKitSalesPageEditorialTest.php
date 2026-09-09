@@ -183,11 +183,14 @@ HTML;
             $editorial['ruLong']
         );
         self::assertSame(
-            'Probiz — набор шаблонов Elementor для консалтинговых и финансовых сайтов. 11+ готовых шаблонов. Elementor Pro не требуется.',
+            'Probiz — набор шаблонов Elementor для консалтинговых '
+                . 'и финансовых сайтов. 11+ готовых шаблонов. '
+                . 'Elementor Pro не требуется.',
             $editorial['ruMeta']
         );
         self::assertSame(
-            'Probiz — Elementor template kit for consulting and finance websites. 11+ ready templates. Elementor Pro is not required.',
+            'Probiz — Elementor template kit for consulting and finance '
+                . 'websites. 11+ ready templates. Elementor Pro is not required.',
             $editorial['enMeta']
         );
         self::assertStringNotContainsString('…', $editorial['ruMeta']);
