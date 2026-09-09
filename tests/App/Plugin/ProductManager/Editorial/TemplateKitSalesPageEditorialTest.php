@@ -171,6 +171,28 @@ HTML;
             $editorial['ruLong']
         );
         self::assertStringContainsString(
+            'консалтинговых компаний, финансовых консультантов, агентств и корпоративных проектов',
+            $editorial['ruShort']
+        );
+        self::assertStringContainsString(
+            'консалтинговых компаний, финансовых консультантов, агентств и корпоративных проектов',
+            $editorial['ruLong']
+        );
+        self::assertStringNotContainsString(
+            'бизнес-сайтов, сайтов компаний',
+            $editorial['ruLong']
+        );
+        self::assertSame(
+            'Probiz — набор шаблонов Elementor для консалтинговых и финансовых сайтов. 11+ готовых шаблонов. Elementor Pro не требуется.',
+            $editorial['ruMeta']
+        );
+        self::assertSame(
+            'Probiz — Elementor template kit for consulting and finance websites. 11+ ready templates. Elementor Pro is not required.',
+            $editorial['enMeta']
+        );
+        self::assertStringNotContainsString('…', $editorial['ruMeta']);
+        self::assertStringNotContainsString('…', $editorial['enMeta']);
+        self::assertStringContainsString(
             'Демо-изображения могут требовать отдельной лицензии Envato Elements',
             $editorial['ruLong']
         );
