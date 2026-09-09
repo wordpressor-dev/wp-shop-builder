@@ -23,7 +23,7 @@ final class WordPressCatalogTagRepository implements
             string $taxonomy,
             string $name,
             string $slug
-        ): bool {
+        ): mixed {
             $taxonomyExists = self::wordpressCallable(
                 'taxonomy_exists'
             );
