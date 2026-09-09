@@ -6,10 +6,10 @@ namespace WPShop\App\Plugin\ProductManager\Tags;
 
 use Closure;
 use RuntimeException;
-use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CanonicalCatalogTagRepositoryInterface;
 
 final class WordPressCatalogTagRepository implements
-    CatalogTagRepositoryInterface
+    CanonicalCatalogTagRepositoryInterface
 {
     /** @var Closure(string, string, string): mixed */
     private readonly Closure $lookup;
