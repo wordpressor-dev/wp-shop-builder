@@ -18,6 +18,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
@@ -950,38 +951,11 @@ final class ProductBatchCreateCoordinator
         string $developer,
         string $productType
     ): array {
-        $ruType = match ($productType) {
-            CatalogProductType::PLUGIN => 'плагин WordPress',
-            CatalogProductType::TEMPLATE_KIT => 'набор шаблонов Elementor',
-            default => 'тема WordPress',
-        };
-        $enType = match ($productType) {
-            CatalogProductType::PLUGIN => 'WordPress plugin',
-            CatalogProductType::TEMPLATE_KIT => 'Elementor template kit',
-            default => 'WordPress theme',
-        };
-        $ruDeveloper = $developer !== '' ? ' от ' . $developer : '';
-        $enDeveloper = $developer !== '' ? ' by ' . $developer : '';
-        $safeTitle = $this->text($title);
-        $safeDeveloperRu = $this->text($ruDeveloper);
-        $safeDeveloperEn = $this->text($enDeveloper);
-
-        return [
-            'ruShort' => '<p>' . $safeTitle . ' — ' . $ruType
-                . $safeDeveloperRu . '.</p>',
-            'ruLong' => '<h2>' . $safeTitle . '</h2><p>'
-                . $safeTitle . ' — ' . $ruType . $safeDeveloperRu
-                . '. Перед публикацией проверьте описание, требования и совместимость на официальной странице разработчика.</p>',
-            'ruMeta' => $title . ' — ' . $ruType . $ruDeveloper
-                . '. Актуальная версия и официальный источник.',
-            'enShort' => '<p>' . $safeTitle . ' — ' . $enType
-                . $safeDeveloperEn . '.</p>',
-            'enLong' => '<h2>' . $safeTitle . '</h2><p>'
-                . $safeTitle . ' — ' . $enType . $safeDeveloperEn
-                . '. Review the description, requirements and compatibility on the official developer page before publishing.</p>',
-            'enMeta' => $title . ' — ' . $enType . $enDeveloper
-                . '. Current version and official source.',
-        ];
+        return (new ProductEditorialDraftBuilder())->build(
+            $title,
+            $developer,
+            $productType
+        );
     }
 
     private function text(string $value): string
