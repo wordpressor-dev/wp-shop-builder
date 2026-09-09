@@ -109,16 +109,20 @@ final class ProductEditorialDraftBuilder
             $sourceTags,
             'en'
         );
-        $ruMeta = $title . ' — ' . $ruType . $ruDeveloper;
-        $enMeta = $title . ' — ' . $enType . $enDeveloper;
-
-        if ($ruTopics !== '') {
-            $ruMeta .= '. Для проектов: ' . $ruTopics;
-        }
-
-        if ($enTopics !== '') {
-            $enMeta .= '. For ' . $enTopics;
-        }
+        $ruMeta = $this->standardMeta(
+            $product,
+            $developer,
+            $productType,
+            $ruTopics,
+            'ru'
+        );
+        $enMeta = $this->standardMeta(
+            $product,
+            $developer,
+            $productType,
+            $enTopics,
+            'en'
+        );
 
         $legacyRuShort = $this->normalizeRuLegacyGrammar($this->legacyText(
     (string) ($legacy['ruShort'] ?? '')
@@ -365,6 +369,44 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         };
     }
 
+    private function standardMeta(
+        string $product,
+        string $developer,
+        string $productType,
+        string $topics,
+        string $language
+    ): string {
+        if ($language === 'ru') {
+            $meta = $product . ' — ' . $this->ruType($productType);
+
+            if ($developer !== '') {
+                $meta .= ' от ' . $developer;
+            }
+
+            if ($topics !== '') {
+                $meta .= ' для проектов, ориентированных на ' . $topics;
+            }
+
+            return $this->limit(
+                $meta . '. Ключевые возможности, совместимость и требования.'
+            );
+        }
+
+        $meta = $product . ' — ' . $this->enType($productType);
+
+        if ($developer !== '') {
+            $meta .= ' by ' . $developer;
+        }
+
+        if ($topics !== '') {
+            $meta .= ' for ' . $topics;
+        }
+
+        return $this->limit(
+            $meta . '. Key features, compatibility and requirements.'
+        );
+    }
+
     /**
      * @param list<string> $existing
      * @param list<string> $sourceTags
@@ -378,6 +420,12 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         string $language
     ): array {
         $features = $existing;
+
+        if ($productType === CatalogProductType::TEMPLATE_KIT) {
+            $features[] = $language === 'ru'
+                ? 'Готовые шаблоны страниц и секций для ускорения сборки сайта'
+                : 'Ready page and section templates for faster site building';
+        }
 
         if (
             $productType === CatalogProductType::TEMPLATE_KIT
@@ -426,7 +474,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             }
         }
 
-        if ($topics !== '' && count($features) < 2) {
+        if ($topics !== '') {
             $features[] = $language === 'ru'
                 ? 'Структура и оформление адаптированы под проекты, ориентированные на '
                     . $topics
@@ -637,28 +685,30 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         string $topics,
         string $language
     ): string {
+        $product = $this->productName($title);
+
         if ($language === 'ru') {
-            $intro = $title . ' — ' . $this->ruType($productType) . '.';
+            $intro = $product . ' — ' . $this->ruType($productType) . '.';
 
             if ($developer !== '') {
                 $intro .= ' Разработчик — ' . $developer . '.';
             }
 
             if ($topics !== '') {
-                $intro .= ' Подходит для проектов, ориентированных на ' . $topics . '.';
+                $intro .= ' Решение ориентировано на ' . $topics . '.';
             }
 
             return $intro;
         }
 
-        $intro = $title . ' is a ' . $this->enType($productType) . '.';
+        $intro = $product . ' is a ' . $this->enType($productType) . '.';
 
         if ($developer !== '') {
             $intro .= ' The developer is ' . $developer . '.';
         }
 
         if ($topics !== '') {
-            $intro .= ' Suitable for projects focused on ' . $topics . '.';
+            $intro .= ' It is designed for ' . $topics . '.';
         }
 
         return $intro;
