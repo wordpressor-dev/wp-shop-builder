@@ -76,17 +76,22 @@ final class ProductEditorialDraftBuilder
         $enType = $this->enType($productType);
         $ruDeveloper = $developer !== '' ? ' от ' . $developer : '';
         $enDeveloper = $developer !== '' ? ' by ' . $developer : '';
+        $product = $this->productName($title);
 
-        $ruShort = $title . ' — ' . $ruType . $ruDeveloper . '.';
-        $enShort = $title . ' is a ' . $enType . $enDeveloper . '.';
-
-        if ($ruTopics !== '') {
-            $ruShort .= ' Подходит для проектов, ориентированных на ' . $ruTopics . '.';
-        }
-
-        if ($enTopics !== '') {
-            $enShort .= ' Suitable for projects focused on ' . $enTopics . '.';
-        }
+        $ruShort = $this->standardShort(
+            $product,
+            $developer,
+            $productType,
+            $ruTopics,
+            'ru'
+        );
+        $enShort = $this->standardShort(
+            $product,
+            $developer,
+            $productType,
+            $enTopics,
+            'en'
+        );
 
         $ruLong = $this->baseLong(
             $title,
@@ -194,17 +199,13 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             $details,
             $this->sameText($summary, $details)
         );
-        $featureHeading = $language === 'ru'
-            ? 'Основные возможности ' . $product
-            : 'Key features of ' . $product;
-        $featuresSection = $this->featureSection(
-            $featureHeading,
-            $features
+        $features = $this->standardFeatureItems(
+            $features,
+            $productType,
+            $topics,
+            $sourceTags,
+            $language
         );
-        $fallback = $featuresSection === ''
-            && ! $this->sameText($summary, $details)
-                ? $this->fallbackDetails($details, $language)
-                : '';
 
         return '<h2>' . $this->text(
             $this->seoHeading(
@@ -217,22 +218,11 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             )
         ) . '</h2>'
             . '<p>' . $this->text($summary) . '</p>'
-            . $this->leadParagraph(
-                $product,
-                $summary . ' ' . $details,
-                $productType,
-                $topics,
-                $language
-            )
-            . $featuresSection
-            . $fallback
-            . $this->editorialSections(
-                $product,
-                $details,
-                $productType,
-                $topics,
-                $sourceTags,
-                $language
+            . $this->featureSection(
+                $language === 'ru'
+                    ? 'Основные возможности'
+                    : 'Key features',
+                $features
             )
             . $this->audienceSection(
                 $product,
@@ -240,8 +230,21 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
                 $productType,
                 $topics,
                 $language
+            )
+            . $this->compatibilitySection(
+                $title,
+                $details,
+                $productType,
+                $sourceTags,
+                $language
+            )
+            . $this->importantSection(
+                $product,
+                $productType,
+                $language
             );
     }
+
 
     /** @param list<string> $sourceTags */
     private function baseLong(
@@ -253,14 +256,18 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         string $language
     ): string {
         $product = $this->productName($title);
-        $type = $language === 'ru'
-            ? $this->ruType($productType)
-            : $this->enType($productType);
         $intro = $this->baseIntro(
             $title,
             $developer,
             $productType,
             $topics,
+            $language
+        );
+        $features = $this->standardFeatureItems(
+            [],
+            $productType,
+            $topics,
+            $sourceTags,
             $language
         );
 
@@ -275,13 +282,11 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             )
         ) . '</h2><p>'
             . $this->text($intro) . '</p>'
-            . $this->editorialSections(
-                $product,
-                '',
-                $productType,
-                $topics,
-                $sourceTags,
-                $language
+            . $this->featureSection(
+                $language === 'ru'
+                    ? 'Основные возможности'
+                    : 'Key features',
+                $features
             )
             . $this->audienceSection(
                 $product,
@@ -290,13 +295,272 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
                 $topics,
                 $language
             )
-            . '<p>' . $this->text(
-                $language === 'ru'
-                    ? 'Перед публикацией рекомендуется сверить функции '
-                        . $type . ' с актуальной документацией разработчика.'
-                    : 'Before publishing, verify the ' . $type
-                        . ' features against the current developer documentation.'
-            ) . '</p>';
+            . $this->compatibilitySection(
+                $title,
+                '',
+                $productType,
+                $sourceTags,
+                $language
+            )
+            . $this->importantSection(
+                $product,
+                $productType,
+                $language
+            );
+    }
+
+
+    private function standardShort(
+        string $product,
+        string $developer,
+        string $productType,
+        string $topics,
+        string $language
+    ): string {
+        $developerPart = $developer !== ''
+            ? ($language === 'ru' ? ' от ' : ' by ') . $developer
+            : '';
+
+        if ($language === 'ru') {
+            $purpose = $topics !== ''
+                ? ' для проектов в сфере ' . $topics
+                : '';
+
+            return match ($productType) {
+                CatalogProductType::TEMPLATE_KIT =>
+                    $product . ' — набор шаблонов Elementor'
+                    . $developerPart . $purpose
+                    . '. Помогает быстрее собрать основные страницы сайта '
+                    . 'на готовой визуальной основе.',
+                CatalogProductType::PLUGIN =>
+                    $product . ' — плагин WordPress'
+                    . $developerPart . $purpose
+                    . '. Расширяет сайт специализированными функциями '
+                    . 'в рамках задач продукта.',
+                default =>
+                    $product . ' — тема WordPress'
+                    . $developerPart . $purpose
+                    . '. Предоставляет готовую основу дизайна и структуры сайта.',
+            };
+        }
+
+        $purpose = $topics !== ''
+            ? ' for projects focused on ' . $topics
+            : '';
+
+        return match ($productType) {
+            CatalogProductType::TEMPLATE_KIT =>
+                $product . ' is an Elementor template kit'
+                . $developerPart . $purpose
+                . '. It provides a ready visual foundation for building '
+                . 'the main website pages faster.',
+            CatalogProductType::PLUGIN =>
+                $product . ' is a WordPress plugin'
+                . $developerPart . $purpose
+                . '. It adds focused functionality for the product use case.',
+            default =>
+                $product . ' is a WordPress theme'
+                . $developerPart . $purpose
+                . '. It provides a ready design and site-structure foundation.',
+        };
+    }
+
+    /**
+     * @param list<string> $existing
+     * @param list<string> $sourceTags
+     * @return list<string>
+     */
+    private function standardFeatureItems(
+        array $existing,
+        string $productType,
+        string $topics,
+        array $sourceTags,
+        string $language
+    ): array {
+        $features = $existing;
+
+        if (
+            $productType === CatalogProductType::TEMPLATE_KIT
+            || $this->hasAnyTag($sourceTags, ['elementor', 'elementor pro'])
+        ) {
+            $features[] = $language === 'ru'
+                ? 'Визуальная настройка страниц с помощью Elementor'
+                : 'Visual page editing with Elementor';
+        }
+
+        if ($this->hasAnyTag(
+            $sourceTags,
+            ['responsive', 'responsive design', 'responsive layout']
+        )) {
+            $features[] = $language === 'ru'
+                ? 'Адаптивная компоновка для компьютеров, планшетов и смартфонов'
+                : 'Responsive layouts for desktop, tablet and mobile devices';
+        }
+
+        if ($this->hasAnyTag($sourceTags, ['woocommerce', 'ecommerce'])) {
+            $features[] = $language === 'ru'
+                ? 'Поддержка коммерческих сценариев и интернет-магазинов'
+                : 'Support for commerce workflows and online stores';
+        }
+
+        if ($features === []) {
+            if ($language === 'ru') {
+                $features[] = match ($productType) {
+                    CatalogProductType::TEMPLATE_KIT =>
+                        'Готовые шаблоны страниц и секций для ускорения сборки сайта',
+                    CatalogProductType::PLUGIN =>
+                        'Расширение стандартных возможностей WordPress '
+                        . 'специализированными функциями продукта',
+                    default =>
+                        'Готовая визуальная основа и структура для WordPress-сайта',
+                };
+            } else {
+                $features[] = match ($productType) {
+                    CatalogProductType::TEMPLATE_KIT =>
+                        'Ready page and section templates for faster site building',
+                    CatalogProductType::PLUGIN =>
+                        'Focused functionality that extends standard WordPress capabilities',
+                    default =>
+                        'A ready visual and structural foundation for a WordPress site',
+                };
+            }
+        }
+
+        if ($topics !== '' && count($features) < 2) {
+            $features[] = $language === 'ru'
+                ? 'Структура и оформление ориентированы на проекты в сфере '
+                    . $topics
+                : 'The structure and presentation are oriented toward '
+                    . $topics . ' projects';
+        }
+
+        return array_values(array_unique(array_slice($features, 0, 12)));
+    }
+
+    /**
+     * @param list<string> $sourceTags
+     */
+    private function compatibilitySection(
+        string $title,
+        string $details,
+        string $productType,
+        array $sourceTags,
+        string $language
+    ): string {
+        unset($details);
+
+        $items = [];
+        $items[] = $language === 'ru'
+            ? 'WordPress'
+            : 'WordPress';
+
+        if (
+            $productType === CatalogProductType::TEMPLATE_KIT
+            || $this->hasAnyTag($sourceTags, ['elementor', 'elementor pro'])
+            || $this->matches($title, '/\belementor\b/ui')
+        ) {
+            $items[] = 'Elementor';
+        }
+
+        if (
+            $this->hasAnyTag($sourceTags, ['elementor pro'])
+            || $this->matches($title, '/\belementor\s+pro\b/ui')
+        ) {
+            $items[] = $language === 'ru'
+                ? 'Для заявленных Pro-виджетов требуется Elementor Pro'
+                : 'Elementor Pro is required for the stated Pro widgets';
+        }
+
+        if ($this->hasAnyTag($sourceTags, ['woocommerce', 'ecommerce'])) {
+            $items[] = 'WooCommerce';
+        }
+
+        $lms = $this->selectedTags(
+            $sourceTags,
+            ['learnpress', 'learndash', 'lifterlms', 'sensei', 'tutor', 'tutor lms']
+        );
+        foreach ($lms as $item) {
+            $items[] = $item;
+        }
+
+        $languageTags = $this->selectedTags(
+            $sourceTags,
+            ['wpml', 'rtl', 'loco translate', 'translation ready']
+        );
+        foreach ($languageTags as $item) {
+            $items[] = $item;
+        }
+
+        return $this->listSection(
+            $language === 'ru'
+                ? 'Совместимость и требования'
+                : 'Compatibility and requirements',
+            array_values(array_unique($items))
+        );
+    }
+
+    private function importantSection(
+        string $product,
+        string $productType,
+        string $language
+    ): string {
+        if ($language === 'ru') {
+            $text = match ($productType) {
+                CatalogProductType::TEMPLATE_KIT =>
+                    $product . ' — это набор шаблонов Elementor, '
+                    . 'а не самостоятельная WordPress-тема. Шаблоны импортируются '
+                    . 'в существующий сайт и используются для создания страниц и секций.',
+                CatalogProductType::PLUGIN =>
+                    $product . ' устанавливается как отдельный плагин WordPress. '
+                    . 'Для интеграций могут потребоваться соответствующие базовые '
+                    . 'плагины, если они указаны в совместимости продукта.',
+                default =>
+                    $product . ' — полноценная WordPress-тема. После установки '
+                    . 'могут использоваться дополнительные плагины, если они '
+                    . 'предусмотрены разработчиком.',
+            };
+
+            return $this->simpleSection('Что важно знать', $text);
+        }
+
+        $text = match ($productType) {
+            CatalogProductType::TEMPLATE_KIT =>
+                $product . ' is an Elementor template kit, not a standalone '
+                . 'WordPress theme. The templates are imported into an existing '
+                . 'site and used to build pages and sections.',
+            CatalogProductType::PLUGIN =>
+                $product . ' is installed as a separate WordPress plugin. '
+                . 'Some integrations may require their corresponding base plugins '
+                . 'when listed in the product compatibility information.',
+            default =>
+                $product . ' is a complete WordPress theme. Additional plugins '
+                . 'may be used when they are provided or recommended by the developer.',
+        };
+
+        return $this->simpleSection('What to know', $text);
+    }
+
+    /** @param list<string> $items */
+    private function listSection(string $heading, array $items): string
+    {
+        $html = '';
+
+        foreach ($items as $item) {
+            $item = rtrim(trim($item), " .;,:!?");
+
+            if ($item === '') {
+                continue;
+            }
+
+            $html .= '<li>' . $this->text($item) . '.</li>';
+        }
+
+        if ($html === '') {
+            return '';
+        }
+
+        return '<h3>' . $this->text($heading) . '</h3><ul>'
+            . $html . '</ul>';
     }
 
     private function seoHeading(
@@ -596,7 +860,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
                 : $this->ruAudienceFallback($product, $productType, $topics);
 
             return $this->simpleSection(
-                'Кому подходит ' . $product . '?',
+                'Кому подходит',
                 $text
             );
         }
@@ -609,7 +873,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             : $this->enAudienceFallback($product, $productType, $topics);
 
         return $this->simpleSection(
-            'Who is ' . $product . ' for?',
+            'Who it is for',
             $text
         );
     }
@@ -627,13 +891,21 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         }
 
         if ($topics !== '') {
-            return $product . ' можно рассматривать для проектов, ориентированных на '
-                . $topics . '. Выбор зависит от требуемых функций и структуры сайта.';
+            return $product . ' подходит для проектов в сфере '
+                . $topics . '.';
         }
 
-        return $product . ' подойдёт пользователям, которым нужен '
-            . $this->ruType($productType)
-            . ' с возможностями, перечисленными в описании товара.';
+        return match ($productType) {
+            CatalogProductType::TEMPLATE_KIT =>
+                $product . ' подходит компаниям, агентствам и специалистам, '
+                . 'которым нужен готовый набор шаблонов Elementor для нового сайта.',
+            CatalogProductType::PLUGIN =>
+                $product . ' подходит владельцам сайтов и разработчикам, '
+                . 'которым нужны специализированные функции WordPress.',
+            default =>
+                $product . ' подходит владельцам сайтов, агентствам и разработчикам, '
+                . 'которым нужна готовая визуальная основа WordPress-сайта.',
+        };
     }
 
     private function enAudienceFallback(
@@ -649,14 +921,21 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
         }
 
         if ($topics !== '') {
-            return $product . ' can be considered for projects focused on '
-                . $topics . '. The final choice depends on the required '
-                . 'site structure and features.';
+            return $product . ' is suitable for projects focused on '
+                . $topics . '.';
         }
 
-        return $product . ' is suitable for users who need a '
-            . $this->enType($productType)
-            . ' with the capabilities listed in the product description.';
+        return match ($productType) {
+            CatalogProductType::TEMPLATE_KIT =>
+                $product . ' is suitable for companies, agencies and specialists '
+                . 'that need a ready Elementor template kit for a new website.',
+            CatalogProductType::PLUGIN =>
+                $product . ' is suitable for site owners and developers '
+                . 'who need focused WordPress functionality.',
+            default =>
+                $product . ' is suitable for site owners, agencies and developers '
+                . 'who need a ready visual foundation for a WordPress website.',
+        };
     }
 
     private function fallbackDetails(string $details, string $language): string
@@ -749,6 +1028,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             'booking' => ['booking'],
             'business' => preg_match('/\bbusiness\s*[–—-]\s*/u', $title) === 1 ? [] : ['business'],
             'corporate' => ['corporate'],
+            'consulting' => ['consulting'],
             'agency' => ['agency'],
             'marketing' => ['marketing'],
             'ecommerce' => ['ecommerce'],
@@ -825,6 +1105,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             'booking' => 'бронирование',
             'business' => 'бизнес',
             'corporate' => 'корпоративные сайты',
+            'consulting' => 'консалтинг',
             'agency' => 'агентства',
             'marketing' => 'маркетинг',
             'education' => ['образование', 'онлайн-обучение'],
@@ -859,6 +1140,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
             'booking' => 'booking',
             'business' => 'business',
             'corporate' => 'corporate websites',
+            'consulting' => 'consulting',
             'agency' => 'agencies',
             'marketing' => 'marketing',
             'education' => ['education', 'online learning'],
@@ -1070,7 +1352,7 @@ if ($legacyEnShort !== '' || $legacyEnLong !== '') {
     /** @param list<string> $features */
     private function featureSection(string $heading, array $features): string
     {
-        if (count($features) < 2) {
+        if ($features === []) {
             return '';
         }
 
