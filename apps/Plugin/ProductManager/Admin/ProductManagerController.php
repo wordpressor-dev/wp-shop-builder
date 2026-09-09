@@ -168,7 +168,7 @@ final class ProductManagerController
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
-                    'EDITORIAL CONTENT = AUTO-DRAFT V31.3 / REVIEW REQUIRED',
+                    'EDITORIAL CONTENT = AUTO-DRAFT V31.4 / REVIEW REQUIRED',
                 ]
             )
         );
