@@ -28,6 +28,30 @@ final class ExistingTagSelector
         );
 
         $selected = [];
+        $ruleSlugs = array_column(
+            $this->rules(),
+            'slug'
+        );
+
+        foreach ($this->tags($envatoItem['tags'] ?? []) as $sourceTag) {
+            $slug = $this->tagSlug($sourceTag);
+
+            if (
+                $slug === ''
+                || in_array($slug, $ruleSlugs, true)
+                || ! $this->repository->existsInBoth(
+                    $sourceTag,
+                    $slug
+                )
+            ) {
+                continue;
+            }
+
+            $selected[$slug] = new CatalogTag(
+                $sourceTag,
+                $slug
+            );
+        }
 
         foreach ($this->rules() as $rule) {
             $matched = $rule['slug'] === 'software'
@@ -174,6 +198,21 @@ final class ExistingTagSelector
         }
 
         return array_values(array_unique($tags));
+    }
+
+    private function tagSlug(string $value): string
+    {
+        $value = $this->normalizeTag($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        return trim(
+            preg_replace('/\s+/', '-', $value)
+            ?? '',
+            '-'
+        );
     }
 
     private function normalizeTag(string $value): string
