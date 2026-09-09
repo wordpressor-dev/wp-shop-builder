@@ -9,38 +9,66 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductDraftData;
 
 final class ProductDraftDataEditorialTest extends TestCase
 {
-    public function testImportQueueDraftReplacesPlaceholderEditorialContent(): void
+    public function testImportQueueDraftPreservesPreparedEditorialContent(): void
     {
         $data = $this->data(
             'Created from WP Shop Builder Import Queue. Review before publish.'
         );
 
-        self::assertStringContainsString(
-            'отели, курорты и виллы',
-            $data->shortDescription
+        self::assertSame('RU short placeholder', $data->shortDescription);
+        self::assertSame('RU long placeholder', $data->longDescription);
+        self::assertSame('RU meta placeholder', $data->metaDescription);
+        self::assertSame('EN short placeholder', $data->enShortDescription);
+        self::assertSame('EN long placeholder', $data->enLongDescription);
+        self::assertSame('EN meta placeholder', $data->enMetaDescription);
+    }
+
+    public function testImportQueueDraftGeneratesUnifiedEditorialWhenPreparedContentIsMissing(): void
+    {
+        $data = new ProductDraftData(
+            'Villora – Villa & Hotel Resort Elementor Template Kit',
+            'villora',
+            64256262,
+            '',
+            '2026-07-15',
+            'kitpixel',
+            '249',
+            'https://themeforest.net/item/villora-villa-hotel-resort-elementor-template-kit/64256262',
+            'themeforest-64256262-villora-villa-hotel-resort-elementor-template-kit.zip',
+            'https://wp-shop.org/example.zip',
+            0,
+            [],
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            'Created from WP Shop Builder Import Queue. Review before publish.',
+            false,
+            false
         );
+
         self::assertStringContainsString(
-            '<h3>Elementor и настройка страниц</h3>',
+            '<h3>Основные возможности</h3>',
             $data->longDescription
         );
         self::assertStringContainsString(
-            '<h3>Кому подходит Villora?</h3>',
+            '<h3>Кому подходит</h3>',
             $data->longDescription
         );
         self::assertStringContainsString(
-            'hotels, resorts and villas',
-            $data->enShortDescription
+            '<h3>Совместимость и требования</h3>',
+            $data->longDescription
         );
         self::assertStringContainsString(
-            '<h3>Elementor and page building</h3>',
-            $data->enLongDescription
+            '<h3>Что важно знать</h3>',
+            $data->longDescription
         );
         self::assertStringContainsString(
-            '<h3>Who is Villora for?</h3>',
-            $data->enLongDescription
+            'не самостоятельная WordPress-тема',
+            $data->longDescription
         );
-        self::assertNotSame('RU meta placeholder', $data->metaDescription);
-        self::assertNotSame('EN meta placeholder', $data->enMetaDescription);
     }
 
     public function testManualDraftKeepsEditorialContentUntouched(): void

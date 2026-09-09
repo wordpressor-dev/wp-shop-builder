@@ -18,6 +18,10 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Envato\Contracts\EnvatoClientInterface;
+use WPShop\App\Plugin\ProductManager\Editorial\EnvatoOfficialFactsExtractor;
+use WPShop\App\Plugin\ProductManager\Editorial\EnvatoTemplateKitSalesPageExtractor;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
+use WPShop\App\Plugin\ProductManager\Editorial\TemplateKitEditorialEnricher;
 use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
@@ -57,11 +61,45 @@ final class ProductManagerController
             );
         }
 
-        $selectedTags = $this->tags->select($item->source);
         $productType = CatalogProductType::infer(
             $item->baseTitle,
             $item->salesPage
         );
+        $official = (new EnvatoOfficialFactsExtractor())->extract(
+            $item->source
+        );
+        $editorialSignals = array_values(array_unique(array_merge(
+            $item->tags,
+            $official['signals']
+        )));
+        $editorial = (new ProductEditorialDraftBuilder())->build(
+            $item->baseTitle,
+            $item->developer,
+            $productType,
+            $editorialSignals,
+            $item->updatedDate
+        );
+        $editorialLogs = [];
+        $pageTags = [];
+
+        if ($productType === CatalogProductType::TEMPLATE_KIT) {
+            [$editorial, $editorialLogs, $pageTags] =
+                $this->enrichTemplateKitEditorial(
+                    $editorial,
+                    $item->baseTitle,
+                    $item->developer,
+                    $item->tags,
+                    $item->source,
+                    $item->salesPage
+                );
+        }
+
+        $tagSource = $item->source;
+        $tagSource['tags'] = array_values(array_unique(array_merge(
+            $item->tags,
+            $pageTags
+        )));
+        $selectedTags = $this->tags->select($tagSource);
         [$featuredImageId, $featuredImageLogs] =
             $this->importEnvatoPreview(
                 $item->previewImageUrl,
@@ -89,6 +127,12 @@ final class ProductManagerController
                 : '',
             'featured_image_source_url' => $item->previewImageUrl,
             'tags' => $this->tagLines($selectedTags),
+            'short_description' => $editorial['ruShort'],
+            'long_description' => $editorial['ruLong'],
+            'meta_description' => $editorial['ruMeta'],
+            'en_short_description' => $editorial['enShort'],
+            'en_long_description' => $editorial['enLong'],
+            'en_meta_description' => $editorial['enMeta'],
         ];
 
         $versionLogs = $this->versionLogs(
@@ -121,13 +165,208 @@ final class ProductManagerController
                 ],
                 $featuredImageLogs,
                 $downloadUrlLogs,
+                $editorialLogs,
                 [
                     'EXISTING TAGS SUGGESTED = '
                         . count($selectedTags),
-                    'EDITORIAL CONTENT = MANUAL',
+                    'EDITORIAL CONTENT = AUTO-DRAFT V31.6 / REVIEW REQUIRED',
                 ]
             )
         );
+    }
+
+    /**
+     * @param array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string} $editorial
+     * @param list<string> $sourceTags
+     * @param array<string, mixed> $source
+     * @return array{
+     *   0:array{ruShort:string,ruLong:string,ruMeta:string,enShort:string,enLong:string,enMeta:string},
+     *   1:list<string>,
+     *   2:list<string>
+     * }
+     */
+    private function enrichTemplateKitEditorial(
+        array $editorial,
+        string $title,
+        string $developer,
+        array $sourceTags,
+        array $source,
+        string $salesPage
+    ): array {
+        $extractor = new EnvatoTemplateKitSalesPageExtractor();
+        $apiDescription = $this->envatoItemDescription($source);
+
+        if ($apiDescription !== '') {
+            $facts = $extractor->extract($apiDescription);
+            $enricher = new TemplateKitEditorialEnricher();
+            $factCount = $enricher->factCount($facts);
+
+            if ($factCount >= 2) {
+                return [
+                    $enricher->enrich(
+                        $editorial,
+                        $title,
+                        $developer,
+                        $sourceTags,
+                        $facts
+                    ),
+                    [
+                        'EDITORIAL FACT SOURCE = ENVATO API DESCRIPTION',
+                        'SALES PAGE EDITORIAL FACTS = READY',
+                        'SALES PAGE FACTS = ' . $factCount,
+                        'SALES PAGE TAGS = 0',
+                    ],
+                    [],
+                ];
+            }
+        }
+
+        $html = $this->templateKitSalesPageHtml($salesPage);
+
+        if ($html === '') {
+            return [
+                $editorial,
+                [
+                    'EDITORIAL FACT SOURCE = API / LIVE PAGE UNAVAILABLE',
+                    'SALES PAGE EDITORIAL FACTS = NOT AVAILABLE / API FALLBACK',
+                ],
+                [],
+            ];
+        }
+
+        $facts = $extractor->extract($html);
+        $pageTags = $facts['tags'];
+        $sourceTags = array_values(array_unique(array_merge(
+            $sourceTags,
+            $pageTags
+        )));
+        $enricher = new TemplateKitEditorialEnricher();
+        $factCount = $enricher->factCount($facts);
+
+        if ($factCount < 2) {
+            return [
+                $editorial,
+                [
+                    'EDITORIAL FACT SOURCE = THEMEFOREST LIVE PAGE',
+                    'SALES PAGE EDITORIAL FACTS = INSUFFICIENT / API FALLBACK',
+                    'SALES PAGE FACTS = ' . $factCount,
+                    'SALES PAGE TAGS = ' . count($pageTags),
+                ],
+                $pageTags,
+            ];
+        }
+
+        return [
+            $enricher->enrich(
+                $editorial,
+                $title,
+                $developer,
+                $sourceTags,
+                $facts
+            ),
+            [
+                'EDITORIAL FACT SOURCE = THEMEFOREST LIVE PAGE',
+                'SALES PAGE EDITORIAL FACTS = READY',
+                'SALES PAGE FACTS = ' . $factCount,
+                'SALES PAGE TAGS = ' . count($pageTags),
+            ],
+            $pageTags,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $source
+     */
+    private function envatoItemDescription(array $source): string
+    {
+        $candidates = [
+            $source['description'] ?? null,
+            is_array($source['item'] ?? null)
+                ? ($source['item']['description'] ?? null)
+                : null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (! is_scalar($candidate)) {
+                continue;
+            }
+
+            $description = trim((string) $candidate);
+
+            if (
+                $description !== ''
+                && strlen($description) <= 5_000_000
+            ) {
+                return $description;
+            }
+        }
+
+        return '';
+    }
+
+    private function templateKitSalesPageHtml(string $salesPage): string
+    {
+        $salesPage = trim($salesPage);
+        $host = strtolower((string) parse_url($salesPage, PHP_URL_HOST));
+
+        if (
+            $salesPage === ''
+            || ! in_array(
+                $host,
+                ['themeforest.net', 'www.themeforest.net'],
+                true
+            )
+            || ! $this->wpFunctionAvailable('wp_safe_remote_get')
+            || ! $this->wpFunctionAvailable('wp_remote_retrieve_response_code')
+            || ! $this->wpFunctionAvailable('wp_remote_retrieve_body')
+        ) {
+            return '';
+        }
+
+        try {
+            $response = $this->wpCall(
+                'wp_safe_remote_get',
+                $salesPage,
+                [
+                    'timeout' => 20,
+                    'redirection' => 3,
+                    'headers' => [
+                        'Accept' => 'text/html,application/xhtml+xml',
+                        'Accept-Language' => 'en-US,en;q=0.9',
+                        'User-Agent' => 'Mozilla/5.0 (compatible; WPShopBuilder/0.3.9; +https://wp-shop.org)',
+                    ],
+                ]
+            );
+
+            if (
+                $this->wpFunctionAvailable('is_wp_error')
+                && (bool) $this->wpCall('is_wp_error', $response)
+            ) {
+                return '';
+            }
+
+            $code = (int) $this->wpCall(
+                'wp_remote_retrieve_response_code',
+                $response
+            );
+
+            if ($code < 200 || $code >= 300) {
+                return '';
+            }
+
+            $body = (string) $this->wpCall(
+                'wp_remote_retrieve_body',
+                $response
+            );
+
+            if ($body === '' || strlen($body) > 5_000_000) {
+                return '';
+            }
+
+            return $body;
+        } catch (Throwable) {
+            return '';
+        }
     }
 
     /**

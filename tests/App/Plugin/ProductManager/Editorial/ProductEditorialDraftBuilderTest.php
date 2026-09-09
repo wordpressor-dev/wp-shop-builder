@@ -28,13 +28,35 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             'hotels, resorts and villas',
             $content['enShort']
         );
-        self::assertStringContainsString(
-            'Elementor и настройка страниц',
+        foreach (
+            [
+                '<h3>Основные возможности</h3>',
+                '<h3>Кому подходит</h3>',
+                '<h3>Совместимость и требования</h3>',
+                '<h3>Что важно знать</h3>',
+            ] as $heading
+        ) {
+            self::assertStringContainsString(
+                $heading,
+                $content['ruLong']
+            );
+        }
+        foreach (
+            [
+                '<h3>Key features</h3>',
+                '<h3>Who it is for</h3>',
+                '<h3>Compatibility and requirements</h3>',
+                '<h3>What to know</h3>',
+            ] as $heading
+        ) {
+            self::assertStringContainsString(
+                $heading,
+                $content['enLong']
+            );
+        }
+        self::assertStringNotContainsString(
+            '<h3>Elementor и настройка страниц</h3>',
             $content['ruLong']
-        );
-        self::assertStringContainsString(
-            'Elementor and page building',
-            $content['enLong']
         );
     }
 
@@ -64,11 +86,15 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['enShort']
         );
         self::assertStringContainsString(
-            'WooCommerce и коммерческие сценарии',
+            '<h3>Совместимость и требования</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            'Многоязычные проекты',
+            'WooCommerce',
+            $content['ruLong']
+        );
+        self::assertStringContainsString(
+            'WPML',
             $content['ruLong']
         );
     }
@@ -110,7 +136,7 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruShort']
         );
         self::assertStringContainsString(
-            '<h3>Основные возможности Edubin</h3>',
+            '<h3>Основные возможности</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
@@ -118,23 +144,23 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Онлайн-курсы и LMS</h3>',
+            '<h3>Кому подходит</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Elementor и настройка страниц</h3>',
+            '<h3>Совместимость и требования</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>WooCommerce и коммерческие сценарии</h3>',
+            '<h3>Что важно знать</h3>',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Многоязычные проекты</h3>',
+            'WooCommerce',
             $content['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Кому подходит Edubin?</h3>',
+            'WPML',
             $content['ruLong']
         );
         self::assertStringNotContainsString(
@@ -146,7 +172,7 @@ final class ProductEditorialDraftBuilderTest extends TestCase
             $content['enLong']
         );
         self::assertStringContainsString(
-            '<h3>Who is Edubin for?</h3>',
+            '<h3>Who it is for</h3>',
             $content['enLong']
         );
     }

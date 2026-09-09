@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingCatalogTagParser;
+use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
 final class ExistingCatalogTagParserTest extends TestCase
 {
@@ -74,5 +75,14 @@ final readonly class ExistingCatalogTagParserRepository implements
         string $slug
     ): bool {
         return in_array($slug, $this->slugs, true);
+    }
+
+    public function resolveInBoth(
+        string $name,
+        string $slug
+    ): ?CatalogTag {
+        return $this->existsInBoth($name, $slug)
+            ? new CatalogTag($name, $slug)
+            : null;
     }
 }

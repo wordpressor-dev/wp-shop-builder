@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPShop\App\Plugin\ProductManager\Tags;
 
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CanonicalCatalogTagRepositoryInterface;
 
 final class ExistingTagSelector
 {
@@ -28,6 +29,33 @@ final class ExistingTagSelector
         );
 
         $selected = [];
+        $ruleSlugs = array_column(
+            $this->rules(),
+            'slug'
+        );
+
+        foreach ($this->tags($envatoItem['tags'] ?? []) as $sourceTag) {
+            $slug = $this->canonicalAliasSlug($sourceTag)
+                ?? $this->tagSlug($sourceTag);
+
+            if (
+                $slug === ''
+                || in_array($slug, $ruleSlugs, true)
+            ) {
+                continue;
+            }
+
+            $canonical = $this->resolveCanonical(
+                $sourceTag,
+                $slug
+            );
+
+            if ($canonical === null) {
+                continue;
+            }
+
+            $selected[$canonical->slug] = $canonical;
+        }
 
         foreach ($this->rules() as $rule) {
             $matched = $rule['slug'] === 'software'
@@ -38,19 +66,16 @@ final class ExistingTagSelector
                 continue;
             }
 
-            if (
-                ! $this->repository->existsInBoth(
-                    $rule['name'],
-                    $rule['slug']
-                )
-            ) {
-                continue;
-            }
-
-            $selected[$rule['slug']] = new CatalogTag(
+            $canonical = $this->resolveCanonical(
                 $rule['name'],
                 $rule['slug']
             );
+
+            if ($canonical === null) {
+                continue;
+            }
+
+            $selected[$canonical->slug] = $canonical;
         }
 
         return array_values($selected);
@@ -174,6 +199,56 @@ final class ExistingTagSelector
         }
 
         return array_values(array_unique($tags));
+    }
+
+    private function resolveCanonical(
+        string $name,
+        string $slug
+    ): ?CatalogTag {
+        if (
+            $this->repository instanceof
+                CanonicalCatalogTagRepositoryInterface
+        ) {
+            return $this->repository->resolveInBoth(
+                $name,
+                $slug
+            );
+        }
+
+        return $this->repository->existsInBoth(
+            $name,
+            $slug
+        )
+            ? new CatalogTag($name, $slug)
+            : null;
+    }
+
+    private function canonicalAliasSlug(
+        string $sourceTag
+    ): ?string {
+        return match ($this->normalizeTag($sourceTag)) {
+            'accounting', 'finance' => 'finance-law',
+            'advisor', 'consulting' => 'consultations',
+            'company' => 'business',
+            'landingpage', 'landing page' => 'landing',
+            'service' => 'services',
+            default => null,
+        };
+    }
+
+    private function tagSlug(string $value): string
+    {
+        $value = $this->normalizeTag($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        return trim(
+            preg_replace('/\s+/', '-', $value)
+            ?? '',
+            '-'
+        );
     }
 
     private function normalizeTag(string $value): string

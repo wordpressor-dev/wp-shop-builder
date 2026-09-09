@@ -52,11 +52,11 @@ final class ProductEditorialAudienceFeatureFilterTest extends TestCase
             $draft['enLong']
         );
         self::assertStringContainsString(
-            '<h3>Кому подходит Sober?</h3>',
+            '<h3>Кому подходит</h3>',
             $draft['ruLong']
         );
         self::assertStringContainsString(
-            '<h3>Who is Sober for?</h3>',
+            '<h3>Who it is for</h3>',
             $draft['enLong']
         );
     }

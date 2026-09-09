@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace WPShop\Tests\App\Plugin\ProductManager\Tags;
 
 use PHPUnit\Framework\TestCase;
-use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CanonicalCatalogTagRepositoryInterface;
 use WPShop\App\Plugin\ProductManager\Tags\ExistingTagSelector;
+use WPShop\App\Plugin\ProductManager\Tags\CatalogTag;
 
 final class ExistingTagSelectorTest extends TestCase
 {
@@ -45,6 +46,57 @@ final class ExistingTagSelectorTest extends TestCase
                 'цифровые товары|digital-product',
                 'интернет-магазин|shop',
                 'музыка и группы|music-bands',
+            ],
+            array_map(
+                static fn($tag): string => $tag->line(),
+                $tags
+            )
+        );
+    }
+
+    public function testSelectsAllExistingRawThemeForestTagsForProbiz(): void
+    {
+        $repository = new ExistingTagSelectorRepository([
+            'agency',
+            'business',
+            'consultations',
+            'corporate',
+            'elementor',
+            'finance-law',
+            'landing',
+            'marketing',
+            'startup',
+        ]);
+
+        $selector = new ExistingTagSelector($repository);
+
+        $tags = $selector->select([
+            'name' => 'Probiz - Business Consulting Elementor Template Kit',
+            'tags' => [
+                'agency',
+                'business',
+                'company',
+                'consulting',
+                'corporate',
+                'elementor',
+                'finance',
+                'landingpage',
+                'marketing',
+                'startup',
+            ],
+        ]);
+
+        self::assertSame(
+            [
+                'агентство|agency',
+                'бизнес|business',
+                'консультации|consultations',
+                'корпоративные|corporate',
+                'финансы и право|finance-law',
+                'лендинг|landing',
+                'маркетинг|marketing',
+                'стартап|startup',
+                'elementor|elementor',
             ],
             array_map(
                 static fn($tag): string => $tag->line(),
@@ -170,7 +222,7 @@ final class ExistingTagSelectorTest extends TestCase
 }
 
 final class ExistingTagSelectorRepository implements
-    CatalogTagRepositoryInterface
+    CanonicalCatalogTagRepositoryInterface
 {
     /**
      * @param list<string> $existingSlugs
@@ -188,6 +240,38 @@ final class ExistingTagSelectorRepository implements
             $slug,
             $this->existingSlugs,
             true
+        );
+    }
+
+    public function resolveInBoth(
+        string $name,
+        string $slug
+    ): ?CatalogTag {
+        if (! $this->existsInBoth($name, $slug)) {
+            return null;
+        }
+
+        $names = [
+            'agency' => 'агентство',
+            'business' => 'бизнес',
+            'consultations' => 'консультации',
+            'corporate' => 'корпоративные',
+            'digital-product' => 'цифровые товары',
+            'elementor' => 'elementor',
+            'finance-law' => 'финансы и право',
+            'landing' => 'лендинг',
+            'marketplace' => 'торговая площадка',
+            'marketing' => 'маркетинг',
+            'multi-vendor' => 'multi-vendor',
+            'music-bands' => 'музыка и группы',
+            'shop' => 'интернет-магазин',
+            'software' => 'программное обеспечение',
+            'startup' => 'стартап',
+        ];
+
+        return new CatalogTag(
+            $names[$slug] ?? $name,
+            $slug
         );
     }
 }

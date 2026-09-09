@@ -86,7 +86,7 @@ final class ProductEditorialOfficialEnrichmentTest extends TestCase
         self::assertSame('READY', $preview['officialStatus']);
         self::assertGreaterThan(0, $preview['officialFacts']);
         self::assertStringContainsString(
-            'Edubin – Education WordPress Theme is a WordPress theme',
+            'Edubin is a WordPress theme',
             $preview['generated']['enShort']
         );
         self::assertStringNotContainsString(

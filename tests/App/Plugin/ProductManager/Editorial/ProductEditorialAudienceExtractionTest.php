@@ -74,11 +74,11 @@ final class ProductEditorialAudienceExtractionTest extends TestCase
             );
 
             self::assertStringContainsString(
-                'подойдёт пользователям, которым нужен плагин WordPress',
+                'подходит владельцам сайтов и разработчикам',
                 $content['ruLong']
             );
             self::assertStringContainsString(
-                'is suitable for users who need a WordPress plugin',
+                'is suitable for site owners and developers',
                 $content['enLong']
             );
             self::assertStringNotContainsString(

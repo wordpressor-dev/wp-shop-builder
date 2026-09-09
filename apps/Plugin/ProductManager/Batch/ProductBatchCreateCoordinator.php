@@ -18,6 +18,7 @@ use WPShop\App\Plugin\ProductManager\Draft\ProductSkuFilename;
 use WPShop\App\Plugin\ProductManager\Draft\ProductVendorSkuFilename;
 use WPShop\App\Plugin\ProductManager\ProductSourceType;
 use WPShop\App\Plugin\ProductManager\Draft\WordPressWooCommerceDraftGateway;
+use WPShop\App\Plugin\ProductManager\Editorial\ProductEditorialDraftBuilder;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoClient;
 use WPShop\App\Plugin\ProductManager\Envato\EnvatoItemMapper;
 use WPShop\App\Plugin\ProductManager\Envato\WordPressEnvatoTransport;
@@ -266,11 +267,24 @@ final class ProductBatchCreateCoordinator
             }
 
             $developer = trim((string) ($fields['developer'] ?? ''));
-            $content = $this->editorialContent(
-                $baseTitle,
-                $developer,
-                $envatoType
-            );
+            $content = [
+                'ruShort' => trim((string) ($fields['short_description'] ?? '')),
+                'ruLong' => trim((string) ($fields['long_description'] ?? '')),
+                'ruMeta' => trim((string) ($fields['meta_description'] ?? '')),
+                'enShort' => trim((string) ($fields['en_short_description'] ?? '')),
+                'enLong' => trim((string) ($fields['en_long_description'] ?? '')),
+                'enMeta' => trim((string) ($fields['en_meta_description'] ?? '')),
+            ];
+
+            if (
+                in_array('', $content, true)
+            ) {
+                $content = $this->editorialContent(
+                    $baseTitle,
+                    $developer,
+                    $envatoType
+                );
+            }
 
             try {
                 $tags = $controller->parseExistingTags(
@@ -937,43 +951,11 @@ final class ProductBatchCreateCoordinator
         string $developer,
         string $productType
     ): array {
-        $ruType = match ($productType) {
-            CatalogProductType::PLUGIN => 'плагин WordPress',
-            CatalogProductType::TEMPLATE_KIT => 'набор шаблонов Elementor',
-            default => 'тема WordPress',
-        };
-        $enType = match ($productType) {
-            CatalogProductType::PLUGIN => 'WordPress plugin',
-            CatalogProductType::TEMPLATE_KIT => 'Elementor template kit',
-            default => 'WordPress theme',
-        };
-        $ruDeveloper = $developer !== '' ? ' от ' . $developer : '';
-        $enDeveloper = $developer !== '' ? ' by ' . $developer : '';
-        $safeTitle = $this->text($title);
-        $safeDeveloperRu = $this->text($ruDeveloper);
-        $safeDeveloperEn = $this->text($enDeveloper);
-
-        return [
-            'ruShort' => '<p>' . $safeTitle . ' — ' . $ruType
-                . $safeDeveloperRu . '.</p>',
-            'ruLong' => '<h2>' . $safeTitle . '</h2><p>'
-                . $safeTitle . ' — ' . $ruType . $safeDeveloperRu
-                . '. Перед публикацией проверьте описание, требования и совместимость на официальной странице разработчика.</p>',
-            'ruMeta' => $title . ' — ' . $ruType . $ruDeveloper
-                . '. Актуальная версия и официальный источник.',
-            'enShort' => '<p>' . $safeTitle . ' — ' . $enType
-                . $safeDeveloperEn . '.</p>',
-            'enLong' => '<h2>' . $safeTitle . '</h2><p>'
-                . $safeTitle . ' — ' . $enType . $safeDeveloperEn
-                . '. Review the description, requirements and compatibility on the official developer page before publishing.</p>',
-            'enMeta' => $title . ' — ' . $enType . $enDeveloper
-                . '. Current version and official source.',
-        ];
-    }
-
-    private function text(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return (new ProductEditorialDraftBuilder())->build(
+            $title,
+            $developer,
+            $productType
+        );
     }
 
     private function buildController(): ProductManagerController

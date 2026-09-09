@@ -6,6 +6,7 @@ namespace WPShop\App\Plugin\ProductManager\Tags;
 
 use InvalidArgumentException;
 use WPShop\App\Plugin\ProductManager\Tags\Contracts\CatalogTagRepositoryInterface;
+use WPShop\App\Plugin\ProductManager\Tags\Contracts\CanonicalCatalogTagRepositoryInterface;
 
 final class ExistingCatalogTagParser
 {
@@ -48,14 +49,29 @@ final class ExistingCatalogTagParser
 
             [$name, $slug] = $parts;
 
-            if (! $this->repository->existsInBoth($name, $slug)) {
+            $canonical = $this->repository instanceof
+                CanonicalCatalogTagRepositoryInterface
+                    ? $this->repository->resolveInBoth(
+                        $name,
+                        $slug
+                    )
+                    : (
+                        $this->repository->existsInBoth(
+                            $name,
+                            $slug
+                        )
+                            ? new CatalogTag($name, $slug)
+                            : null
+                    );
+
+            if ($canonical === null) {
                 throw new InvalidArgumentException(
                     'Tag is not present in both product_tag and pa_tags: '
                     . $name . '|' . $slug
                 );
             }
 
-            $selected[$slug] = new CatalogTag($name, $slug);
+            $selected[$canonical->slug] = $canonical;
         }
 
         return array_values($selected);
