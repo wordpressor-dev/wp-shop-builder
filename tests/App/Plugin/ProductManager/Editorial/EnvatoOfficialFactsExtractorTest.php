@@ -63,9 +63,14 @@ final class EnvatoOfficialFactsExtractorTest extends TestCase
         );
 
         self::assertStringContainsString('интернет-магазины', $content['ruLong']);
-        self::assertStringContainsString('Многоязычные проекты', $content['ruLong']);
+        self::assertStringContainsString(
+            '<h3>Совместимость и требования</h3>',
+            $content['ruLong']
+        );
+        self::assertStringContainsString('WPML', $content['ruLong']);
+        self::assertStringContainsString('RTL', $content['ruLong']);
         self::assertStringNotContainsString(
-            'WooCommerce и коммерческие сценарии',
+            '<h3>WooCommerce и коммерческие сценарии</h3>',
             $content['ruLong']
         );
         self::assertStringNotContainsString(
