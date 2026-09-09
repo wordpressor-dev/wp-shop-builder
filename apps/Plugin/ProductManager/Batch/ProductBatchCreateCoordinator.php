@@ -958,11 +958,6 @@ final class ProductBatchCreateCoordinator
         );
     }
 
-    private function text(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
-
     private function buildController(): ProductManagerController
     {
         $transport = new WordPressEnvatoTransport();
