@@ -34,6 +34,24 @@ final class ExistingTagSelector
         );
 
         foreach ($this->tags($envatoItem['tags'] ?? []) as $sourceTag) {
+            $canonical = $this->canonicalAlias($sourceTag);
+
+            if ($canonical !== null) {
+                if (
+                    $this->repository->existsInBoth(
+                        $canonical['name'],
+                        $canonical['slug']
+                    )
+                ) {
+                    $selected[$canonical['slug']] = new CatalogTag(
+                        $canonical['name'],
+                        $canonical['slug']
+                    );
+                }
+
+                continue;
+            }
+
             $slug = $this->tagSlug($sourceTag);
 
             if (
@@ -198,6 +216,32 @@ final class ExistingTagSelector
         }
 
         return array_values(array_unique($tags));
+    }
+
+    /**
+     * @return null|array{name:string,slug:string}
+     */
+    private function canonicalAlias(string $sourceTag): ?array
+    {
+        return match ($this->normalizeTag($sourceTag)) {
+            'company' => [
+                'name' => 'business',
+                'slug' => 'business',
+            ],
+            'consulting' => [
+                'name' => 'консультации',
+                'slug' => 'consultations',
+            ],
+            'finance' => [
+                'name' => 'финансы и право',
+                'slug' => 'finance-law',
+            ],
+            'landingpage', 'landing page' => [
+                'name' => 'лендинг',
+                'slug' => 'landing',
+            ],
+            default => null,
+        };
     }
 
     private function tagSlug(string $value): string
