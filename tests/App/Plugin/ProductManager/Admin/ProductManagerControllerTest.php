@@ -78,7 +78,7 @@ final class ProductManagerControllerTest extends TestCase
             $result->logs
         );
         self::assertContains(
-            'EDITORIAL CONTENT = AUTO-DRAFT V31.4 / REVIEW REQUIRED',
+            'EDITORIAL CONTENT = AUTO-DRAFT V31.5 / REVIEW REQUIRED',
             $result->logs
         );
         self::assertContains(
@@ -91,6 +91,113 @@ final class ProductManagerControllerTest extends TestCase
         );
         self::assertContains(
             'FEATURED IMAGE FALLBACK = MANUAL PICKER',
+            $result->logs
+        );
+    }
+
+    public function testTemplateKitUsesEnvatoApiDescriptionForEditorialFacts(): void
+    {
+        $client = new class implements EnvatoClientInterface {
+            public function fetch(
+                string $itemUrl,
+                string $token
+            ): EnvatoItem {
+                return new EnvatoItem(
+                    53903194,
+                    'Probiz – Business Consulting Elementor Template Kit',
+                    'probiz',
+                    '',
+                    '2026-09-02',
+                    'Rometheme',
+                    'https://themeforest.net/item/probiz-business-consulting-elementor-template-kit/53903194',
+                    4,
+                    '2024-01-01T00:00:00+00:00',
+                    [
+                        'agency',
+                        'business',
+                        'consulting',
+                        'corporate',
+                        'finance',
+                        'marketing',
+                        'startup',
+                    ],
+                    'themeforest-53903194-probiz-business-consulting-elementor-template-kit.zip',
+                    [
+                        'id' => 53903194,
+                        'name' => 'Probiz - Business Consulting Elementor Template Kit',
+                        'author_username' => 'Rometheme',
+                        'tags' => [
+                            'agency',
+                            'business',
+                            'consulting',
+                            'corporate',
+                            'finance',
+                            'marketing',
+                            'startup',
+                        ],
+                        'description' => '<p>Probiz is an Elementor Template Kit for Business Consulting websites.</p>'
+                            . '<p>Features :</p><ul>'
+                            . '<li>Using Free Plugins (Elementor Pro is not required)</li>'
+                            . '<li>True no-code customization with drag and drop</li>'
+                            . '<li>100% Fully Responsive & mobile-friendly</li>'
+                            . '<li>11+ pre-built templates ready to use</li>'
+                            . '<li>Customize fonts and colors in one place (Global Theme Kit Style)</li>'
+                            . '</ul><p>Templates in Zip :</p><ul>'
+                            . '<li>Homepage</li><li>About Us</li><li>Services</li>'
+                            . '<li>Pricing Plan</li><li>FAQs</li><li>Contact Us</li>'
+                            . '<li>Header</li><li>Footer</li></ul>'
+                            . '<p>Required Plugins :</p><ul>'
+                            . '<li>Elementor</li><li>RomethemeForm</li>'
+                            . '<li>RomethemeKit For Elementor</li></ul>'
+                            . '<p>This kit has been optimized for use with the free Hello Elementor theme.</p>',
+                    ],
+                    ''
+                );
+            }
+        };
+
+        $controller = new ProductManagerController(
+            $client,
+            new ExistingTagSelector(
+                new ProductManagerCatalogTagRepository()
+            )
+        );
+
+        $result = $controller->autofill(
+            'https://themeforest.net/item/probiz/53903194',
+            'token'
+        );
+
+        self::assertTrue($result->success);
+        self::assertStringContainsString(
+            'более 11 готовых шаблонов',
+            mb_strtolower(
+                $result->fields['short_description'],
+                'UTF-8'
+            )
+        );
+        self::assertStringContainsString(
+            'Elementor Pro не требуется',
+            $result->fields['short_description']
+        );
+        self::assertStringContainsString(
+            'RomethemeForm',
+            $result->fields['long_description']
+        );
+        self::assertStringContainsString(
+            'Hello Elementor',
+            $result->fields['long_description']
+        );
+        self::assertContains(
+            'EDITORIAL FACT SOURCE = ENVATO API DESCRIPTION',
+            $result->logs
+        );
+        self::assertContains(
+            'SALES PAGE EDITORIAL FACTS = READY',
+            $result->logs
+        );
+        self::assertContains(
+            'EDITORIAL CONTENT = AUTO-DRAFT V31.5 / REVIEW REQUIRED',
             $result->logs
         );
     }
