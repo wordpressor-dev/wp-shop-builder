@@ -29,7 +29,7 @@ final class ProductEditorialBulkSafetyTest extends TestCase
         );
 
         self::assertStringContainsString(
-            'интернет-магазинах и других e-commerce проектах',
+            'Поддержка коммерческих сценариев и интернет-магазинов',
             $content['ruLong']
         );
         self::assertStringNotContainsString(
