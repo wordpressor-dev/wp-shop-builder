@@ -34,41 +34,26 @@ final class ExistingTagSelector
         );
 
         foreach ($this->tags($envatoItem['tags'] ?? []) as $sourceTag) {
-            $canonical = $this->canonicalAlias($sourceTag);
-
-            if ($canonical !== null) {
-                if (
-                    $this->repository->existsInBoth(
-                        $canonical['name'],
-                        $canonical['slug']
-                    )
-                ) {
-                    $selected[$canonical['slug']] = new CatalogTag(
-                        $canonical['name'],
-                        $canonical['slug']
-                    );
-                }
-
-                continue;
-            }
-
-            $slug = $this->tagSlug($sourceTag);
+            $slug = $this->canonicalAliasSlug($sourceTag)
+                ?? $this->tagSlug($sourceTag);
 
             if (
                 $slug === ''
                 || in_array($slug, $ruleSlugs, true)
-                || ! $this->repository->existsInBoth(
-                    $sourceTag,
-                    $slug
-                )
             ) {
                 continue;
             }
 
-            $selected[$slug] = new CatalogTag(
+            $canonical = $this->repository->resolveInBoth(
                 $sourceTag,
                 $slug
             );
+
+            if ($canonical === null) {
+                continue;
+            }
+
+            $selected[$canonical->slug] = $canonical;
         }
 
         foreach ($this->rules() as $rule) {
@@ -80,19 +65,16 @@ final class ExistingTagSelector
                 continue;
             }
 
-            if (
-                ! $this->repository->existsInBoth(
-                    $rule['name'],
-                    $rule['slug']
-                )
-            ) {
-                continue;
-            }
-
-            $selected[$rule['slug']] = new CatalogTag(
+            $canonical = $this->repository->resolveInBoth(
                 $rule['name'],
                 $rule['slug']
             );
+
+            if ($canonical === null) {
+                continue;
+            }
+
+            $selected[$canonical->slug] = $canonical;
         }
 
         return array_values($selected);
@@ -218,28 +200,15 @@ final class ExistingTagSelector
         return array_values(array_unique($tags));
     }
 
-    /**
-     * @return null|array{name:string,slug:string}
-     */
-    private function canonicalAlias(string $sourceTag): ?array
-    {
+    private function canonicalAliasSlug(
+        string $sourceTag
+    ): ?string {
         return match ($this->normalizeTag($sourceTag)) {
-            'company' => [
-                'name' => 'business',
-                'slug' => 'business',
-            ],
-            'consulting' => [
-                'name' => 'консультации',
-                'slug' => 'consultations',
-            ],
-            'finance' => [
-                'name' => 'финансы и право',
-                'slug' => 'finance-law',
-            ],
-            'landingpage', 'landing page' => [
-                'name' => 'лендинг',
-                'slug' => 'landing',
-            ],
+            'accounting', 'finance' => 'finance-law',
+            'advisor', 'consulting' => 'consultations',
+            'company' => 'business',
+            'landingpage', 'landing page' => 'landing',
+            'service' => 'services',
             default => null,
         };
     }
