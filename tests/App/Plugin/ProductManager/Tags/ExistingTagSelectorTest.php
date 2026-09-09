@@ -53,6 +53,59 @@ final class ExistingTagSelectorTest extends TestCase
         );
     }
 
+    public function testSelectsAllExistingRawThemeForestTagsForProbiz(): void
+    {
+        $repository = new ExistingTagSelectorRepository([
+            'agency',
+            'business',
+            'company',
+            'consulting',
+            'corporate',
+            'elementor',
+            'finance',
+            'landingpage',
+            'marketing',
+            'startup',
+        ]);
+
+        $selector = new ExistingTagSelector($repository);
+
+        $tags = $selector->select([
+            'name' => 'Probiz - Business Consulting Elementor Template Kit',
+            'tags' => [
+                'agency',
+                'business',
+                'company',
+                'consulting',
+                'corporate',
+                'elementor',
+                'finance',
+                'landingpage',
+                'marketing',
+                'startup',
+            ],
+        ]);
+
+        self::assertSame(
+            [
+                'agency|agency',
+                'business|business',
+                'company|company',
+                'consulting|consulting',
+                'corporate|corporate',
+                'finance|finance',
+                'landingpage|landingpage',
+                'marketing|marketing',
+                'startup|startup',
+                'elementor|elementor',
+            ],
+            array_map(
+                static fn($tag): string => $tag->line(),
+                $tags
+            )
+        );
+    }
+
     public function testSelectsSoftwareOnlyForSoftwareThemeSignals(): void
     {
         $repository = new ExistingTagSelectorRepository([
